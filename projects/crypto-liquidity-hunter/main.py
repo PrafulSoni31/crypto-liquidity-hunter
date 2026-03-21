@@ -88,7 +88,7 @@ def cmd_scan(args):
         latest_price = df.iloc[-1]['close']
         signals = []
         for sweep in sweeps[-5:]:  # last 5 sweeps
-            signal = engine.generate_signal(sweep, zones, latest_price, capital=args.capital or 10000)
+            signal = engine.generate_signal(sweep, zones, latest_price, capital=args.capital or 10000, pair=pair)
             if signal:
                 signals.append(signal)
 
@@ -299,7 +299,7 @@ def cmd_scan_all(args):
                 latest_price = df.iloc[-1]['close']
 
                 for sweep in sweeps[-5:]:
-                    signal = engine.generate_signal(sweep, zones, latest_price, capital=args.capital or 10000)
+                    signal = engine.generate_signal(sweep, zones, latest_price, capital=args.capital or 10000, pair=pair)
                     if signal:
                         signal_record = {
                             'pair': pair,

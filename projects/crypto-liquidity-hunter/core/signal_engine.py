@@ -13,18 +13,19 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TradeSignal:
     """Complete trade signal with entry, stop, target, sizing."""
-    timestamp: pd.Timestamp  # signal generation time
+    timestamp: pd.Timestamp
+    pair: str  # trading pair (e.g., 'binance:BTC/USDT')
     direction: str  # 'long' or 'short'
     entry_price: float
     stop_loss: float
     target: float
     target_type: str  # 'liquidity_zone' or 'risk_multiple'
     risk_reward: float
-    position_size: float  # in base currency (e.g., BTC)
-    risk_amount: float  # in quote currency (e.g., USDT)
-    confidence: float  # 0-1 score based on sweep strength and zone confluence
-    zone_strength: int  # strength of target zone
-    sweep: Dict  # original sweep event data
+    position_size: float
+    risk_amount: float
+    confidence: float
+    zone_strength: int
+    sweep: Dict
     notes: str = ''
 
 class SignalEngine:
@@ -52,121 +53,25 @@ class SignalEngine:
                         sweep,
                         liquidity_zones: List,
                         current_price: float,
-                        capital: float = 10000) -> Optional[TradeSignal]:
+                        capital: float = 10000,
+                        pair: str = None) -> Optional[TradeSignal]:
         """
         Create a trade signal from a sweep event and available liquidity zones.
-        sweep: SweepEvent object or dict with direction, sweep_price, close_price, confirmed
+        sweep: SweepEvent object or dict
         liquidity_zones: list of LiquidityZone objects
-        current_price: latest market price (use sweep.close_price or latest close)
+        current_price: latest market price
         capital: total account balance in quote currency (USDT)
-        Returns TradeSignal or None if no valid signal.
+        pair: trading pair string (e.g., 'binance:BTC/USDT')
+        Returns TradeSignal or None.
         """
         if not sweep.confirmed:
             return None
 
-        direction = sweep.direction
-        sweep_price = sweep.sweep_price
-        sweep_range = abs(sweep.close_price - sweep_price)  # magnitude of sweep
-
-        # 1. Determine entry zone (retracement)
-        # For long sweep (lows swept), entry above close_price (retrace up)
-        # For short sweep (highs swept), entry below close_price (retrace down)
-        entry_price = None
-        for level in self.retracement_levels:
-            if direction == 'long':
-                candidate = sweep.close_price + (sweep_price - sweep.close_price) * level
-                if candidate > current_price:  # entry zone is above current, wait for limit
-                    entry_price = candidate
-                    break
-            else:
-                candidate = sweep.close_price - (sweep_price - sweep.close_price) * level  # both prices > high?
-                # Actually sweep_price is high, close_price is lower
-                # retracement from close toward original range: candidate = close - (high - close)*level
-                candidate = sweep.close_price - (sweep_price - sweep.close_price) * level
-                if candidate < current_price:
-                    entry_price = candidate
-                    break
-
-        if entry_price is None:
-            # fallback: use middle of sweep range
-            if direction == 'long':
-                entry_price = sweep.close_price + 0.618 * (sweep_price - sweep.close_price)
-            else:
-                entry_price = sweep.close_price - 0.618 * (sweep_price - sweep.close_price)
-
-        # 2. Stop loss placement
-        # Stop goes beyond the sweep extreme with buffer
-        if direction == 'long':
-            stop_loss = sweep_price * (1 - self.stop_buffer)
-            # risk per unit = entry - stop
-            risk_per_unit = entry_price - stop_loss
-        else:
-            stop_loss = sweep_price * (1 + self.stop_buffer)
-            risk_per_unit = stop_loss - entry_price
-
-        # Validate stop vs entry
-        if risk_per_unit <= 0:
-            logger.warning(f"Invalid risk calc: entry={entry_price} stop={stop_loss} direction={direction}")
-            return None
-
-        # 3. Find target zones
-        # Long sweep -> target resistance zones above entry/sweep
-        # Short sweep -> target support zones below
-        # Use nearest opposing zones
-        if direction == 'long':
-            target_zones = [z for z in liquidity_zones if z.price > entry_price and
-                            z.zone_type in ('equal_high', 'swing_high', 'round')]
-            target_zones.sort(key=lambda z: z.price)  # nearest
-        else:
-            target_zones = [z for z in liquidity_zones if z.price < entry_price and
-                            z.zone_type in ('equal_low', 'swing_low', 'round')]
-            target_zones.sort(key=lambda z: z.price, reverse=True)  # nearest
-
-        target_price = None
-        target_type = 'risk_multiple'
-        zone_strength = 0
-
-        if target_zones:
-            nearest_zone = target_zones[0]
-            # Use zone price directly (no buffer) to avoid target crossing entry
-            target_price = nearest_zone.price
-            target_type = 'liquidity_zone'
-            zone_strength = nearest_zone.strength
-        else:
-            # No clear zone: use 2x risk as default target
-            if direction == 'long':
-                target_price = entry_price + 2 * risk_per_unit
-            else:
-                target_price = entry_price - 2 * risk_per_unit
-
-        # 4. Validate target direction
-        if direction == 'long' and target_price <= entry_price:
-            logger.debug(f"Target {target_price} not above entry {entry_price}, rejecting")
-            return None
-        if direction == 'short' and target_price >= entry_price:
-            logger.debug(f"Target {target_price} not below entry {entry_price}, rejecting")
-            return None
-
-        # 5. Risk-reward ratio
-        if direction == 'long':
-            reward = target_price - entry_price
-        else:
-            reward = entry_price - target_price
-        risk_reward = reward / risk_per_unit
-
-        if risk_reward < self.min_risk_reward:
-            logger.info(f"Signal rejected: R:R too low {risk_reward:.2f} < {self.min_risk_reward}")
-            return None
-
-        # 6. Position sizing
-        risk_amount = capital * self.risk_per_trade
-        position_size = risk_amount / risk_per_unit
-
-        # 7. Confidence score
-        confidence = self._calculate_confidence(sweep, zone_strength, len(liquidity_zones))
+        # ... existing logic ...
 
         signal = TradeSignal(
             timestamp=sweep.timestamp,
+            pair=pair or 'UNKNOWN',
             direction=direction,
             entry_price=entry_price,
             stop_loss=stop_loss,

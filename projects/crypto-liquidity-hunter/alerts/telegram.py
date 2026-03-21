@@ -56,7 +56,7 @@ Depth: {abs(sweep['sweep_depth_pct']):.2f}%
         direction_emoji = '🟢' if signal.direction == 'long' else '🔴'
         text = f"""<b>TRADE SIGNAL</b> {direction_emoji}
 
-Pair: BTC/USDT
+Pair: {signal.pair}
 Direction: {signal.direction.upper()}
 Entry: ${signal.entry_price:.2f}
 Stop: ${signal.stop_loss:.2f}
