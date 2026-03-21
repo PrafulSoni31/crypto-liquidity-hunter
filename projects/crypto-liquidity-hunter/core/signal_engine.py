@@ -67,7 +67,92 @@ class SignalEngine:
         if not sweep.confirmed:
             return None
 
-        # ... existing logic ...
+        direction = sweep.direction
+        sweep_price = sweep.sweep_price
+        sweep_range = abs(sweep.close_price - sweep_price)
+
+        # 1. Determine entry zone (retracement)
+        entry_price = None
+        for level in self.retracement_levels:
+            if direction == 'long':
+                candidate = sweep.close_price + (sweep_price - sweep.close_price) * level
+                if candidate > current_price:
+                    entry_price = candidate
+                    break
+            else:
+                candidate = sweep.close_price - (sweep_price - sweep.close_price) * level
+                if candidate < current_price:
+                    entry_price = candidate
+                    break
+
+        if entry_price is None:
+            if direction == 'long':
+                entry_price = sweep.close_price + 0.618 * (sweep_price - sweep.close_price)
+            else:
+                entry_price = sweep.close_price - 0.618 * (sweep_price - sweep.close_price)
+
+        # 2. Stop loss placement
+        if direction == 'long':
+            stop_loss = sweep_price * (1 - self.stop_buffer)
+            risk_per_unit = entry_price - stop_loss
+        else:
+            stop_loss = sweep_price * (1 + self.stop_buffer)
+            risk_per_unit = stop_loss - entry_price
+
+        if risk_per_unit <= 0:
+            logger.warning(f"Invalid risk calc: entry={entry_price} stop={stop_loss} direction={direction}")
+            return None
+
+        # 3. Find target zones
+        if direction == 'long':
+            target_zones = [z for z in liquidity_zones if z.price > entry_price and
+                            z.zone_type in ('equal_high', 'swing_high', 'round')]
+            target_zones.sort(key=lambda z: z.price)
+        else:
+            target_zones = [z for z in liquidity_zones if z.price < entry_price and
+                            z.zone_type in ('equal_low', 'swing_low', 'round')]
+            target_zones.sort(key=lambda z: z.price, reverse=True)
+
+        target_price = None
+        target_type = 'risk_multiple'
+        zone_strength = 0
+
+        if target_zones:
+            nearest_zone = target_zones[0]
+            target_price = nearest_zone.price
+            target_type = 'liquidity_zone'
+            zone_strength = nearest_zone.strength
+        else:
+            if direction == 'long':
+                target_price = entry_price + 2 * risk_per_unit
+            else:
+                target_price = entry_price - 2 * risk_per_unit
+
+        # 4. Validate target direction
+        if direction == 'long' and target_price <= entry_price:
+            logger.debug(f"Target {target_price} not above entry {entry_price}, rejecting")
+            return None
+        if direction == 'short' and target_price >= entry_price:
+            logger.debug(f"Target {target_price} not below entry {entry_price}, rejecting")
+            return None
+
+        # 5. Risk-reward ratio
+        if direction == 'long':
+            reward = target_price - entry_price
+        else:
+            reward = entry_price - target_price
+        risk_reward = reward / risk_per_unit
+
+        if risk_reward < self.min_risk_reward:
+            logger.info(f"Signal rejected: R:R too low {risk_reward:.2f} < {self.min_risk_reward}")
+            return None
+
+        # 6. Position sizing
+        risk_amount = capital * self.risk_per_trade
+        position_size = risk_amount / risk_per_unit
+
+        # 7. Confidence score
+        confidence = self._calculate_confidence(sweep, zone_strength, len(liquidity_zones))
 
         signal = TradeSignal(
             timestamp=sweep.timestamp,
