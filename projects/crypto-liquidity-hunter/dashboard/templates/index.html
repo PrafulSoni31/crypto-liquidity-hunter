@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Liquidity Hunter Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #1e1e1e; color: #ddd; }
+    h1, h2 { color: #0af; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; }
+    .card { background: #2a2a2a; padding: 15px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #444; }
+    th { color: #0af; }
+    .signal-long { color: #0f0; }
+    .signal-short { color: #f00; }
+    #chart { width: 100%; height: 500px; border: 1px solid #444; margin-top: 20px; }
+    select, button { padding: 8px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; }
+    button { cursor: pointer; }
+    .refresh { margin: 20px 0; }
+    .alert { padding: 10px; margin: 5px 0; border-radius: 4px; }
+    .alert-success { background: #1a4d1a; }
+    .alert-warning { background: #4d3a1a; }
+  </style>
+</head>
+<body>
+  <h1>🎃 Liquidity Hunter Dashboard</h1>
+
+  <div class="refresh">
+    <button onclick="loadData()">Refresh All</button>
+    <select id="pairSelect" onchange="loadChart(); loadScan();">
+      {% for pair in pairs %}
+        <option value="{{ pair }}">{{ pair }}</option>
+      {% endfor %}
+    </select>
+    <select id="tfSelect" onchange="loadChart(); loadScan();">
+      {% for tf in timeframes %}
+        <option value="{{ tf }}">{{ tf }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Latest Scan</h2>
+      <div id="scanInfo">Loading...</div>
+      <h3>Zones (top 10)</h3>
+      <table id="zonesTable">
+        <thead><tr><th>Type</th><th>Price</th><th>Strength</th><th>Last Touch</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <h3>Recent Sweeps</h3>
+      <table id="sweepsTable">
+        <thead><tr><th>Time</th><th>Dir</th><th>Sweep Price</th><th>Depth %</th><th>Vol Ratio</th><th>Confirmed</th></tr>
+        <tbody></tbody>
+      </table>
+      <h3>Active Signals</h3>
+      <table id="signalsTable">
+        <thead><tr><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Conf</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Price Chart</h2>
+      <div id="chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent Signals (All Pairs)</h2>
+      <table id="allSignalsTable">
+        <thead><tr><th>Pair</th><th>TF</th><th>Time</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+  <script>
+    function loadChart() {
+      const pair = document.getElementById('pairSelect').value;
+      fetch(`/api/chart/${pair}`)
+        .then(r => r.json())
+        .then(data => {
+          const plotDiv = document.getElementById('chart');
+          const chart = JSON.parse(data.chart);
+          Plotly.react(plotDiv, chart.data, chart.layout);
+        });
+    }
+
+    function loadScan() {
+      const pair = document.getElementById('pairSelect').value;
+      fetch(`/api/scan/${pair}`)
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('scanInfo').innerHTML =
+            `<strong>Pair:</strong> ${data.pair} | <strong>TF:</strong> ${data.timeframe} | ` +
+            `<strong>Price:</strong> $${data.current_price.toLocaleString()} | ` +
+            `<strong>Zones:</strong> ${data.zones.length} | <strong>Sweeps:</strong> ${data.sweeps.length} | ` +
+            `<strong>Signals:</strong> ${data.signals.length}`;
+
+          // Zones table
+          const zonesTbody = document.querySelector('#zonesTable tbody');
+          zonesTbody.innerHTML = data.zones.map(z => `
+            <tr>
+              <td>${z.type}</td>
+              <td>${z.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${z.strength}</td>
+              <td>${new Date(z.last_touch).toLocaleDateString()}</td>
+            </tr>
+          `).join('');
+
+          // Sweeps table
+          const sweepsTbody = document.querySelector('#sweepsTable tbody');
+          sweepsTbody.innerHTML = data.sweeps.map(s => `
+            <tr>
+              <td>${new Date(s.timestamp).toLocaleTimeString()}</td>
+              <td>${s.direction}</td>
+              <td>${s.sweep_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${s.depth_pct.toFixed(2)}%</td>
+              <td>${s.volume_ratio.toFixed(2)}x</td>
+              <td>${s.confirmed ? '✅' : '⏳'}</td>
+            </tr>
+          `).join('');
+
+          // Signals table
+          const signalsTbody = document.querySelector('#signalsTable tbody');
+          signalsTbody.innerHTML = data.signals.map(s => `
+            <tr>
+              <td class="${s.direction === 'long' ? 'signal-long' : 'signal-short'}">${s.direction.toUpperCase()}</td>
+              <td>${s.entry_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${s.stop_loss.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${s.target.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${s.risk_reward.toFixed(2)}</td>
+              <td>${(s.confidence*100).toFixed(0)}%</td>
+            </tr>
+          `).join('');
+        });
+    }
+
+    function loadAllSignals() {
+      fetch('/api/signals')
+        .then(r => r.json())
+        .then(data => {
+          const tbody = document.querySelector('#allSignalsTable tbody');
+          tbody.innerHTML = data.signals.map(s => `
+            <tr>
+              <td>${s.pair}</td>
+              <td>${s.timeframe}</td>
+              <td>${new Date(s.timestamp).toLocaleTimeString()}</td>
+              <td class="${s.direction === 'long' ? 'signal-long' : 'signal-short'}">${s.direction.toUpperCase()}</td>
+              <td>${s.entry.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${s.sl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${s.tp.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${s.rr.toFixed(2)}</td>
+            </tr>
+          `).join('');
+        });
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadChart();
+      loadScan();
+      loadAllSignals();
+      // Auto-refresh every 60s
+      setInterval(() => {
+        loadChart();
+        loadScan();
+        loadAllSignals();
+      }, 60000);
+    });
+  </script>
+</body>
+</html>

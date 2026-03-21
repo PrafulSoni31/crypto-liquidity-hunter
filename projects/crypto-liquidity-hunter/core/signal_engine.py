@@ -104,6 +104,7 @@ class SignalEngine:
             stop_loss = sweep_price * (1 + self.stop_buffer)
             risk_per_unit = stop_loss - entry_price
 
+        # Validate stop vs entry
         if risk_per_unit <= 0:
             logger.warning(f"Invalid risk calc: entry={entry_price} stop={stop_loss} direction={direction}")
             return None
@@ -127,11 +128,8 @@ class SignalEngine:
 
         if target_zones:
             nearest_zone = target_zones[0]
-            # Apply buffer so we don't hit exactly
-            if direction == 'long':
-                target_price = nearest_zone.price * (1 - self.target_buffer)
-            else:
-                target_price = nearest_zone.price * (1 + self.target_buffer)
+            # Use zone price directly (no buffer) to avoid target crossing entry
+            target_price = nearest_zone.price
             target_type = 'liquidity_zone'
             zone_strength = nearest_zone.strength
         else:
@@ -141,7 +139,15 @@ class SignalEngine:
             else:
                 target_price = entry_price - 2 * risk_per_unit
 
-        # 4. Risk-reward ratio
+        # 4. Validate target direction
+        if direction == 'long' and target_price <= entry_price:
+            logger.debug(f"Target {target_price} not above entry {entry_price}, rejecting")
+            return None
+        if direction == 'short' and target_price >= entry_price:
+            logger.debug(f"Target {target_price} not below entry {entry_price}, rejecting")
+            return None
+
+        # 5. Risk-reward ratio
         if direction == 'long':
             reward = target_price - entry_price
         else:
@@ -152,11 +158,11 @@ class SignalEngine:
             logger.info(f"Signal rejected: R:R too low {risk_reward:.2f} < {self.min_risk_reward}")
             return None
 
-        # 5. Position sizing
+        # 6. Position sizing
         risk_amount = capital * self.risk_per_trade
         position_size = risk_amount / risk_per_unit
 
-        # 6. Confidence score
+        # 7. Confidence score
         confidence = self._calculate_confidence(sweep, zone_strength, len(liquidity_zones))
 
         signal = TradeSignal(

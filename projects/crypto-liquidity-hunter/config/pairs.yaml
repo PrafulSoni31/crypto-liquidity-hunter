@@ -3,10 +3,27 @@ pairs:
   - 'binance:BTC/USDT'
   - 'binance:ETH/USDT'
   - 'binance:SOL/USDT'
+  - 'binance:BNB/USDT'
+  - 'binance:XRP/USDT'
+  - 'binance:ADA/USDT'
+  - 'binance:DOGE/USDT'
+  - 'binance:AVAX/USDT'
+  - 'binance:DOT/USDT'
+  - 'binance:MATIC/USDT'
+  - 'binance:LINK/USDT'
+  - 'binance:UNI/USDT'
+  - 'binance:AAVE/USDT'
+  - 'binance:INJ/USDT'
+  - 'binance:OP/USDT'
+  - 'binance:ARB/USDT'
+  - 'binance:APT/USDT'
+  - 'binance:SUI/USDT'
+  - 'binance:SEI/USDT'
+  - 'binance:WIF/USDT'
 
 data_fetch:
-  timeframe: '1h'          # default timeframe for scanning (1h gives quality, 5m gives noise)
-  ohlcv_limit: 1000        # bars to fetch
+  timeframes: ['4h', '1h', '15m']   # scan multiple timeframes for confluence
+  ohlcv_limit: 1000        # bars to fetch per timeframe
   atr_period: 14
 
 liquidity_mapper:
@@ -16,11 +33,11 @@ liquidity_mapper:
   min_swing_strength: 3
 
 sweep_detector:
-  sweep_multiplier: 0.6           # ATR threshold (0.6×ATR)
+  sweep_multiplier: 0.6           # 0.6×ATR threshold
   volume_multiplier: 1.2          # volume spike (20% above avg)
   confirmation_bars: 3            # wait 3 bars for rejection
   wick_ratio: 0.45                # wick ≥45% of candle range
-  min_sweep_pct: 0.25             # minimum sweep depth (0.25%)
+  min_sweep_pct: 0.3              # minimum sweep depth (0.3%)
 
 signal_engine:
   risk_per_trade: 0.01            # 1% per trade
@@ -40,3 +57,12 @@ alerts:
     enabled: false
     bot_token: ''
     chat_id: ''
+
+# Auto-trading configuration (testnet only)
+trading:
+  enabled: false               # Set to true to enable auto-trade
+  exchange: binance            # binance or bybit
+  testnet: true                # use testnet sandbox
+  api_key_env: BINANCE_TESTNET_API_KEY
+  api_secret_env: BINANCE_TESTNET_SECRET
+  max_concurrent: 3            # max simultaneous trades
