@@ -1,0 +1,41 @@
+pairs:
+  - 'binance:BTC/USDT'
+  - 'binance:ETH/USDT'
+  - 'binance:SOL/USDT'
+
+data_fetch:
+  timeframe: '15m'          # default timeframe for scanning
+  ohlcv_limit: 1000        # bars to fetch
+  atr_period: 14
+
+liquidity_mapper:
+  equal_touch_tolerance: 0.001    # 0.1%
+  swing_lookback: 5
+  round_tolerance: 0.005          # 0.5%
+  min_swing_strength: 3
+
+sweep_detector:
+  sweep_multiplier: 1.5     # ATR multiple for sweep threshold
+  volume_multiplier: 2.5    # volume spike threshold
+  confirmation_bars: 3
+  wick_ratio: 0.67
+  min_sweep_pct: 0.2        # 0.2%
+
+signal_engine:
+  risk_per_trade: 0.01      # 1% per trade
+  min_risk_reward: 1.5
+  stop_buffer_pct: 0.001    # 0.1%
+  target_buffer_pct: 0.001
+  retracement_levels: [0.5, 0.618, 0.786]
+
+backtester:
+  commission_pct: 0.001
+  slippage_pct: 0.0005
+  max_concurrent_trades: 3
+  timeout_bars: 48
+
+alerts:
+  telegram:
+    enabled: false
+    bot_token: ''
+    chat_id: ''
