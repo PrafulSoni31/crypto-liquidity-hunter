@@ -1,0 +1,316 @@
+//+------------------------------------------------------------------+
+//|                    GOLD HYBRID STRATEGY V4                       |
+//|                                                              |
+//|  Based on: Multi-Timeframe Trend + Momentum + RSI Filter       |
+//|  Timeframe: H1 or Higher (Recommended: H4 or Daily)            |
+//|  Symbol: XAUUSD (Gold)                                         |
+//|                                                              |
+//+------------------------------------------------------------------+
+
+#property copyright "Shiva - Elite Trading Systems"
+#property version   "1.00"
+#property description "Gold Hybrid Strategy V4 - Trend Following with RSI Filter"
+#property description "Rules: Price>200MA & Price>50MA & MACD Cross OR Price>200MA & RSI<35 & Price>Previous"
+#property description "Exit: TP 5% | SL 2% | Trend Exit (Price<50MA)"
+
+#include <Trade/Trade.mqh>
+
+//--- Input Parameters
+input group "====== STRATEGY SETTINGS ======"
+input ENUM_TIMEFRAMES Timeframe = PERIOD_H4;        // Trading Timeframe
+input double LotSize = 0.01;                        // Fixed Lot Size
+input bool UseAutoLot = false;                      // Auto Lot (Use Risk %)
+input double RiskPercent = 0.5;                     // Risk per Trade (%)
+
+//--- Indicator Parameters
+input group "====== INDICATOR SETTINGS ======"
+input int MAPeriod1 = 20;                           // MA Short Period
+input int MAPeriod2 = 50;                           // MA Medium Period
+input int MAPeriod3 = 200;                          // MA Long Period
+input ENUM_MA_METHOD MAType = MODE_EMA;             // MA Type (EMA/SMA)
+
+input int RSIPeriod = 14;                           // RSI Period
+input int RSIOverSold = 35;                         // RSI Oversold Level
+input int RSIOverBought = 65;                       // RSI Overbought Level
+
+input int MACDFast = 12;                            // MACD Fast EMA
+input int MACDSlow = 26;                            // MACD Slow EMA
+input int MACDSignal = 9;                           // MACD Signal Line
+
+input double ATRMultiplier = 2.0;                   // ATR Stop Multiplier
+input int ATRPeriod = 14;                           // ATR Period
+
+//--- Trade Management
+input group "====== TRADE MANAGEMENT ======"
+input double TakeProfitPercent = 5.0;               // Take Profit (%)
+input double StopLossPercent = 2.0;                 // Stop Loss (%)
+input bool UseTrailingStop = false;                 // Use Trailing Stop
+input double TrailDistance = 1.0;                   // Trailing Distance (%)
+
+//--- Other Settings
+input int MagicNumber = 20260226;                   // Magic Number
+input int MaxSpread = 30;                           // Max Spread (points)
+input int Slippage = 3;                             // Slippage
+
+//--- Global Variables
+CTrade trade;
+double pt;
+int buyTicket = 0;
+double buyPrice = 0;
+double buySL = 0;
+double buyTP = 0;
+datetime lastTradeTime = 0;
+
+//+------------------------------------------------------------------+
+//| Expert Initialization Function                                    |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   // Validate inputs
+   if(LotSize <= 0 && !UseAutoLot)
+   {
+      Alert("Invalid Lot Size!");
+      return INIT_PARAMETERS_INCORRECT;
+   }
+   
+   // Set point value for gold (XAUUSD)
+   pt = Point();
+   if(_Symbol == "XAUUSD" || _Symbol == "GOLD")
+      pt = Point() * 10;  // 5-digit for gold
+   
+   // Set magic number
+   trade.SetExpertMagicNumber(MagicNumber);
+   trade.SetDeviationInPoints(Slippage);
+   
+   // Set type filling
+   trade.SetTypeFilling(ORDER_FILLING_IOC);
+   
+   Print("=== GOLD HYBRID V4 INITIALIZED ===");
+   Print("Timeframe: ", Timeframe);
+   Print("Symbol: ", _Symbol);
+   Print("Lot: ", UseAutoLot ? "Auto (" + DoubleToString(RiskPercent,1) + "%)" : DoubleToString(LotSize,2));
+   
+   return INIT_SUCCEEDED;
+}
+
+//+------------------------------------------------------------------+
+//| Expert Deinitialization Function                                  |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   Print("=== EA STOPPED ===");
+}
+
+//+------------------------------------------------------------------+
+//| Expert Tick Function                                              |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Check if we have open position
+   if(buyTicket > 0)
+   {
+      if(!PositionSelectByTicket(buyTicket))
+      {
+         // Position closed
+         buyTicket = 0;
+         buyPrice = 0;
+         return;
+      }
+      
+      // Check exit conditions
+      CheckExit();
+   }
+   else
+   {
+      // Check entry conditions
+      if(CheckEntry())
+      {
+         OpenPosition();
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Check Entry Conditions                                           |
+//+------------------------------------------------------------------+
+bool CheckEntry()
+{
+   // Get indicator values
+   double ma20 = iMA(_Symbol, Timeframe, MAPeriod1, 0, MAType, PRICE_CLOSE);
+   double ma50 = iMA(_Symbol, Timeframe, MAPeriod2, 0, MAType, PRICE_CLOSE);
+   double ma200 = iMA(_Symbol, Timeframe, MAPeriod3, 0, MAType, PRICE_CLOSE);
+   
+   double rsi = iRSI(_Symbol, Timeframe, RSIPeriod, PRICE_CLOSE);
+   
+   double macdMain = iMACD(_Symbol, Timeframe, MACDFast, MACDSlow, MACDSignal, PRICE_CLOSE).Main;
+   double macdPrev = iMACD(_Symbol, Timeframe, MACDFast, MACDSlow, MACDSignal, PRICE_CLOSE).Main;
+   double macdSig = iMACD(_Symbol, Timeframe, MACDFast, MACDSlow, MACDSignal, PRICE_CLOSE).Signal;
+   double macdSigPrev = iMACD(_Symbol, Timeframe, MACDFast, MACDSlow, MACDSignal, PRICE_CLOSE).Signal;
+   
+   double closePrice = iClose(_Symbol, Timeframe, 0);
+   double prevClose = iClose(_Symbol, Timeframe, 1);
+   
+   // BUY Conditions (all must be true for main condition OR alternative)
+   // Main: Price > 200MA AND Price > 50MA AND Price > 20MA AND MACD bullish cross AND RSI < 65
+   bool buyCond1 = (closePrice > ma200) && (closePrice > ma50) && (closePrice > ma20) 
+                && (macdMain > macdSig) && (macdPrev <= macdSigPrev) && (rsi < RSIOverBought);
+   
+   // Alternative: Price > 200MA AND RSI oversold bounce
+   bool buyCond2 = (closePrice > ma200) && (rsi < RSIOverSold) && (closePrice > prevClose);
+   
+   return (buyCond1 || buyCond2);
+}
+
+//+------------------------------------------------------------------+
+//| Check Exit Conditions                                            |
+//+------------------------------------------------------------------+
+void CheckExit()
+{
+   if(buyTicket <= 0) return;
+   
+   double closePrice = iClose(_Symbol, Timeframe, 0);
+   double ma50 = iMA(_Symbol, Timeframe, MAPeriod2, 0, MAType, PRICE_CLOSE);
+   double rsi = iRSI(_Symbol, Timeframe, RSIPeriod, PRICE_CLOSE);
+   
+   // Calculate current profit/loss
+   double currentPL = (closePrice - buyPrice) / buyPrice * 100;
+   
+   // Check Take Profit
+   if(currentPL >= TakeProfitPercent)
+   {
+      ClosePosition();
+      Print("TAKE PROFIT HIT: ", DoubleToString(currentPL, 2), "%");
+      return;
+   }
+   
+   // Check Stop Loss
+   if(currentPL <= -StopLossPercent)
+   {
+      ClosePosition();
+      Print("STOP LOSS HIT: ", DoubleToString(currentPL, 2), "%");
+      return;
+   }
+   
+   // Check Trend Exit (Price below 50 MA)
+   if(closePrice < ma50)
+   {
+      ClosePosition();
+      Print("TREND EXIT: Price below 50 MA");
+      return;
+   }
+   
+   // Check RSI Overbought Exit
+   if(rsi > RSIOverBought + 10)  // +10 buffer
+   {
+      ClosePosition();
+      Print("RSI EXIT: Overbought");
+      return;
+   }
+   
+   // Trailing Stop (optional)
+   if(UseTrailingStop && currentPL > TrailDistance * 2)
+   {
+      double newSL = buyPrice * (1 + TrailDistance / 100);
+      if(newSL > buySL)
+      {
+         buySL = newSL;
+         trade.PositionModify(buyTicket, buySL, buyTP);
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Open Position                                                     |
+//+------------------------------------------------------------------+
+void OpenPosition()
+{
+   double closePrice = iClose(_Symbol, Timeframe, 0);
+   double atr = iATR(_Symbol, Timeframe, ATRPeriod, 0);
+   
+   // Calculate lot size
+   double lot = LotSize;
+   if(UseAutoLot)
+   {
+      double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+      double riskAmount = balance * RiskPercent / 100;
+      
+      // Calculate lot based on stop loss
+      double slDistance = closePrice * StopLossPercent / 100;
+      if(slDistance > 0)
+         lot = riskAmount / (slDistance / closePrice) / 1000;  // Approximate for gold
+         
+      lot = NormalizeDouble(lot, 2);
+   }
+   
+   // Calculate SL and TP
+   double slDistance = closePrice * StopLossPercent / 100;
+   double tpDistance = closePrice * TakeProfitPercent / 100;
+   
+   buyPrice = closePrice;
+   buySL = closePrice - slDistance;
+   buyTP = closePrice + tpDistance;
+   
+   // For gold, adjust SL/TP to ATR
+   if(_Symbol == "XAUUSD" || _Symbol == "GOLD")
+   {
+      buySL = closePrice - atr * ATRMultiplier;
+      buyTP = closePrice + atr * ATRMultiplier * 2.5;  // 1:2.5 ratio
+   }
+   
+   // Open buy order
+   bool result = trade.Buy(lot, _Symbol, closePrice, buySL, buyTP, "GoldHybridV4");
+   
+   if(result)
+   {
+      buyTicket = trade.ResultOrder();
+      lastTradeTime = TimeCurrent();
+      Print("POSITION OPENED: Buy ", lot, " at ", DoubleToString(closePrice, 2));
+      Print("SL: ", DoubleToString(buySL, 2), " TP: ", DoubleToString(buyTP, 2));
+   }
+   else
+   {
+      Print("FAILED TO OPEN POSITION: ", trade.ResultRetcodeDescription());
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Close Position                                                    |
+//+------------------------------------------------------------------+
+void ClosePosition()
+{
+   if(buyTicket <= 0) return;
+   
+   bool result = trade.PositionClose(buyTicket);
+   
+   if(result)
+   {
+      Print("POSITION CLOSED: Ticket ", buyTicket);
+   }
+   else
+   {
+      Print("FAILED TO CLOSE: ", trade.ResultRetcodeDescription());
+   }
+   
+   buyTicket = 0;
+   buyPrice = 0;
+   buySL = 0;
+   buyTP = 0;
+}
+
+//+------------------------------------------------------------------+
+//| Verify spread before trading                                      |
+//+------------------------------------------------------------------+
+bool CheckSpread()
+{
+   int spread = (int)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
+   return (spread <= MaxSpread);
+}
+
+//+------------------------------------------------------------------+
+//| Check if enough bars for indicators                               |
+//+------------------------------------------------------------------+
+bool CheckBars()
+{
+   int bars = iBars(_Symbol, Timeframe);
+   return (bars > MAPeriod3 + 50);
+}

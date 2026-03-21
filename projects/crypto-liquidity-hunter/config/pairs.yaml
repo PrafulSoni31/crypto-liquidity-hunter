@@ -1,10 +1,11 @@
+# pairs: List of trading pairs to monitor (format: EXCHANGE:SYMBOL)
 pairs:
   - 'binance:BTC/USDT'
   - 'binance:ETH/USDT'
   - 'binance:SOL/USDT'
 
 data_fetch:
-  timeframe: '15m'          # default timeframe for scanning
+  timeframe: '1h'          # default timeframe for scanning (1h gives quality, 5m gives noise)
   ohlcv_limit: 1000        # bars to fetch
   atr_period: 14
 
@@ -15,16 +16,16 @@ liquidity_mapper:
   min_swing_strength: 3
 
 sweep_detector:
-  sweep_multiplier: 1.5     # ATR multiple for sweep threshold
-  volume_multiplier: 2.5    # volume spike threshold
-  confirmation_bars: 3
-  wick_ratio: 0.67
-  min_sweep_pct: 0.2        # 0.2%
+  sweep_multiplier: 0.6           # ATR threshold (0.6×ATR)
+  volume_multiplier: 1.2          # volume spike (20% above avg)
+  confirmation_bars: 3            # wait 3 bars for rejection
+  wick_ratio: 0.45                # wick ≥45% of candle range
+  min_sweep_pct: 0.25             # minimum sweep depth (0.25%)
 
 signal_engine:
-  risk_per_trade: 0.01      # 1% per trade
+  risk_per_trade: 0.01            # 1% per trade
   min_risk_reward: 1.5
-  stop_buffer_pct: 0.001    # 0.1%
+  stop_buffer_pct: 0.001          # 0.1%
   target_buffer_pct: 0.001
   retracement_levels: [0.5, 0.618, 0.786]
 
