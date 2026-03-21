@@ -56,7 +56,7 @@
       </table>
       <h3>Active Signals</h3>
       <table id="signalsTable">
-        <thead><tr><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Conf</th></tr></thead>
+        <thead><tr><th>Dir</th><th>Price</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Conf</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -79,7 +79,8 @@
   <script>
     function loadChart() {
       const pair = document.getElementById('pairSelect').value;
-      fetch(`/api/chart/${pair}`)
+      const tf = document.getElementById('tfSelect').value;
+      fetch(`/api/chart/${pair}?tf=${tf}`)
         .then(r => r.json())
         .then(data => {
           const plotDiv = document.getElementById('chart');
@@ -90,7 +91,8 @@
 
     function loadScan() {
       const pair = document.getElementById('pairSelect').value;
-      fetch(`/api/scan/${pair}`)
+      const tf = document.getElementById('tfSelect').value;
+      fetch(`/api/scan/${pair}?tf=${tf}`)
         .then(r => r.json())
         .then(data => {
           document.getElementById('scanInfo').innerHTML =
@@ -128,6 +130,7 @@
           signalsTbody.innerHTML = data.signals.map(s => `
             <tr>
               <td class="${s.direction === 'long' ? 'signal-long' : 'signal-short'}">${s.direction.toUpperCase()}</td>
+              <td>${s.current_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
               <td>${s.entry_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
               <td>${s.stop_loss.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
               <td>${s.target.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>

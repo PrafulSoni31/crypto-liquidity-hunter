@@ -99,6 +99,12 @@ class SignalEngine:
             stop_loss = sweep_price * (1 + self.stop_buffer)
             risk_per_unit = stop_loss - entry_price
 
+        # Reject if risk is too small (near-zero) — prevents huge positions and calculation errors
+        min_risk = entry_price * 0.0001  # 0.01% of entry price
+        if risk_per_unit < min_risk:
+            logger.debug(f"Risk per unit too small: {risk_per_unit:.6f} < {min_risk:.6f}, rejecting")
+            return None
+
         if risk_per_unit <= 0:
             logger.warning(f"Invalid risk calc: entry={entry_price} stop={stop_loss} direction={direction}")
             return None

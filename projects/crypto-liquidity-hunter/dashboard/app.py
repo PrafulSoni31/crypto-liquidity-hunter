@@ -5,7 +5,7 @@ Flask app with Plotly charts, real-time sweep/signal display.
 import os
 import json
 from datetime import datetime, timedelta
-from flask import Flask, render_template, jsonify, send_from_directory
+from flask import Flask, render_template, jsonify, send_from_directory, request
 import pandas as pd
 import plotly.graph_objs as go
 from plotly.utils import PlotlyJSONEncoder
@@ -59,9 +59,9 @@ def index():
 
 @app.route('/api/scan/<pair>')
 def scan_pair(pair):
-    """Run live scan for a specific pair (default timeframe from config)."""
+    """Run live scan for a specific pair (with optional tf query param)."""
+    tf = request.args.get('tf', config['data_fetch']['timeframes'][0])
     exchange_str, symbol = pair.split(':', 1)
-    tf = config['data_fetch']['timeframes'][0]  # use first TF (1h)
     df = fetcher.fetch_ohlcv(symbol, timeframe=tf, limit=config['data_fetch']['ohlcv_limit'])
     atr = fetcher.calculate_atr(df, period=config['data_fetch']['atr_period'])
     zones = mapper.map_liquidity(df)
@@ -97,6 +97,7 @@ def scan_pair(pair):
         signals_data.append({
             'direction': sig.direction,
             'entry_price': sig.entry_price,
+            'current_price': latest_price,  # add current market price
             'stop_loss': sig.stop_loss,
             'target': sig.target,
             'risk_reward': sig.risk_reward,
@@ -117,8 +118,8 @@ def scan_pair(pair):
 @app.route('/api/chart/<pair>')
 def chart_pair(pair):
     """Generate candlestick chart with zones and sweeps."""
+    tf = request.args.get('tf', config['data_fetch']['timeframes'][0])
     exchange_str, symbol = pair.split(':', 1)
-    tf = config['data_fetch']['timeframes'][0]
     df = fetcher.fetch_ohlcv(symbol, timeframe=tf, limit=200)
     atr = fetcher.calculate_atr(df, period=config['data_fetch']['atr_period'])
     zones = mapper.map_liquidity(df)
@@ -174,7 +175,7 @@ def chart_pair(pair):
 def get_signals():
     """Get recent signals across all pairs."""
     signals_all = []
-    for pair in config['pairs'][:5]:  # limit to 5 for performance
+    for pair in config['pairs']:  # scan all pairs (no limit)
         try:
             exchange_str, symbol = pair.split(':', 1)
             tf = config['data_fetch']['timeframes'][0]

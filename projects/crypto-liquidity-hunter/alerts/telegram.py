@@ -54,15 +54,25 @@ Depth: {abs(sweep['sweep_depth_pct']):.2f}%
     def format_signal_alert(self, signal) -> str:
         """Format trade signal message."""
         direction_emoji = '🟢' if signal.direction == 'long' else '🔴'
+        # Determine base currency from pair (e.g., 'binance:WIF/USDT' -> 'WIF')
+        base_currency = signal.pair.split('/')[-1].split(':')[-1] if '/' in signal.pair else 'BTC'
+        # Dynamic precision: more decimals for low-priced assets
+        def fmt(price):
+            if price < 1:
+                return f"{price:.6f}"
+            elif price < 10:
+                return f"{price:.4f}"
+            else:
+                return f"{price:.2f}"
         text = f"""<b>TRADE SIGNAL</b> {direction_emoji}
 
 Pair: {signal.pair}
 Direction: {signal.direction.upper()}
-Entry: ${signal.entry_price:.2f}
-Stop: ${signal.stop_loss:.2f}
-Target: ${signal.target:.2f}
+Entry: ${fmt(signal.entry_price)}
+Stop: ${fmt(signal.stop_loss)}
+Target: ${fmt(signal.target)}
 R:R: {signal.risk_reward:.2f}
-Size: {signal.position_size:.4f} BTC
+Size: {signal.position_size:.4f} {base_currency}
 Confidence: {signal.confidence*100:.0f}%
 Reason: {signal.target_type}
 
