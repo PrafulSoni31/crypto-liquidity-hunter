@@ -127,13 +127,18 @@
 
           // Signals table
           const signalsTbody = document.querySelector('#signalsTable tbody');
+          const fmtPrice = (p) => {
+            if (p < 1) return p.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6});
+            if (p < 10) return p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
+            return p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          };
           signalsTbody.innerHTML = data.signals.map(s => `
             <tr>
               <td class="${s.direction === 'long' ? 'signal-long' : 'signal-short'}">${s.direction.toUpperCase()}</td>
-              <td>${s.current_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-              <td>${s.entry_price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-              <td>${s.stop_loss.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-              <td>${s.target.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${fmtPrice(s.current_price)}</td>
+              <td>${fmtPrice(s.entry_price)}</td>
+              <td>${fmtPrice(s.stop_loss)}</td>
+              <td>${fmtPrice(s.target)}</td>
               <td>${s.risk_reward.toFixed(2)}</td>
               <td>${(s.confidence*100).toFixed(0)}%</td>
             </tr>
@@ -142,6 +147,11 @@
     }
 
     function loadAllSignals() {
+      const fmtPrice = (p) => {
+        if (p < 1) return p.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6});
+        if (p < 10) return p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
+        return p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      };
       fetch('/api/signals')
         .then(r => r.json())
         .then(data => {
@@ -152,9 +162,9 @@
               <td>${s.timeframe}</td>
               <td>${new Date(s.timestamp).toLocaleTimeString()}</td>
               <td class="${s.direction === 'long' ? 'signal-long' : 'signal-short'}">${s.direction.toUpperCase()}</td>
-              <td>${s.entry.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-              <td>${s.sl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
-              <td>${s.tp.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+              <td>${fmtPrice(s.entry)}</td>
+              <td>${fmtPrice(s.sl)}</td>
+              <td>${fmtPrice(s.tp)}</td>
               <td>${s.rr.toFixed(2)}</td>
             </tr>
           `).join('');

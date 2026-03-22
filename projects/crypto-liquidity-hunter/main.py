@@ -79,11 +79,17 @@ def cmd_scan(args):
         sweeps = detector.detect_sweeps(df, atr, zones)
 
         # Generate signals for recent sweeps
+        sig_cfg = config['signal_engine']
+        paper_cfg = config.get('paper_trading', {})
         engine = SignalEngine(
-            risk_per_trade=config['signal_engine']['risk_per_trade'],
-            retracement_levels=config['signal_engine']['retracement_levels'],
-            stop_buffer_pct=config['signal_engine']['stop_buffer_pct'],
-            min_risk_reward=config['signal_engine']['min_risk_reward']
+            risk_per_trade=sig_cfg['risk_per_trade'],
+            retracement_levels=sig_cfg['retracement_levels'],
+            stop_buffer_pct=sig_cfg['stop_buffer_pct'],
+            min_risk_reward=sig_cfg['min_risk_reward'],
+            position_sizing=paper_cfg.get('position_sizing', 'risk_percent'),
+            fixed_notional_usd=paper_cfg.get('fixed_notional_usd', 50.0),
+            margin_leverage=paper_cfg.get('margin_leverage', 1.0),
+            commission_pct=paper_cfg.get('commission_per_trade', 0.001)
         )
         latest_price = df.iloc[-1]['close']
         signals = []
@@ -290,11 +296,17 @@ def cmd_scan_all(args):
                 )
                 sweeps = detector.detect_sweeps(df, atr, zones)
 
+                sig_cfg = config['signal_engine']
+                paper_cfg = config.get('paper_trading', {})
                 engine = SignalEngine(
-                    risk_per_trade=config['signal_engine']['risk_per_trade'],
-                    retracement_levels=config['signal_engine']['retracement_levels'],
-                    stop_buffer_pct=config['signal_engine']['stop_buffer_pct'],
-                    min_risk_reward=config['signal_engine']['min_risk_reward']
+                    risk_per_trade=sig_cfg['risk_per_trade'],
+                    retracement_levels=sig_cfg['retracement_levels'],
+                    stop_buffer_pct=sig_cfg['stop_buffer_pct'],
+                    min_risk_reward=sig_cfg['min_risk_reward'],
+                    position_sizing=paper_cfg.get('position_sizing', 'risk_percent'),
+                    fixed_notional_usd=paper_cfg.get('fixed_notional_usd', 50.0),
+                    margin_leverage=paper_cfg.get('margin_leverage', 1.0),
+                    commission_pct=paper_cfg.get('commission_per_trade', 0.001)
                 )
                 latest_price = df.iloc[-1]['close']
 

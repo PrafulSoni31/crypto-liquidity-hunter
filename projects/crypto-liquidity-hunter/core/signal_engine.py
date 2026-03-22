@@ -21,10 +21,13 @@ class TradeSignal:
     target: float
     target_type: str  # 'liquidity_zone' or 'risk_multiple'
     risk_reward: float
-    position_size: float
-    risk_amount: float
-    confidence: float
-    zone_strength: int
+    position_size: float  # in base currency (e.g., BTC)
+    risk_amount: float  # in quote currency (e.g., USDT) - potential loss
+    notional_usd: float  # total position value at entry (position_size * entry_price)
+    margin_required_usd: float  # notional / leverage
+    commission_estimated_usd: float  # commission on entry (and maybe exit)
+    confidence: float  # 0-1 score
+    zone_strength: int  # strength of target zone
     sweep: Dict
     notes: str = ''
 
@@ -34,20 +37,32 @@ class SignalEngine:
                  retracement_levels: List[float] = None,  # fib levels for entry
                  stop_buffer_pct: float = 0.001,      # 0.1% beyond sweep extreme
                  min_risk_reward: float = 1.5,
-                 target_buffer_pct: float = 0.001):   # buffer before zone
+                 target_buffer_pct: float = 0.001,    # buffer before zone
+                 position_sizing: str = 'risk_percent',  # 'risk_percent' or 'fixed_notional'
+                 fixed_notional_usd: float = 50.0,
+                 margin_leverage: float = 1.0,
+                 commission_pct: float = 0.001):
         """
         Parameters:
-        - risk_per_trade: fraction of capital to risk per trade
-        - retracement_levels: Fib retracement levels to consider for entry (default [0.5, 0.618, 0.786])
+        - risk_per_trade: fraction of capital to risk per trade (used if position_sizing='risk_percent')
+        - retracement_levels: Fib retracement levels for entry
         - stop_buffer_pct: extra buffer beyond sweep extreme for stop placement
         - min_risk_reward: minimum R:R to take trade
         - target_buffer_pct: buffer before hitting zone exactly (helps with takers)
+        - position_sizing: 'risk_percent' (default) or 'fixed_notional'
+        - fixed_notional_usd: if using fixed_notional, the target notional value in USD
+        - margin_leverage: margin multiplier (e.g., 20 for 1:20)
+        - commission_pct: commission rate per trade (for P&L calculation)
         """
         self.risk_per_trade = risk_per_trade
         self.retracement_levels = retracement_levels or [0.5, 0.618, 0.786]
         self.stop_buffer = stop_buffer_pct
         self.min_risk_reward = min_risk_reward
         self.target_buffer = target_buffer_pct
+        self.position_sizing = position_sizing
+        self.fixed_notional_usd = fixed_notional_usd
+        self.margin_leverage = margin_leverage
+        self.commission_pct = commission_pct
 
     def generate_signal(self,
                         sweep,
@@ -153,9 +168,20 @@ class SignalEngine:
             logger.info(f"Signal rejected: R:R too low {risk_reward:.2f} < {self.min_risk_reward}")
             return None
 
-        # 6. Position sizing
-        risk_amount = capital * self.risk_per_trade
-        position_size = risk_amount / risk_per_unit
+        # 6. Position sizing based on mode
+        if self.position_sizing == 'fixed_notional':
+            # Fixed notional value in USD (e.g., $50) regardless of risk
+            notional_usd = self.fixed_notional_usd
+            position_size = notional_usd / entry_price
+            risk_amount = risk_per_unit * position_size
+            margin_required_usd = notional_usd / self.margin_leverage
+            commission_estimated_usd = notional_usd * self.commission_pct
+        else:  # risk_percent (default)
+            risk_amount = capital * self.risk_per_trade
+            position_size = risk_amount / risk_per_unit
+            notional_usd = position_size * entry_price
+            margin_required_usd = notional_usd / self.margin_leverage if self.margin_leverage > 1 else notional_usd
+            commission_estimated_usd = notional_usd * self.commission_pct
 
         # 7. Confidence score
         confidence = self._calculate_confidence(sweep, zone_strength, len(liquidity_zones))
@@ -171,6 +197,9 @@ class SignalEngine:
             risk_reward=risk_reward,
             position_size=position_size,
             risk_amount=risk_amount,
+            notional_usd=notional_usd,
+            margin_required_usd=margin_required_usd,
+            commission_estimated_usd=commission_estimated_usd,
             confidence=confidence,
             zone_strength=zone_strength,
             sweep=asdict(sweep) if hasattr(sweep, '__dict__') else sweep,

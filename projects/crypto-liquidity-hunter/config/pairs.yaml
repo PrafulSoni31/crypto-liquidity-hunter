@@ -58,6 +58,13 @@ alerts:
     bot_token: "8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys"
     chat_id: "686482312"
 
+# Paper trading configuration (simulated, not live)
+paper_trading:
+  position_sizing: fixed_notional  # 'risk_percent' or 'fixed_notional'
+  fixed_notional_usd: 50            # $50 equivalent per trade
+  margin_leverage: 20               # 1:20 margin multiplier
+  commission_per_trade: 0.001       # 0.1% commission per trade
+
 # Auto-trading configuration (testnet only)
 trading:
   enabled: false               # Set to true to enable auto-trade
