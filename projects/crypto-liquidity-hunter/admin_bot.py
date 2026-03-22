@@ -12,7 +12,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 # === CONFIG ===
-ADMIN_USER_ID = 686482312  # Your Telegram user ID (change if needed)
+ADMIN_USER_ID = 686482312  # Your Telegram user ID
 BOT_TOKEN = "8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys"
 PROJECT_ROOT = Path("/root/.openclaw/workspace/projects/crypto-liquidity-hunter")
 
@@ -41,6 +41,8 @@ def auth_required(func):
         return await func(update, context)
     return wrapper
 
+# === System Commands ===
+
 async def restart_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Restart the dashboard service with cache clear."""
     await update.message.reply_text("🔄 Restarting dashboard and clearing caches...")
@@ -55,17 +57,23 @@ async def restart_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         subprocess.run(["systemctl", "restart", "liquidity-hunter-dashboard.service"], check=True, capture_output=True, text=True)
         await update.message.reply_text(
-            "✅ Dashboard restarted with clean cache.\n\n"
-            "📌 <b>Next step:</b> Hard refresh your browser to see updates:\n"
-            "• Chrome/Windows: <code>Ctrl + Shift + R</code>\n"
-            "• Mac: <code>Cmd + Shift + R</code>\n"
-            "Or open in incognito window.",
+            "✅ Dashboard restarted.\n"
+            "📌 Hard refresh browser: Ctrl+Shift+R (Windows) or Cmd+Shift+R (Mac).",
             parse_mode="HTML"
         )
     except subprocess.CalledProcessError as e:
         await update.message.reply_text(f"❌ Restart failed:\n<code>{e.stderr}</code>", parse_mode="HTML")
     except subprocess.TimeoutExpired:
-        await update.message.reply_text("⚠️ Cache clear timed out, but dashboard restart may have succeeded.")
+        await update.message.reply_text("⚠️ Cache clear timed out.")
+
+async def restart_admin_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Restart the admin bot service (this bot)."""
+    await update.message.reply_text("🔄 Restarting admin bot...")
+    try:
+        subprocess.run(["systemctl", "restart", "liquidity-hunter-admin-bot.service"], check=True, capture_output=True, text=True)
+        await update.message.reply_text("✅ Admin bot restarted successfully.")
+    except subprocess.CalledProcessError as e:
+        await update.message.reply_text(f"❌ Restart failed:\n<code>{e.stderr}</code>", parse_mode="HTML")
 
 async def dashboard_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show dashboard service status."""
@@ -114,35 +122,61 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = """
 <b>🤖 Liquidity Hunter Admin Bot</b>
 
-Commands:
+<b>System:</b>
 /restart_dashboard — Restart dashboard service
+/restart_admin_bot — Restart this admin bot
 /dashboard_status — Show dashboard status
-/scan_all — Trigger full scan now (alerts will be sent)
 /logs — Show recent dashboard logs
-/help — This message
 
-<B>Parameter Commands (live adjust):</b>
+<b>Operations:</b>
+/scan_all — Trigger full scan now (alerts will be sent)
+
+<b>Parameter Commands (live adjust):</b>
 /params — Show current parameters
-/set_sweep_multiplier &lt;value&gt; — e.g., 0.65
-/set_volume_multiplier &lt;value&gt; — e.g., 1.3
-/set_wick_ratio &lt;value&gt; — e.g., 0.5
-/set_min_sweep_pct &lt;value&gt; — e.g., 0.35
-/set_min_risk_reward &lt;value&gt; — e.g., 5.0
-/set_fixed_notional &lt;usd&gt; — e.g., 50
-/set_margin_leverage &lt;ratio&gt; — e.g., 20
+
+Sweep Detector:
+  /set_sweep_multiplier &lt;value&gt; — 0.1–5.0 (ATR multiplier)
+  /set_volume_multiplier &lt;value&gt; — 1.0–10.0 (volume spike)
+  /set_wick_ratio &lt;value&gt; — 0.1–1.0 (wick fraction)
+  /set_min_sweep_pct &lt;value&gt; — 0.01–5% (depth)
+
+Signal Engine:
+  /set_min_risk_reward &lt;value&gt; — 0.5–20.0 (R:R threshold)
+
+Data Fetch:
+  /set_ohlcv_limit &lt;bars&gt; — 100–5000 (candles per scan)
+
+Volume Filter:
+  /set_min_24h_volume &lt;usd&gt; — e.g., 500000
+  /toggle_volume_filter — Enable/disable filter
+
+Paper Trading:
+  /set_fixed_notional &lt;usd&gt; — position size
+  /set_margin_leverage &lt;ratio&gt; — 1–100
 
 Only admin can use these commands.
 """
     await update.message.reply_text(text, parse_mode="HTML")
 
-# --- Parameter Commands ---
+# === Parameter Commands ===
 
 async def show_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not config_mgr:
         await update.message.reply_text("❌ Config manager not available")
         return
     c = config_mgr._config
+    vol_cfg = c.get('volume_filter', {})
+    vol_enabled = vol_cfg.get('enabled', False)
+    vol_min = vol_cfg.get('min_24h_volume_usd', 0)
     text = f"""<b>Current Parameters:</b>
+
+<b>Data Fetch:</b>
+• ohlcv_limit: {c['data_fetch']['ohlcv_limit']} bars
+• atr_period: {c['data_fetch']['atr_period']}
+
+<b>Volume Filter:</b>
+• enabled: {vol_enabled}
+• min_24h_volume_usd: ${{vol_min:,.0f}}
 
 <b>Sweep Detector:</b>
 • sweep_multiplier: {c['sweep_detector']['sweep_multiplier']}
@@ -259,6 +293,52 @@ async def set_margin_leverage(update: Update, context: ContextTypes.DEFAULT_TYPE
     except (IndexError, ValueError):
         await update.message.reply_text("Usage: /set_margin_leverage <ratio>")
 
+async def set_ohlcv_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set OHLCV fetch limit (bars per scan)."""
+    if not config_mgr:
+        await update.message.reply_text("❌ Config manager not available")
+        return
+    try:
+        val = int(context.args[0])
+        if not (100 <= val <= 5000):
+            await update.message.reply_text("❌ Value must be between 100 and 5000 bars")
+            return
+        config_mgr.set('data_fetch.ohlcv_limit', val)
+        await update.message.reply_text(f"✅ ohlcv_limit set to {val} bars")
+    except (IndexError, ValueError):
+        await update.message.reply_text("Usage: /set_ohlcv_limit <100-5000>")
+
+async def set_min_24h_volume(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set minimum 24h volume filter threshold (USD) and enable filter."""
+    if not config_mgr:
+        await update.message.reply_text("❌ Config manager not available")
+        return
+    try:
+        val = float(context.args[0])
+        if val <= 0:
+            await update.message.reply_text("❌ Value must be positive")
+            return
+        config_mgr.set('volume_filter.min_24h_volume_usd', val)
+        # Auto-enable if not already
+        if not config_mgr.get('volume_filter.enabled', False):
+            config_mgr.set('volume_filter.enabled', True)
+            await update.message.reply_text(f"✅ min_24h_volume_usd set to ${val:,.0f}\n✅ Volume filter auto-enabled")
+        else:
+            await update.message.reply_text(f"✅ min_24h_volume_usd set to ${val:,.0f}")
+    except (IndexError, ValueError):
+        await update.message.reply_text("Usage: /set_min_24h_volume <usd>")
+
+async def toggle_volume_filter(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle volume filter on/off."""
+    if not config_mgr:
+        await update.message.reply_text("❌ Config manager not available")
+        return
+    current = config_mgr.get('volume_filter.enabled', False)
+    new = not current
+    config_mgr.set('volume_filter.enabled', new)
+    state = "ENABLED" if new else "DISABLED"
+    await update.message.reply_text(f"✅ Volume filter is now {state}")
+
 def main():
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN not set")
@@ -266,8 +346,9 @@ def main():
 
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Existing commands
+    # System commands
     app.add_handler(CommandHandler("restart_dashboard", restart_dashboard))
+    app.add_handler(CommandHandler("restart_admin_bot", restart_admin_bot))
     app.add_handler(CommandHandler("dashboard_status", dashboard_status))
     app.add_handler(CommandHandler("scan_all", run_scan_all))
     app.add_handler(CommandHandler("logs", view_logs))
@@ -282,6 +363,9 @@ def main():
     app.add_handler(CommandHandler("set_min_risk_reward", set_min_risk_reward))
     app.add_handler(CommandHandler("set_fixed_notional", set_fixed_notional))
     app.add_handler(CommandHandler("set_margin_leverage", set_margin_leverage))
+    app.add_handler(CommandHandler("set_ohlcv_limit", set_ohlcv_limit))
+    app.add_handler(CommandHandler("set_min_24h_volume", set_min_24h_volume))
+    app.add_handler(CommandHandler("toggle_volume_filter", toggle_volume_filter))
 
     logger.info("Admin bot starting...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)

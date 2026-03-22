@@ -248,6 +248,29 @@ def cmd_scan_all(args):
     pairs = config['pairs']
     timeframes = config['data_fetch'].get('timeframes', [config['data_fetch'].get('timeframe', '1h')])
 
+    # --- Volume Filter: skip pairs below 24h volume threshold ---
+    vol_cfg = config.get('volume_filter', {})
+    if vol_cfg.get('enabled', False):
+        min_vol = vol_cfg.get('min_24h_volume_usd', 0)
+        if min_vol > 0:
+            # Use a single fetcher to check volumes (no API keys needed for public endpoints)
+            fetcher = MarketDataFetcher('binance')
+            active_pairs = []
+            logger.info(f"Volume filter enabled: min_24h_volume_usd = ${min_vol:,.0f}")
+            for pair in pairs:
+                exchange_str, symbol = pair.split(':', 1) if ':' in pair else ('binance', pair)
+                try:
+                    vol = fetcher.get_24h_volume(symbol)
+                    if vol >= min_vol:
+                        active_pairs.append(pair)
+                    else:
+                        logger.info(f"Skipping {pair}: 24h volume ${vol:,.0f} < ${min_vol:,.0f}")
+                except Exception as e:
+                    logger.warning(f"Could not fetch volume for {pair}: {e} — skipping")
+            pairs = active_pairs
+            logger.info(f"Volume filter: {len(pairs)} pairs remain after threshold")
+    # -----------------------------------------------------------
+
     dispatcher = AlertDispatcher(config['alerts'])
     all_signals = []
 

@@ -52,6 +52,22 @@ class MarketDataFetcher:
             logger.error(f"Fetch OHLCV failed: {e}")
             raise
 
+    def get_24h_volume(self, symbol: str) -> float:
+        """
+        Get 24h trading volume in quote currency (USDT).
+        Returns volume as float.
+        """
+        try:
+            ticker = self.exchange.fetch_ticker(symbol)
+            # Most exchanges return 'quoteVolume' for 24h volume in quote currency
+            volume = ticker.get('quoteVolume', 0.0)
+            if volume is None:
+                volume = ticker.get('baseVolume', 0.0)  # fallback, but that's in base currency
+            return float(volume)
+        except Exception as e:
+            logger.warning(f"Fetch 24h volume failed for {symbol}: {e}")
+            return 0.0
+
     def fetch_orderbook(self, symbol: str, limit: int = 20) -> Dict:
         """Fetch orderbook snapshot (bids/asks)."""
         try:

@@ -5,7 +5,7 @@ SQLite database with tables: zones, sweeps, signals, trades.
 import sqlite3
 import pandas as pd
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pathlib import Path
 import json
 import logging
