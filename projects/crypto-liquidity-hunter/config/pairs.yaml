@@ -41,7 +41,7 @@ sweep_detector:
 
 signal_engine:
   risk_per_trade: 0.01            # 1% per trade
-  min_risk_reward: 1.8            # only 1.8:1 or better
+  min_risk_reward: 5.0            # only 5:1 or better (ultra-high conviction)
   stop_buffer_pct: 0.001          # 0.1%
   target_buffer_pct: 0.001
   retracement_levels: [0.5, 0.618, 0.786]
