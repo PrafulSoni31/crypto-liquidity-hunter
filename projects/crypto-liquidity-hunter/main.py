@@ -22,6 +22,7 @@ from core.signal_engine import SignalEngine
 from core.backtester import Backtester
 from core.auto_trader import AutoTrader
 from alerts.telegram import AlertDispatcher
+from data.store import DataStore
 
 # Load config
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -357,6 +358,31 @@ def cmd_scan_all(args):
             except Exception as e:
                 logger.error(f"Error scanning {pair} {tf}: {e}")
                 continue
+
+    # Save latest signals to cache for dashboard
+    store = DataStore()
+    # Convert TradeSignal objects to serializable dicts
+    serializable_signals = []
+    for item in all_signals:
+        sig = item['signal']
+        # Convert dataclass to dict if needed
+        sig_dict = sig.__dict__ if hasattr(sig, '__dict__') else dict(sig)
+        serializable_signals.append({
+            'pair': item['pair'],
+            'timeframe': item['timeframe'],
+            'timestamp': item['timestamp'].isoformat() if hasattr(item['timestamp'], 'isoformat') else item['timestamp'],
+            'direction': sig_dict['direction'],
+            'entry': sig_dict['entry_price'],
+            'sl': sig_dict['stop_loss'],
+            'tp': sig_dict['target'],
+            'rr': sig_dict['risk_reward'],
+            'confidence': sig_dict['confidence'],
+            'notional_usd': sig_dict.get('notional_usd', 0),
+            'margin_required_usd': sig_dict.get('margin_required_usd', 0),
+            'commission_estimated_usd': sig_dict.get('commission_estimated_usd', 0),
+            'zone_strength': sig_dict.get('zone_strength', 0)
+        })
+    store.save_latest_signals(serializable_signals)
 
     # Print summary
     print(f"\n=== SCAN ALL: {len(pairs)} pairs, {len(timeframes)} timeframes ===")

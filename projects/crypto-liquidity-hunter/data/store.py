@@ -13,9 +13,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DataStore:
-    def __init__(self, db_path: str = 'data/store.db'):
+    def __init__(self, db_path: str = 'data/store.db', cache_path: str = 'data/latest_signals.json'):
         self.db_path = Path(db_path)
+        self.cache_path = Path(cache_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
     def _init_db(self):
@@ -171,6 +173,26 @@ class DataStore:
             query += " ORDER BY entry_time DESC"
             df = pd.read_sql(query, conn, params=params)
         return df
+
+    def save_latest_signals(self, signals: List[Dict], scan_timestamp: datetime = None):
+        """Save latest scan results to JSON cache for dashboard/API."""
+        data = {
+            'last_updated': (scan_timestamp or datetime.utcnow()).isoformat(),
+            'signals': signals
+        }
+        with open(self.cache_path, 'w') as f:
+            json.dump(data, f, indent=2)
+
+    def get_latest_signals(self) -> Dict:
+        """Read latest signals from cache. Returns {'last_updated': ..., 'signals': [...]}."""
+        if not self.cache_path.exists():
+            return {'last_updated': None, 'signals': []}
+        try:
+            with open(self.cache_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to read signals cache: {e}")
+            return {'last_updated': None, 'signals': []}
 
 if __name__ == '__main__':
     store = DataStore()

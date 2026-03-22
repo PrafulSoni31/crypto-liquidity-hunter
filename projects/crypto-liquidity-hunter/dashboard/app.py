@@ -180,41 +180,11 @@ def chart_pair(pair):
 
 @app.route('/api/signals')
 def get_signals():
-    """Get recent signals across all pairs and all timeframes."""
-    signals_all = []
-    timeframes = config['data_fetch'].get('timeframes', [config['data_fetch'].get('timeframe', '1h')])
-    for pair in config['pairs']:
-        try:
-            exchange_str, symbol = pair.split(':', 1)
-            for tf in timeframes:
-                df = fetcher.fetch_ohlcv(symbol, timeframe=tf, limit=300)  # faster, 300 bars enough
-                atr = fetcher.calculate_atr(df, period=config['data_fetch']['atr_period'])
-                zones = mapper.map_liquidity(df)
-                sweeps = detector.detect_sweeps(df, atr, zones)
-                latest_price = df.iloc[-1]['close']
-                for sweep in sweeps[-5:]:
-                    signal = engine.generate_signal(sweep, zones, latest_price, capital=10000, pair=pair)
-                    if signal:
-                        signals_all.append({
-                            'pair': pair,
-                            'timeframe': tf,
-                            'timestamp': sweep.timestamp.isoformat(),
-                            'direction': signal.direction,
-                            'entry': signal.entry_price,
-                            'sl': signal.stop_loss,
-                            'tp': signal.target,
-                            'rr': signal.risk_reward,
-                            'confidence': signal.confidence,
-                            'notional_usd': signal.notional_usd,
-                            'margin_required_usd': signal.margin_required_usd,
-                            'commission_estimated_usd': signal.commission_estimated_usd
-                        })
-        except Exception as e:
-            logger.error(f"Error scanning {pair}: {e}")
-            continue
-
-    signals_all.sort(key=lambda x: x['timestamp'], reverse=True)
-    return jsonify({'signals': signals_all[:50]})
+    """Get latest signals from shared cache (same as Telegram alerts)."""
+    from data.store import DataStore
+    store = DataStore()
+    cache = store.get_latest_signals()
+    return jsonify(cache)
 
 @app.route('/health')
 def health():

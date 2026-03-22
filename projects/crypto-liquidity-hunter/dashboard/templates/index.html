@@ -25,6 +25,7 @@
 </head>
 <body>
   <h1>🎃 Liquidity Hunter Dashboard</h1>
+  <p id="lastUpdated" style="color: #aaa; font-size: 0.9em;"></p>
 
   <div class="refresh">
     <button onclick="loadData()">Refresh All</button>
@@ -56,7 +57,7 @@
       </table>
       <h3>Active Signals</h3>
       <table id="signalsTable">
-        <thead><tr><th>Dir</th><th>Price</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Conf</th></tr></thead>
+        <thead><tr><th>Dir</th><th>Price</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Conf</th><th>Notional</th><th>Margin</th><th>Comm</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -77,6 +78,12 @@
 
   <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
   <script>
+    function loadData() {
+      loadChart();
+      loadScan();
+      loadAllSignals();
+    }
+
     function loadChart() {
       const pair = document.getElementById('pairSelect').value;
       const tf = document.getElementById('tfSelect').value;
@@ -101,18 +108,16 @@
             `<strong>Zones:</strong> ${data.zones.length} | <strong>Sweeps:</strong> ${data.sweeps.length} | ` +
             `<strong>Signals:</strong> ${data.signals.length}`;
 
-          // Zones table
           const zonesTbody = document.querySelector('#zonesTable tbody');
           zonesTbody.innerHTML = data.zones.map(z => `
             <tr>
-              <td>${z.type}</td>
+              <td>${z.zone_type}</td>
               <td>${z.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
               <td>${z.strength}</td>
               <td>${new Date(z.last_touch).toLocaleDateString()}</td>
             </tr>
           `).join('');
 
-          // Sweeps table
           const sweepsTbody = document.querySelector('#sweepsTable tbody');
           sweepsTbody.innerHTML = data.sweeps.map(s => `
             <tr>
@@ -125,7 +130,6 @@
             </tr>
           `).join('');
 
-          // Signals table
           const signalsTbody = document.querySelector('#signalsTable tbody');
           const fmtPrice = (p) => {
             if (p < 1) return p.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6});
@@ -150,14 +154,21 @@
     }
 
     function loadAllSignals() {
-      const fmtPrice = (p) => {
-        if (p < 1) return p.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6});
-        if (p < 10) return p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
-        return p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-      };
       fetch('/api/signals')
         .then(r => r.json())
         .then(data => {
+          // Update last updated timestamp
+          const el = document.getElementById('lastUpdated');
+          if (data.last_updated) {
+            el.textContent = 'Last updated: ' + new Date(data.last_updated).toLocaleString();
+          } else {
+            el.textContent = 'No scans yet';
+          }
+          const fmtPrice = (p) => {
+            if (p < 1) return p.toLocaleString(undefined, {minimumFractionDigits: 4, maximumFractionDigits: 6});
+            if (p < 10) return p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4});
+            return p.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          };
           const tbody = document.querySelector('#allSignalsTable tbody');
           tbody.innerHTML = data.signals.map(s => `
             <tr>
@@ -177,12 +188,10 @@
         });
     }
 
-    // Initial load
     document.addEventListener('DOMContentLoaded', () => {
       loadChart();
       loadScan();
       loadAllSignals();
-      // Auto-refresh every 60s
       setInterval(() => {
         loadChart();
         loadScan();
