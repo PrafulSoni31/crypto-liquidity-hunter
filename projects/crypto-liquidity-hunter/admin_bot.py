@@ -125,6 +125,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 <b>System:</b>
 /restart_dashboard — Restart dashboard service
 /restart_admin_bot — Restart this admin bot
+/reload_config — Reload config file without restart
 /dashboard_status — Show dashboard status
 /logs — Show recent dashboard logs
 
@@ -133,6 +134,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>Parameter Commands (live adjust):</b>
 /params — Show current parameters
+/debug_config — Dump raw config (troubleshooting)
 
 Sweep Detector:
   /set_sweep_multiplier &lt;value&gt; — 0.1–5.0 (ATR multiplier)
@@ -168,6 +170,8 @@ async def show_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vol_cfg = c.get('volume_filter', {})
     vol_enabled = vol_cfg.get('enabled', False)
     vol_min = vol_cfg.get('min_24h_volume_usd', 0)
+    # Debug logging
+    logger.info(f"[show_params] volume_filter keys: {list(vol_cfg.keys()) if isinstance(vol_cfg, dict) else 'not dict'}, vol_min={vol_min}, vol_enabled={vol_enabled}")
     text = f"""<b>Current Parameters:</b>
 
 <b>Data Fetch:</b>
@@ -176,7 +180,7 @@ async def show_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 <b>Volume Filter:</b>
 • enabled: {vol_enabled}
-• min_24h_volume_usd: ${{vol_min:,.0f}}
+• min_24h_volume_usd: ${vol_min:,.0f}
 
 <b>Sweep Detector:</b>
 • sweep_multiplier: {c['sweep_detector']['sweep_multiplier']}
@@ -194,6 +198,28 @@ async def show_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • commission_per_trade: {c.get('paper_trading', {}).get('commission_per_trade', 0.001)}
 """
     await update.message.reply_text(text, parse_mode="HTML")
+
+async def reload_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reload configuration from file."""
+    if not config_mgr:
+        await update.message.reply_text("❌ Config manager not available")
+        return
+    try:
+        config_mgr._config = config_mgr.load()
+        await update.message.reply_text("✅ Config reloaded from file.")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Reload failed: {e}")
+
+async def debug_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Debug: dump entire config (for troubleshooting)."""
+    if not config_mgr:
+        await update.message.reply_text("❌ Config manager not available")
+        return
+    import json
+    dump = json.dumps(config_mgr._config, indent=2, default=str)
+    if len(dump) > 4000:
+        dump = dump[:4000] + "\n... (truncated)"
+    await update.message.reply_text(f"<pre>{dump}</pre>", parse_mode="HTML")
 
 async def set_sweep_multiplier(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not config_mgr:
@@ -322,9 +348,15 @@ async def set_min_24h_volume(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # Auto-enable if not already
         if not config_mgr.get('volume_filter.enabled', False):
             config_mgr.set('volume_filter.enabled', True)
-            await update.message.reply_text(f"✅ min_24h_volume_usd set to ${val:,.0f}\n✅ Volume filter auto-enabled")
-        else:
-            await update.message.reply_text(f"✅ min_24h_volume_usd set to ${val:,.0f}")
+        # Read back to confirm
+        read_val = config_mgr.get('volume_filter.min_24h_volume_usd')
+        enabled = config_mgr.get('volume_filter.enabled')
+        await update.message.reply_text(
+            f"✅ min_24h_volume_usd set to ${val:,.0f}\n"
+            f"Read-back: ${read_val:,.0f}\n"
+            f"Volume filter enabled: {enabled}"
+        )
+        logger.info(f"Set volume_filter: min_24h_volume_usd={val}, enabled={enabled}")
     except (IndexError, ValueError):
         await update.message.reply_text("Usage: /set_min_24h_volume <usd>")
 
@@ -356,6 +388,8 @@ def main():
     
     # Parameter commands
     app.add_handler(CommandHandler("params", show_params))
+    app.add_handler(CommandHandler("debug_config", debug_config))
+    app.add_handler(CommandHandler("reload_config", reload_config))
     app.add_handler(CommandHandler("set_sweep_multiplier", set_sweep_multiplier))
     app.add_handler(CommandHandler("set_volume_multiplier", set_volume_multiplier))
     app.add_handler(CommandHandler("set_wick_ratio", set_wick_ratio))

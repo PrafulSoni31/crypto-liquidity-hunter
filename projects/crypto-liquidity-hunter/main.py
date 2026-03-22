@@ -245,6 +245,7 @@ def cmd_scan_all(args):
     """Scan all pairs across configured timeframes and send alerts for new signals."""
     config = load_config()
     setup_logging()
+    logger = logging.getLogger(__name__)
     pairs = config['pairs']
     timeframes = config['data_fetch'].get('timeframes', [config['data_fetch'].get('timeframe', '1h')])
 
