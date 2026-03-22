@@ -101,12 +101,15 @@ def scan_pair(pair):
         signals_data.append({
             'direction': sig.direction,
             'entry_price': sig.entry_price,
-            'current_price': latest_price,  # add current market price
+            'current_price': latest_price,
             'stop_loss': sig.stop_loss,
             'target': sig.target,
             'risk_reward': sig.risk_reward,
             'confidence': sig.confidence,
-            'zone_strength': sig.zone_strength
+            'zone_strength': sig.zone_strength,
+            'notional_usd': sig.notional_usd,
+            'margin_required_usd': sig.margin_required_usd,
+            'commission_estimated_usd': sig.commission_estimated_usd
         })
 
     return jsonify({

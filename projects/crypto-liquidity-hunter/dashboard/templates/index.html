@@ -69,7 +69,7 @@
     <div class="card">
       <h2>Recent Signals (All Pairs)</h2>
       <table id="allSignalsTable">
-        <thead><tr><th>Pair</th><th>TF</th><th>Time</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th></tr></thead>
+        <thead><tr><th>Pair</th><th>TF</th><th>Time</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>R:R</th><th>Notional</th><th>Margin</th><th>Comm</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -141,6 +141,9 @@
               <td>${fmtPrice(s.target)}</td>
               <td>${s.risk_reward.toFixed(2)}</td>
               <td>${(s.confidence*100).toFixed(0)}%</td>
+              <td>$${s.notional_usd.toFixed(2)}</td>
+              <td>$${s.margin_required_usd.toFixed(2)}</td>
+              <td>$${s.commission_estimated_usd.toFixed(2)}</td>
             </tr>
           `).join('');
         });
@@ -166,6 +169,9 @@
               <td>${fmtPrice(s.sl)}</td>
               <td>${fmtPrice(s.tp)}</td>
               <td>${s.rr.toFixed(2)}</td>
+              <td>$${s.notional_usd.toFixed(2)}</td>
+              <td>$${s.margin_required_usd.toFixed(2)}</td>
+              <td>$${s.commission_estimated_usd.toFixed(2)}</td>
             </tr>
           `).join('');
         });
