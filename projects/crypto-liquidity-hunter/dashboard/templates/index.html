@@ -87,7 +87,7 @@
     function loadChart() {
       const pair = document.getElementById('pairSelect').value;
       const tf = document.getElementById('tfSelect').value;
-      fetch(`/api/chart/${pair}?tf=${tf}`)
+      fetch(`/api/chart/${encodeURIComponent(pair)}?tf=${tf}`)
         .then(r => r.json())
         .then(data => {
           const plotDiv = document.getElementById('chart');
@@ -99,7 +99,7 @@
     function loadScan() {
       const pair = document.getElementById('pairSelect').value;
       const tf = document.getElementById('tfSelect').value;
-      fetch(`/api/scan/${pair}?tf=${tf}`)
+      fetch(`/api/scan/${encodeURIComponent(pair)}?tf=${tf}`)
         .then(r => r.json())
         .then(data => {
           document.getElementById('scanInfo').innerHTML =

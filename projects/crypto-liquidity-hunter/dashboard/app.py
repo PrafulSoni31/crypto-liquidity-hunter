@@ -37,7 +37,7 @@ def index():
     timeframes = config['data_fetch']['timeframes']
     return render_template('index.html', pairs=pairs, timeframes=timeframes)
 
-@app.route('/api/scan/<pair>')
+@app.route('/api/scan/<path:pair>')
 def scan_pair(pair):
     """Run live scan for a specific pair (with optional tf query param)."""
     config = load_config()
@@ -131,7 +131,7 @@ def scan_pair(pair):
         'last_updated': datetime.utcnow().isoformat()
     })
 
-@app.route('/api/chart/<pair>')
+@app.route('/api/chart/<path:pair>')
 def chart_pair(pair):
     """Generate candlestick chart with zones and sweeps."""
     config = load_config()
