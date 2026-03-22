@@ -97,3 +97,14 @@ Total signals generated: 4
   binance:WIF/USDT 15m LONG Entry=0.18 SL=0.18 TP=0.19 R:R=22.86
   binance:WIF/USDT 15m LONG Entry=0.18 SL=0.18 TP=0.19 R:R=21.35
   binance:WIF/USDT 15m LONG Entry=0.18 SL=0.18 TP=0.19 R:R=21.35
+Traceback (most recent call last):
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py", line 25, in <module>
+    from data.store import DataStore
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/data/store.py", line 15, in <module>
+    class DataStore:
+    ...<179 lines>...
+                return {'last_updated': None, 'signals': []}
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/data/store.py", line 139, in DataStore
+    def save_trade(self, pair: str, timeframe: str, trade: Dict, signal_id: Optional[int] = None):
+                                                           ^^^^
+NameError: name 'Dict' is not defined. Did you mean: 'dict'?

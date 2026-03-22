@@ -1,75 +1,70 @@
-# pairs: List of trading pairs to monitor (format: EXCHANGE:SYMBOL)
 pairs:
-  - 'binance:BTC/USDT'
-  - 'binance:ETH/USDT'
-  - 'binance:SOL/USDT'
-  - 'binance:BNB/USDT'
-  - 'binance:XRP/USDT'
-  - 'binance:ADA/USDT'
-  - 'binance:DOGE/USDT'
-  - 'binance:AVAX/USDT'
-  - 'binance:DOT/USDT'
-  - 'binance:MATIC/USDT'
-  - 'binance:LINK/USDT'
-  - 'binance:UNI/USDT'
-  - 'binance:AAVE/USDT'
-  - 'binance:INJ/USDT'
-  - 'binance:OP/USDT'
-  - 'binance:ARB/USDT'
-  - 'binance:APT/USDT'
-  - 'binance:SUI/USDT'
-  - 'binance:SEI/USDT'
-  - 'binance:WIF/USDT'
-
+- binance:BTC/USDT
+- binance:ETH/USDT
+- binance:SOL/USDT
+- binance:BNB/USDT
+- binance:XRP/USDT
+- binance:ADA/USDT
+- binance:DOGE/USDT
+- binance:AVAX/USDT
+- binance:DOT/USDT
+- binance:MATIC/USDT
+- binance:LINK/USDT
+- binance:UNI/USDT
+- binance:AAVE/USDT
+- binance:INJ/USDT
+- binance:OP/USDT
+- binance:ARB/USDT
+- binance:APT/USDT
+- binance:SUI/USDT
+- binance:SEI/USDT
+- binance:WIF/USDT
 data_fetch:
-  timeframes: ['4h', '1h', '15m']   # scan multiple timeframes for confluence
-  ohlcv_limit: 1000        # bars to fetch per timeframe
+  timeframes:
+  - 4h
+  - 1h
+  - 15m
+  ohlcv_limit: 1000
   atr_period: 14
-
 liquidity_mapper:
-  equal_touch_tolerance: 0.001    # 0.1%
+  equal_touch_tolerance: 0.001
   swing_lookback: 5
-  round_tolerance: 0.005          # 0.5%
+  round_tolerance: 0.005
   min_swing_strength: 3
-
 sweep_detector:
-  sweep_multiplier: 0.65          # 0.65×ATR
-  volume_multiplier: 1.3          # 1.3x volume
+  sweep_multiplier: 0.75
+  volume_multiplier: 1.3
   confirmation_bars: 3
-  wick_ratio: 0.5                 # wick ≥50% of range
-  min_sweep_pct: 0.35             # min 0.35% depth
-
+  wick_ratio: 0.5
+  min_sweep_pct: 0.35
 signal_engine:
-  risk_per_trade: 0.01            # 1% per trade
-  min_risk_reward: 5.0            # only 5:1 or better (ultra-high conviction)
-  stop_buffer_pct: 0.001          # 0.1%
+  risk_per_trade: 0.01
+  min_risk_reward: 5.0
+  stop_buffer_pct: 0.001
   target_buffer_pct: 0.001
-  retracement_levels: [0.5, 0.618, 0.786]
-
+  retracement_levels:
+  - 0.5
+  - 0.618
+  - 0.786
 backtester:
   commission_pct: 0.001
   slippage_pct: 0.0005
   max_concurrent_trades: 3
   timeout_bars: 48
-
 alerts:
   telegram:
     enabled: true
-    bot_token: "8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys"
-    chat_id: "686482312"
-
-# Paper trading configuration (simulated, not live)
+    bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
+    chat_id: '686482312'
 paper_trading:
-  position_sizing: fixed_notional  # 'risk_percent' or 'fixed_notional'
-  fixed_notional_usd: 50            # $50 equivalent per trade
-  margin_leverage: 20               # 1:20 margin multiplier
-  commission_per_trade: 0.001       # 0.1% commission per trade
-
-# Auto-trading configuration (testnet only)
+  position_sizing: fixed_notional
+  fixed_notional_usd: 50
+  margin_leverage: 20
+  commission_per_trade: 0.001
 trading:
-  enabled: false               # Set to true to enable auto-trade
-  exchange: binance            # binance or bybit
-  testnet: true                # use testnet sandbox
+  enabled: false
+  exchange: binance
+  testnet: true
   api_key_env: BINANCE_TESTNET_API_KEY
   api_secret_env: BINANCE_TESTNET_SECRET
-  max_concurrent: 3            # max simultaneous trades
+  max_concurrent: 3
