@@ -77,13 +77,17 @@ class DataStore:
                     pair TEXT NOT NULL,
                     timeframe TEXT NOT NULL,
                     entry_time TIMESTAMP NOT NULL,
-                    exit_time TIMESTAMP NOT NULL,
+                    exit_time TIMESTAMP,
                     direction TEXT NOT NULL,
                     entry_price REAL NOT NULL,
-                    exit_price REAL NOT NULL,
-                    pnl REAL NOT NULL,
-                    pnl_pct REAL NOT NULL,
-                    exit_reason TEXT NOT NULL,
+                    exit_price REAL,
+                    sl REAL NOT NULL,
+                    tp REAL NOT NULL,
+                    notional_usd REAL NOT NULL,
+                    commission_usd REAL NOT NULL,
+                    pnl_usd REAL,
+                    status TEXT NOT NULL DEFAULT 'open',
+                    notes TEXT,
                     signal_id INTEGER,
                     FOREIGN KEY(signal_id) REFERENCES signals(id)
                 )
@@ -129,7 +133,7 @@ class DataStore:
                  target, risk_reward, confidence, zone_strength, sweep_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                pair, timeframe, signal.timestamp, signal.direction, signal.entry_price,
+                pair, timeframe, signal.timestamp.isoformat(), signal.direction, signal.entry_price,
                 signal.stop_loss, signal.target, signal.risk_reward, signal.confidence,
                 signal.zone_strength, sweep_id
             ))
@@ -137,18 +141,94 @@ class DataStore:
             return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
     def save_trade(self, pair: str, timeframe: str, trade: Dict, signal_id: Optional[int] = None):
-        """Insert filled trade result."""
+        """
+        Insert a completed trade (backtest or manual). For closed trades only.
+        Expected keys in trade dict:
+          entry_time, exit_time, direction, entry_price, exit_price,
+          pnl, pnl_pct, exit_reason
+        """
         with sqlite3.connect(self.db_path) as conn:
             conn.execute("""
                 INSERT INTO trades
                 (pair, timeframe, entry_time, exit_time, direction, entry_price, exit_price,
-                 pnl, pnl_pct, exit_reason, signal_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 sl, tp, notional_usd, commission_usd, pnl_usd, status, notes, signal_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                pair, timeframe, trade['entry_time'], trade['exit_time'], trade['direction'],
-                trade['entry_price'], trade['exit_price'], trade['pnl'], trade['pnl_pct'],
-                trade['exit_reason'], signal_id
+                pair, timeframe,
+                trade['entry_time'], trade['exit_time'], trade['direction'],
+                trade['entry_price'], trade['exit_price'],
+                trade.get('sl', 0), trade.get('tp', 0),
+                trade.get('notional_usd', 0), trade.get('commission_usd', 0),
+                trade.get('pnl', 0),  # pnl maps to pnl_usd
+                'closed',  # status
+                trade.get('notes', ''),
+                signal_id
             ))
+            conn.commit()
+
+    # --- New open trade tracking for paper trading ---
+
+    def create_open_trade(self, pair: str, timeframe: str, direction: str,
+                         entry_price: float, sl: float, tp: float,
+                         entry_time: datetime, notional_usd: float,
+                         commission_usd: float, signal_id: Optional[int] = None,
+                         notes: str = '') -> int:
+        """Create an open trade (paper trade). Returns trade ID, or None if duplicate."""
+        # Avoid duplicate open trades for the same signal
+        if signal_id is not None:
+            with sqlite3.connect(self.db_path) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT id FROM trades WHERE signal_id = ? AND status='open'", (signal_id,))
+                if cur.fetchone():
+                    return None
+        with sqlite3.connect(self.db_path) as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO trades
+                (pair, timeframe, entry_time, direction, entry_price, sl, tp,
+                 notional_usd, commission_usd, status, notes, signal_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
+            """, (
+                pair, timeframe, entry_time.isoformat(), direction, entry_price,
+                sl, tp, notional_usd, commission_usd, notes, signal_id
+            ))
+            conn.commit()
+            return cur.lastrowid
+
+    def get_open_trades(self) -> List[Dict]:
+        """Return all open trades."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM trades WHERE status='open' ORDER BY entry_time DESC")
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+
+    def get_closed_trades(self, limit: int = 50) -> List[Dict]:
+        """Return recent closed trades."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT * FROM trades WHERE status!='open'
+                ORDER BY exit_time DESC LIMIT ?
+            """, (limit,))
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+
+    def close_trade(self, trade_id: int, exit_price: float, exit_time: datetime,
+                   status: str, pnl_usd: Optional[float] = None):
+        """
+        Close an open trade.
+        status: 'target_hit' or 'stop_loss'
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE trades
+                SET exit_price = ?, exit_time = ?, status = ?, pnl_usd = ?
+                WHERE id = ? AND status = 'open'
+            """, (exit_price, exit_time.isoformat(), status, pnl_usd, trade_id))
             conn.commit()
 
     def get_recent_sweeps(self, pair: str, timeframe: str, hours: int = 24) -> pd.DataFrame:

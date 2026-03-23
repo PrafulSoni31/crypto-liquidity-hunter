@@ -272,6 +272,11 @@ def cmd_scan_all(args):
             logger.info(f"Volume filter: {len(pairs)} pairs remain after threshold")
     # -----------------------------------------------------------
 
+    # Initialize data store for trade tracking
+    store = DataStore()
+    # Track latest prices for open trade exit checks
+    latest_prices = {}
+
     dispatcher = AlertDispatcher(config['alerts'])
     all_signals = []
 
@@ -334,10 +339,26 @@ def cmd_scan_all(args):
                     commission_pct=paper_cfg.get('commission_per_trade', 0.001)
                 )
                 latest_price = df.iloc[-1]['close']
+                latest_prices[symbol] = latest_price
 
                 for sweep in sweeps[-5:]:
                     signal = engine.generate_signal(sweep, zones, latest_price, capital=args.capital or 10000, pair=pair)
                     if signal:
+                        # Save signal to DB and create open trade (paper tracking)
+                        signal_id = store.save_signal(pair, tf, signal)
+                        store.create_open_trade(
+                            pair=pair,
+                            timeframe=tf,
+                            direction=signal.direction,
+                            entry_price=signal.entry_price,
+                            sl=signal.stop_loss,
+                            tp=signal.target,
+                            entry_time=datetime.utcnow(),
+                            notional_usd=signal.notional_usd,
+                            commission_usd=signal.commission_estimated_usd,
+                            signal_id=signal_id,
+                            notes='Auto-paper trade'
+                        )
                         signal_record = {
                             'pair': pair,
                             'timeframe': tf,
@@ -382,6 +403,48 @@ def cmd_scan_all(args):
             except Exception as e:
                 logger.error(f"Error scanning {pair} {tf}: {e}")
                 continue
+
+    # Check open trades for exit (SL/TP) before considering new signals
+    open_trades = store.get_open_trades()
+    if open_trades:
+        logger.info(f"Checking {len(open_trades)} open trades for exit conditions")
+        for trade in open_trades:
+            # Extract symbol from trade['pair']
+            pair_full = trade['pair']
+            if ':' in pair_full:
+                _, sym = pair_full.split(':', 1)
+            else:
+                sym = pair_full
+            if sym not in latest_prices:
+                continue
+            price = latest_prices[sym]
+            direction = trade['direction']
+            sl = trade['sl']
+            tp = trade['tp']
+            entry_price = trade['entry_price']
+            notional_usd = trade['notional_usd']
+            commission_usd = trade['commission_usd']
+            status = None
+            exit_price = None
+            if direction == 'long':
+                if price >= tp:
+                    status = 'target_hit'
+                    exit_price = tp
+                elif price <= sl:
+                    status = 'stop_loss'
+                    exit_price = sl
+            else:  # short
+                if price <= tp:
+                    status = 'target_hit'
+                    exit_price = tp
+                elif price >= sl:
+                    status = 'stop_loss'
+                    exit_price = sl
+            if status:
+                price_diff = price - entry_price if direction == 'long' else entry_price - price
+                pnl_usd = (price_diff / entry_price) * notional_usd - (2 * commission_usd)
+                store.close_trade(trade['id'], exit_price, datetime.utcnow(), status, pnl_usd)
+                logger.info(f"Closed trade {trade['id']} {trade['pair']} {status} P&L=${pnl_usd:.2f}")
 
     # Save latest signals to cache for dashboard
     store = DataStore()

@@ -16,6 +16,7 @@ from core.data_fetcher import MarketDataFetcher
 from core.liquidity_mapper import LiquidityMapper
 from core.sweep_detector import SweepDetector
 from core.signal_engine import SignalEngine
+from data.store import DataStore
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +177,7 @@ def chart_pair(pair):
             x1=df.index[-1],
             y0=z.price,
             y1=z.price,
-            line=dict(color='rgba(0, 200, 0, 0.5)', width=1, dash='dash'),
+            line=dict(color='rgba(0, 200, 0, 0.5)', width=z.strength, dash='dash'),
             name=f"Zone {z.zone_type}"
         ))
 
@@ -214,6 +215,31 @@ def get_signals():
     store = DataStore()
     cache = store.get_latest_signals()
     return jsonify(cache)
+
+@app.route('/api/trades')
+def get_trades():
+    """Get trades (open or closed)."""
+    store = DataStore()
+    status = request.args.get('status', 'all')  # all, open, closed
+    if status == 'open':
+        trades = store.get_open_trades()
+    elif status == 'closed':
+        limit = int(request.args.get('limit', 50))
+        trades = store.get_closed_trades(limit=limit)
+    else:  # all
+        open_trades = store.get_open_trades()
+        closed_trades = store.get_closed_trades(limit=100)
+        trades = open_trades + closed_trades
+        # Sort by entry_time descending
+        trades.sort(key=lambda x: x['entry_time'], reverse=True)
+    # Serialize datetime fields
+    def serialize(t):
+        t_ser = dict(t)
+        for field in ['entry_time', 'exit_time']:
+            if t_ser.get(field) and isinstance(t_ser[field], datetime):
+                t_ser[field] = t_ser[field].isoformat()
+        return t_ser
+    return jsonify([serialize(t) for t in trades])
 
 @app.route('/health')
 def health():
