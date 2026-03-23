@@ -346,6 +346,28 @@ def history():
         pin=pin,
     )
 
+@app.route("/api/reminders")
+def api_reminders():
+    """Return today's sent reminders."""
+    date_str = request.args.get("date", today_ist().strftime("%Y-%m-%d"))
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT task_id, level, sent_at FROM reminders WHERE date=? ORDER BY sent_at",
+            (date_str,)
+        ).fetchall()
+    task_label = {t["id"]: f'{t["emoji"]} {t["label"]}' for t in ROUTINE}
+    result = []
+    for r in rows:
+        result.append({
+            "task_id":   r["task_id"],
+            "task_name": task_label.get(r["task_id"], r["task_id"]),
+            "level":     r["level"],
+            "label":     "Child nudge" if r["level"] == 1 else "Parent alert",
+            "sent_at":   r["sent_at"],
+        })
+    return jsonify(result)
+
 @app.route("/api/status")
 def api_status():
     date_str = request.args.get("date", today_ist().strftime("%Y-%m-%d"))

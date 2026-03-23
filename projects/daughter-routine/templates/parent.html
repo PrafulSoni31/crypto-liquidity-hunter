@@ -208,6 +208,12 @@
     {% endfor %}
   </div>
 
+  <!-- Today's Reminders -->
+  <div class="section-card">
+    <div class="section-title">🔔 Today's Reminders Sent</div>
+    <div id="reminderLog" style="font-size:.88em;color:#555;">Loading...</div>
+  </div>
+
   <!-- Nav -->
   <div class="nav-links">
     <a href="/" class="nav-btn">🏠 Child View</a>
@@ -252,6 +258,30 @@ new Chart(ctx, {
     }
   }
 });
+// Load today's reminders
+fetch('/api/reminders')
+  .then(r => r.json())
+  .then(data => {
+    const el = document.getElementById('reminderLog');
+    if (!data.length) {
+      el.textContent = '✅ No reminders needed today — she\'s on track!';
+      el.style.color = '#4CAF50';
+      return;
+    }
+    el.innerHTML = data.map(r => {
+      const icon  = r.level === 1 ? '⏰' : '⚠️';
+      const color = r.level === 1 ? '#FF9800' : '#f44336';
+      const time  = r.sent_at.split(' ')[1] || r.sent_at;
+      return `<div style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
+        <span style="color:${color};font-weight:600;">${icon} ${r.label}</span>
+        &nbsp;—&nbsp;${r.task_name}
+        <span style="color:#aaa;font-size:.85em;float:right;">${time}</span>
+      </div>`;
+    }).join('');
+  })
+  .catch(() => {
+    document.getElementById('reminderLog').textContent = 'Could not load reminders.';
+  });
 </script>
 </body>
 </html>

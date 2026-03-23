@@ -119,7 +119,8 @@
     .task-info { flex: 1; padding: 0 10px; }
     .task-label { font-weight: 600; font-size: 1em; color: #333; }
     .task-time  { font-size: 0.78em; color: #888; margin-top: 2px; }
-    .task-ticked { font-size: 0.72em; color: #4CAF50; font-weight: 500; margin-top: 2px; }
+    .task-ticked  { font-size: 0.72em; color: #4CAF50; font-weight: 500; margin-top: 2px; }
+    .task-reminded{ font-size: 0.70em; color: #FF9800; font-weight: 500; margin-top: 2px; }
 
     /* ── Checkbox ────────────────────────────── */
     .task-check {
@@ -273,6 +274,7 @@
       <div class="task-ticked" id="ticked-{{ task.id }}">✅ Done at {{ task.ticked_at }}</div>
       {% else %}
       <div class="task-ticked" id="ticked-{{ task.id }}"></div>
+      <div class="task-reminded" id="reminded-{{ task.id }}"></div>
       {% endif %}
     </div>
     <div class="task-check" id="check-{{ task.id }}">
@@ -299,8 +301,25 @@
 </div>
 
 <script>
-const TOTAL = {{ total }};
-let done    = {{ done }};
+const TOTAL   = {{ total }};
+let done      = {{ done }};
+const TODAY   = "{{ today }}";
+
+// Load reminder state on page open
+fetch('/api/reminders?date=' + TODAY)
+  .then(r => r.json())
+  .then(reminders => {
+    reminders.forEach(rem => {
+      const el = document.getElementById('reminded-' + rem.task_id);
+      if (el) {
+        const icon = rem.level === 1 ? '⏰' : '⚠️';
+        const who  = rem.level === 1 ? 'Reminder sent' : 'Parent alerted';
+        el.textContent = icon + ' ' + who;
+        el.style.color  = rem.level === 1 ? '#FF9800' : '#f44336';
+      }
+    });
+  })
+  .catch(() => {});
 
 function toggleTask(taskId, dateStr) {
   const row    = document.getElementById('row-' + taskId);
