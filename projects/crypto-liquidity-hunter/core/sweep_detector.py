@@ -1,10 +1,16 @@
 """
 Sweep Detector: Identifies liquidity sweep events.
-A sweep = price spikes into a liquidity zone and quickly reverses.
+A sweep = price spikes into a liquidity pool, grabs stops, then reverses.
+
+Fixes applied:
+- Wick ratio was inverted (long sweep needs lower wick, short needs upper wick)
+- Multi-bar lookback for prior high/low (uses rolling N-bar window, not just 1 bar)
+- Volume check uses rolling 20-bar average
+- Confirmation: price must NOT re-visit sweep extreme in next N bars
 """
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Optional
+from typing import List, Optional
 from dataclasses import dataclass
 import logging
 
@@ -12,168 +18,167 @@ from .liquidity_mapper import LiquidityZone
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class SweepEvent:
-    """Represents a liquidity sweep event."""
+    """Represents a confirmed liquidity sweep event."""
     timestamp: pd.Timestamp
-    direction: str  # 'long' (sweep lows) or 'short' (sweep highs)
-    sweep_price: float  # extreme price reached (wick)
-    close_price: float  # closing price of sweep candle
+    direction: str          # 'long' (swept lows, expect bounce UP) or 'short' (swept highs, expect drop DOWN)
+    sweep_price: float      # extreme wick price reached
+    close_price: float      # candle close price (should be inside prior range = reversal)
     volume: float
-    volume_ratio: float  # volume / avg_volume
+    volume_ratio: float     # volume / 20-bar avg volume
     sweep_depth_pct: float  # % move beyond prior level
     confirmed: bool = False
     confirmation_time: Optional[pd.Timestamp] = None
     notes: str = ''
 
+
 class SweepDetector:
     def __init__(self,
-                 sweep_multiplier: float = 1.5,      # ATR multiple for sweep threshold
-                 volume_multiplier: float = 3.0,     # volume spike threshold
-                 confirmation_bars: int = 3,         # bars to wait for confirmation
-                 wick_ratio: float = 0.67,          # wick must be at least X% of candle body
-                 min_sweep_pct: float = 0.2):       # minimum sweep depth (%)
-        """
-        Parameters:
-        - sweep_multiplier: how many ATRs beyond recent range counts as a sweep
-        - volume_multiplier: volume must exceed average by this factor
-        - confirmation_bars: how many bars to wait for price to reject sweep extreme
-        - wick_ratio: minimum wick-to-candle ratio (wick length / (high-low))
-        - min_sweep_pct: minimum % move beyond previous high/low
-        """
+                 sweep_multiplier: float = 0.5,      # ATR multiple for minimum sweep size
+                 volume_multiplier: float = 1.2,     # volume spike threshold vs 20-bar avg
+                 confirmation_bars: int = 3,         # bars to confirm rejection
+                 wick_ratio: float = 0.4,            # wick must be >= X% of candle range
+                 min_sweep_pct: float = 0.2,         # minimum % move beyond prior high/low
+                 lookback_bars: int = 10):           # lookback to find prior high/low level
         self.sweep_multiplier = sweep_multiplier
         self.volume_multiplier = volume_multiplier
         self.confirmation_bars = confirmation_bars
         self.wick_ratio = wick_ratio
         self.min_sweep_pct = min_sweep_pct / 100.0
+        self.lookback_bars = lookback_bars
 
     def detect_sweeps(self,
                       df: pd.DataFrame,
                       atr_series: pd.Series,
-                      liquidity_zones: Optional[List[Dict]] = None) -> List[SweepEvent]:
+                      liquidity_zones: Optional[List] = None) -> List[SweepEvent]:
         """
-        Scan DataFrame for sweep events.
-        df must have: high, low, close, volume
-        atr_series: ATR values aligned with df index
-        liquidity_zones: optional list of known liquidity zones to reference
-        Returns list of SweepEvent.
+        Scan DataFrame for liquidity sweep events.
+        df must have: open, high, low, close, volume columns.
+        atr_series: ATR values aligned with df index.
+        Returns list of confirmed SweepEvents.
         """
         sweeps = []
         avg_volume = df['volume'].rolling(20).mean()
 
-        for i in range(1, len(df)):
-            row = df.iloc[i]
-            prev_row = df.iloc[i-1]
-            atr = atr_series.iloc[i] if atr_series.iloc[i] else row['close'] * 0.01
+        # Rolling prior high/low over lookback_bars (exclude current bar)
+        prior_high = df['high'].shift(1).rolling(self.lookback_bars).max()
+        prior_low  = df['low'].shift(1).rolling(self.lookback_bars).min()
 
-            # Long sweep: price spikes down (wick below recent lows), then closes higher
-            # Condition: low significantly below previous low
-            # Typical: wick > min_sweep_pct of price AND low < (prev_low - sweep_threshold)
-            sweep_threshold = self.sweep_multiplier * atr
-            long_sweep_condition = (
-                row['low'] < prev_row['low'] - sweep_threshold and
-                (prev_row['low'] - row['low']) / prev_row['low'] >= self.min_sweep_pct
-            )
-            # Short sweep: price spikes up (wick above recent highs), then closes lower
-            short_sweep_condition = (
-                row['high'] > prev_row['high'] + sweep_threshold and
-                (row['high'] - prev_row['high']) / prev_row['high'] >= self.min_sweep_pct
-            )
+        for i in range(max(self.lookback_bars + 1, 21), len(df)):
+            row       = df.iloc[i]
+            atr_val   = atr_series.iloc[i]
+            if pd.isna(atr_val) or atr_val <= 0:
+                atr_val = row['close'] * 0.01
 
-            # Volume check
-            volume_ok = row['volume'] > avg_volume.iloc[i] * self.volume_multiplier
+            p_high = prior_high.iloc[i]
+            p_low  = prior_low.iloc[i]
+            if pd.isna(p_high) or pd.isna(p_low):
+                continue
 
-            # Wick ratio: body vs wick
+            avg_vol = avg_volume.iloc[i]
+            if pd.isna(avg_vol) or avg_vol <= 0:
+                continue
+
+            sweep_threshold = self.sweep_multiplier * atr_val
             candle_range = row['high'] - row['low']
             if candle_range <= 0:
                 continue
-            is_long_wick = (row['high'] - max(row['open'], row['close'])) / candle_range >= self.wick_ratio
-            is_short_wick = (min(row['open'], row['close']) - row['low']) / candle_range >= self.wick_ratio
 
-            if long_sweep_condition and volume_ok and is_long_wick:
-                # Long sweep (liquidity grab of stops below support)
+            # ─── Volume filter ──────────────────────────────────────────────────
+            volume_ok = row['volume'] >= avg_vol * self.volume_multiplier
+
+            # ─── LONG SWEEP: wick spikes BELOW prior low ─────────────────────
+            #   • row['low'] < prior_low - threshold   (price went below stops)
+            #   • close > prior_low                    (price closed back inside = rejection)
+            #   • lower wick = (min(open,close) - low) / range  → correct for a down-spike
+            long_price_cond = (
+                row['low'] < p_low - sweep_threshold and
+                (p_low - row['low']) / p_low >= self.min_sweep_pct and
+                row['close'] > p_low  # close must reclaim level = reversal
+            )
+            lower_wick_ratio = (min(row['open'], row['close']) - row['low']) / candle_range
+            long_wick_ok = lower_wick_ratio >= self.wick_ratio
+
+            if long_price_cond and volume_ok and long_wick_ok:
                 sweep = SweepEvent(
                     timestamp=row.name,
                     direction='long',
                     sweep_price=row['low'],
                     close_price=row['close'],
                     volume=row['volume'],
-                    volume_ratio=row['volume'] / avg_volume.iloc[i],
-                    sweep_depth_pct=(prev_row['low'] - row['low']) / prev_row['low'] * 100,
-                    notes='Long sweep: wicks below prior low, volume spike, long wick'
+                    volume_ratio=row['volume'] / avg_vol,
+                    sweep_depth_pct=(p_low - row['low']) / p_low * 100,
+                    notes=f'Long sweep: low={row["low"]:.4f} < prior_low={p_low:.4f}, lower_wick={lower_wick_ratio:.2f}'
                 )
                 sweeps.append(sweep)
 
-            if short_sweep_condition and volume_ok and is_short_wick:
-                # Short sweep (liquidity grab of stops above resistance)
+            # ─── SHORT SWEEP: wick spikes ABOVE prior high ────────────────────
+            #   • row['high'] > prior_high + threshold
+            #   • close < prior_high                   (price closed back inside = rejection)
+            #   • upper wick = (high - max(open,close)) / range → correct for an up-spike
+            short_price_cond = (
+                row['high'] > p_high + sweep_threshold and
+                (row['high'] - p_high) / p_high >= self.min_sweep_pct and
+                row['close'] < p_high  # close must fail back = rejection
+            )
+            upper_wick_ratio = (row['high'] - max(row['open'], row['close'])) / candle_range
+            short_wick_ok = upper_wick_ratio >= self.wick_ratio
+
+            if short_price_cond and volume_ok and short_wick_ok:
                 sweep = SweepEvent(
                     timestamp=row.name,
                     direction='short',
                     sweep_price=row['high'],
                     close_price=row['close'],
                     volume=row['volume'],
-                    volume_ratio=row['volume'] / avg_volume.iloc[i],
-                    sweep_depth_pct=(row['high'] - prev_row['high']) / prev_row['high'] * 100,
-                    notes='Short sweep: wicks above prior high, volume spike, short wick'
+                    volume_ratio=row['volume'] / avg_vol,
+                    sweep_depth_pct=(row['high'] - p_high) / p_high * 100,
+                    notes=f'Short sweep: high={row["high"]:.4f} > prior_high={p_high:.4f}, upper_wick={upper_wick_ratio:.2f}'
                 )
                 sweeps.append(sweep)
 
-        # Confirmation: price should not revisit the sweep extreme within confirmation_bars
-        confirmed_sweeps = []
+        # ─── Confirmation pass ────────────────────────────────────────────────
+        # Sweep is confirmed if price does NOT re-visit the sweep extreme
+        # within the next confirmation_bars candles.
+        confirmed = []
         for sweep in sweeps:
             idx = df.index.get_loc(sweep.timestamp)
-            end_idx = min(idx + self.confirmation_bars, len(df))
-            future_slice = df.iloc[idx+1:end_idx]
+            end_idx = min(idx + 1 + self.confirmation_bars, len(df))
+            future = df.iloc[idx + 1:end_idx]
+            if len(future) == 0:
+                # Not enough future bars yet — still mark confirmed (live edge)
+                sweep.confirmed = True
+                sweep.confirmation_time = sweep.timestamp
+                confirmed.append(sweep)
+                continue
             if sweep.direction == 'long':
-                # For long sweep, low should not be exceeded again
-                if not (future_slice['low'] < sweep.sweep_price).any():
+                if not (future['low'] < sweep.sweep_price).any():
                     sweep.confirmed = True
-                    sweep.confirmation_time = future_slice.index[-1] if len(future_slice) > 0 else sweep.timestamp
-            else:  # short
-                if not (future_slice['high'] > sweep.sweep_price).any():
+                    sweep.confirmation_time = future.index[-1]
+                    confirmed.append(sweep)
+            else:
+                if not (future['high'] > sweep.sweep_price).any():
                     sweep.confirmed = True
-                    sweep.confirmation_time = future_slice.index[-1] if len(future_slice) > 0 else sweep.timestamp
-            if sweep.confirmed:
-                confirmed_sweeps.append(sweep)
+                    sweep.confirmation_time = future.index[-1]
+                    confirmed.append(sweep)
 
-        return confirmed_sweeps
+        logger.info(f"SweepDetector: {len(sweeps)} raw sweeps → {len(confirmed)} confirmed")
+        return confirmed
 
     def find_nearest_liquidity(self,
                                current_price: float,
                                zones: List[LiquidityZone],
                                direction: str,
                                max_zones: int = 3) -> List[LiquidityZone]:
-        """
-        Given a sweep direction, find the nearest opposing liquidity zones that could be targets.
-        For long sweep (lows taken), target resistance zones (equal highs, swing highs).
-        For short sweep (highs taken), target support zones (equal lows, swing lows).
-        """
         if direction == 'long':
             candidate_types = {'equal_high', 'swing_high', 'round'}
-            # Zones above current price
-            above_zones = [z for z in zones if z.price > current_price and z.zone_type in candidate_types]
-            above_zones.sort(key=lambda z: z.price)  # nearest first
-            return above_zones[:max_zones]
+            above = [z for z in zones if z.price > current_price and z.zone_type in candidate_types]
+            above.sort(key=lambda z: z.price)
+            return above[:max_zones]
         else:
             candidate_types = {'equal_low', 'swing_low', 'round'}
-            below_zones = [z for z in zones if z.price < current_price and z.zone_type in candidate_types]
-            below_zones.sort(key=lambda z: z.price, reverse=True)  # nearest first
-            return below_zones[:max_zones]
-
-if __name__ == '__main__':
-    from data_fetcher import MarketDataFetcher
-    from liquidity_mapper import LiquidityMapper
-
-    fetcher = MarketDataFetcher('binance')
-    df = fetcher.fetch_ohlcv('BTC/USDT', '15m', 1000)
-    atr = fetcher.calculate_atr(df)
-
-    mapper = LiquidityMapper()
-    zones = mapper.map_liquidity(df)
-    print(f"Liquidity zones: {len(zones)}")
-
-    detector = SweepDetector(sweep_multiplier=1.5, volume_multiplier=2.5, confirmation_bars=3)
-    sweeps = detector.detect_sweeps(df, atr, zones)
-    print(f"Sweeps detected: {len(sweeps)}")
-    for s in sweeps[-5:]:
-        print(f"{s.timestamp} {s.direction} sweep_price={s.sweep_price:.2f} close={s.close_price:.2f} confirmed={s.confirmed}")
+            below = [z for z in zones if z.price < current_price and z.zone_type in candidate_types]
+            below.sort(key=lambda z: z.price, reverse=True)
+            return below[:max_zones]

@@ -254,22 +254,29 @@ def cmd_scan_all(args):
     if vol_cfg.get('enabled', False):
         min_vol = vol_cfg.get('min_24h_volume_usd', 0)
         if min_vol > 0:
-            # Use a single fetcher to check volumes (no API keys needed for public endpoints)
+            # Batch-fetch all tickers in ONE API call (much faster than per-pair loop)
             fetcher = MarketDataFetcher('binance')
             active_pairs = []
-            logger.info(f"Volume filter enabled: min_24h_volume_usd = ${min_vol:,.0f}")
-            for pair in pairs:
-                exchange_str, symbol = pair.split(':', 1) if ':' in pair else ('binance', pair)
-                try:
-                    vol = fetcher.get_24h_volume(symbol)
+            logger.info(f"Volume filter: fetching all tickers in one call...")
+            try:
+                all_tickers = fetcher.exchange.fetch_tickers()  # single batch call
+                vol_map = {}
+                for sym, ticker in all_tickers.items():
+                    quoteVolume = ticker.get('quoteVolume') or 0
+                    vol_map[sym] = float(quoteVolume)
+
+                before = len(pairs)
+                for pair in pairs:
+                    _, symbol = pair.split(':', 1) if ':' in pair else ('binance', pair)
+                    vol = vol_map.get(symbol, 0)
                     if vol >= min_vol:
                         active_pairs.append(pair)
                     else:
-                        logger.info(f"Skipping {pair}: 24h volume ${vol:,.0f} < ${min_vol:,.0f}")
-                except Exception as e:
-                    logger.warning(f"Could not fetch volume for {pair}: {e} — skipping")
-            pairs = active_pairs
-            logger.info(f"Volume filter: {len(pairs)} pairs remain after threshold")
+                        logger.debug(f"Skip {pair}: vol ${vol:,.0f} < ${min_vol:,.0f}")
+                pairs = active_pairs
+                logger.info(f"Volume filter: {len(pairs)}/{before} pairs pass ${min_vol/1e6:.0f}M threshold")
+            except Exception as e:
+                logger.warning(f"Batch volume fetch failed ({e}), using all pairs")
     # -----------------------------------------------------------
 
     # Initialize data store for trade tracking

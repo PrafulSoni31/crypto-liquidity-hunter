@@ -458,11 +458,12 @@ liquidity_mapper:
   round_tolerance: 0.005
   min_swing_strength: 3
 sweep_detector:
-  sweep_multiplier: 0.65
-  volume_multiplier: 1.3
+  sweep_multiplier: 0.5
+  volume_multiplier: 1.2
   confirmation_bars: 3
-  wick_ratio: 0.5
-  min_sweep_pct: 0.35
+  wick_ratio: 0.4
+  min_sweep_pct: 0.2
+  lookback_bars: 10
 signal_engine:
   risk_per_trade: 0.01
   min_risk_reward: 1.8

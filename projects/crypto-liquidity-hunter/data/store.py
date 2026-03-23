@@ -93,6 +93,32 @@ class DataStore:
                 )
             """)
             conn.commit()
+            # Migration guard: ensure trades table has all required columns
+            self._migrate_trades(conn)
+
+    def _migrate_trades(self, conn):
+        """Add any missing columns to trades table (safe, idempotent)."""
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(trades)")
+        existing = {row[1] for row in cur.fetchall()}
+        required = {
+            'sl':           'REAL NOT NULL DEFAULT 0',
+            'tp':           'REAL NOT NULL DEFAULT 0',
+            'notional_usd': 'REAL NOT NULL DEFAULT 50',
+            'commission_usd': 'REAL NOT NULL DEFAULT 0.05',
+            'pnl_usd':      'REAL',
+            'status':       "TEXT NOT NULL DEFAULT 'open'",
+            'notes':        'TEXT',
+            'signal_id':    'INTEGER',
+        }
+        for col, col_def in required.items():
+            if col not in existing:
+                try:
+                    conn.execute(f"ALTER TABLE trades ADD COLUMN {col} {col_def}")
+                    logger.info(f"DB migration: added column trades.{col}")
+                except Exception as e:
+                    logger.warning(f"DB migration skip {col}: {e}")
+        conn.commit()
 
     def save_zones(self, pair: str, timeframe: str, zones: List, timestamp: datetime):
         """Batch insert liquidity zones."""
