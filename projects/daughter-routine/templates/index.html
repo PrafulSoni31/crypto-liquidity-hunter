@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>{{ child_name }}'s Daily Routine 🌟</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 10px;
+    }
+
+    /* ── Header ─────────────────────────────── */
+    .header {
+      text-align: center;
+      color: white;
+      padding: 20px 10px 14px;
+    }
+    .header h1 { font-size: 1.8em; text-shadow: 0 2px 4px rgba(0,0,0,.3); }
+    .header .date { font-size: 0.95em; opacity: .85; margin-top: 4px; }
+
+    /* ── Progress ring ───────────────────────── */
+    .progress-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 10px 0 16px;
+    }
+    .progress-ring-svg { width: 120px; height: 120px; }
+    .progress-ring-circle {
+      fill: none;
+      stroke: rgba(255,255,255,.25);
+      stroke-width: 10;
+    }
+    .progress-ring-fill {
+      fill: none;
+      stroke: #FFD700;
+      stroke-width: 10;
+      stroke-linecap: round;
+      transform-origin: 50% 50%;
+      transform: rotate(-90deg);
+      transition: stroke-dashoffset .6s ease;
+    }
+    .progress-text {
+      position: absolute;
+      font-size: 1.6em;
+      font-weight: bold;
+      color: white;
+    }
+    .progress-center {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .streak-badge {
+      background: #FFD700;
+      color: #333;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-weight: bold;
+      font-size: 0.9em;
+      margin-top: 8px;
+    }
+    .done-label {
+      color: rgba(255,255,255,.9);
+      font-size: 0.9em;
+      margin-top: 4px;
+    }
+
+    /* ── Card container ──────────────────────── */
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 18px 14px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    }
+    .cat-header {
+      font-size: 0.75em;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      display: inline-block;
+      color: white;
+    }
+
+    /* ── Task row ────────────────────────────── */
+    .task-row {
+      display: flex;
+      align-items: center;
+      padding: 12px 8px;
+      border-radius: 14px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all .2s;
+      border: 2.5px solid #eee;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .task-row:active { transform: scale(.97); }
+    .task-row.done {
+      background: #f0fff4;
+      border-color: #4CAF50;
+    }
+    .task-emoji {
+      font-size: 1.7em;
+      width: 40px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .task-info { flex: 1; padding: 0 10px; }
+    .task-label { font-weight: 600; font-size: 1em; color: #333; }
+    .task-time  { font-size: 0.78em; color: #888; margin-top: 2px; }
+    .task-ticked { font-size: 0.72em; color: #4CAF50; font-weight: 500; margin-top: 2px; }
+
+    /* ── Checkbox ────────────────────────────── */
+    .task-check {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 3px solid #ddd;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 1.4em;
+      transition: all .3s;
+    }
+    .task-row.done .task-check {
+      background: #4CAF50;
+      border-color: #4CAF50;
+      color: white;
+    }
+
+    /* ── Weekend message ─────────────────────── */
+    .weekend-msg {
+      background: white;
+      border-radius: 20px;
+      padding: 40px 20px;
+      text-align: center;
+      font-size: 1.1em;
+      color: #555;
+    }
+    .weekend-msg .big { font-size: 3em; }
+
+    /* ── Celebration overlay ─────────────────── */
+    .celebration {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,.5);
+      z-index: 999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .celebration.show { display: flex; }
+    .celebration-box {
+      background: white;
+      border-radius: 24px;
+      padding: 40px 30px;
+      text-align: center;
+      max-width: 320px;
+    }
+    .celebration-box .big-star { font-size: 4em; }
+    .celebration-box h2 { font-size: 1.6em; margin: 12px 0 6px; color: #333; }
+    .celebration-box p  { color: #666; }
+    .btn-close {
+      margin-top: 20px;
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1em;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    /* ── Confetti ────────────────────────────── */
+    .confetti-piece {
+      position: fixed;
+      width: 10px; height: 10px;
+      border-radius: 2px;
+      animation: confettiFall 3s ease-in forwards;
+      pointer-events: none;
+      z-index: 1000;
+    }
+    @keyframes confettiFall {
+      0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+
+    /* ── Bottom nav ─────────────────────────── */
+    .bottom-nav {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 10px;
+      padding-bottom: 20px;
+    }
+    .nav-btn {
+      padding: 10px 20px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.2);
+      color: white;
+      text-decoration: none;
+      font-size: 0.85em;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>⭐ {{ child_name }}'s Day ⭐</h1>
+  <div class="date">{{ today_fmt }}</div>
+</div>
+
+{% if not weekday %}
+<!-- Weekend Message -->
+<div class="weekend-msg">
+  <div class="big">🎉</div>
+  <h2 style="margin:12px 0 8px;color:#333;">It's the Weekend!</h2>
+  <p>Relax and enjoy your free time.<br>See you Monday! 🌈</p>
+</div>
+
+{% else %}
+<!-- Progress Ring -->
+<div class="progress-wrap">
+  <div class="progress-center">
+    <svg class="progress-ring-svg" viewBox="0 0 120 120">
+      <circle class="progress-ring-circle" cx="60" cy="60" r="50"/>
+      <circle class="progress-ring-fill" id="progressFill" cx="60" cy="60" r="50"
+        stroke-dasharray="314.16"
+        stroke-dashoffset="{{ 314.16 * (1 - pct/100) | round(2) }}"/>
+    </svg>
+    <div class="progress-text" id="progressText">{{ pct }}%</div>
+  </div>
+  <div class="done-label" id="doneLabel">{{ done }} of {{ total }} tasks done</div>
+  <div class="streak-badge">🔥 {{ streak }} day streak</div>
+</div>
+
+<!-- Routine by category -->
+{% set ns = namespace(cur_cat='') %}
+{% for task in routine %}
+  {% if task.category != ns.cur_cat %}
+    {% if ns.cur_cat != '' %}</div>{% endif %}
+    {% set ns.cur_cat = task.category %}
+    <div class="card">
+    <span class="cat-header" style="background:{{ categories[task.category].color }}">
+      {{ categories[task.category].label }}
+    </span>
+  {% endif %}
+
+  <div class="task-row {% if task.done %}done{% endif %}"
+       id="row-{{ task.id }}"
+       onclick="toggleTask('{{ task.id }}', '{{ today }}')">
+    <div class="task-emoji">{{ task.emoji }}</div>
+    <div class="task-info">
+      <div class="task-label">{{ task.label }}</div>
+      <div class="task-time">🕐 {{ task.time }}</div>
+      {% if task.done %}
+      <div class="task-ticked" id="ticked-{{ task.id }}">✅ Done at {{ task.ticked_at }}</div>
+      {% else %}
+      <div class="task-ticked" id="ticked-{{ task.id }}"></div>
+      {% endif %}
+    </div>
+    <div class="task-check" id="check-{{ task.id }}">
+      {% if task.done %}✓{% endif %}
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+
+<!-- Bottom nav -->
+<div class="bottom-nav">
+  <a href="/parent?pin=1234" class="nav-btn">👩 Parent View</a>
+</div>
+
+<!-- Celebration Overlay -->
+<div class="celebration" id="celebrationOverlay">
+  <div class="celebration-box">
+    <div class="big-star">🏆</div>
+    <h2>Amazing {{ child_name }}!</h2>
+    <p>You completed ALL tasks today!<br>You're a superstar! ⭐⭐⭐</p>
+    <button class="btn-close" onclick="closeCelebration()">Yay! 🎉</button>
+  </div>
+</div>
+
+<script>
+const TOTAL = {{ total }};
+let done    = {{ done }};
+
+function toggleTask(taskId, dateStr) {
+  const row    = document.getElementById('row-' + taskId);
+  const check  = document.getElementById('check-' + taskId);
+  const ticked = document.getElementById('ticked-' + taskId);
+  const isDone = row.classList.contains('done');
+  const action = isDone ? 'untick' : 'tick';
+
+  fetch('/api/tick', {
+    method:  'POST',
+    headers: {'Content-Type': 'application/json'},
+    body:    JSON.stringify({ task_id: taskId, date: dateStr, action: action })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (action === 'tick') {
+      row.classList.add('done');
+      check.textContent = '✓';
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+      ticked.textContent = '✅ Done at ' + timeStr + ' IST';
+      // Bounce animation
+      row.style.transform = 'scale(1.04)';
+      setTimeout(() => row.style.transform = '', 250);
+    } else {
+      row.classList.remove('done');
+      check.textContent = '';
+      ticked.textContent = '';
+    }
+
+    done = data.done;
+    updateProgress(data.pct, data.done, data.streak);
+
+    if (data.done === TOTAL) {
+      setTimeout(showCelebration, 400);
+    }
+  });
+}
+
+function updateProgress(pct, doneCount, streak) {
+  const fill   = document.getElementById('progressFill');
+  const text   = document.getElementById('progressText');
+  const label  = document.getElementById('doneLabel');
+  const str    = document.querySelector('.streak-badge');
+  const circum = 314.16;
+  fill.style.strokeDashoffset = circum * (1 - pct / 100);
+  text.textContent = pct + '%';
+  label.textContent = doneCount + ' of ' + TOTAL + ' tasks done';
+  if (str) str.textContent = '🔥 ' + streak + ' day streak';
+}
+
+function showCelebration() {
+  document.getElementById('celebrationOverlay').classList.add('show');
+  launchConfetti();
+}
+function closeCelebration() {
+  document.getElementById('celebrationOverlay').classList.remove('show');
+}
+
+function launchConfetti() {
+  const colors = ['#FFD700','#FF6B6B','#4CAF50','#2196F3','#9C27B0','#FF5722'];
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const c = document.createElement('div');
+      c.className = 'confetti-piece';
+      c.style.left = Math.random() * 100 + 'vw';
+      c.style.top  = '-20px';
+      c.style.background = colors[Math.floor(Math.random() * colors.length)];
+      c.style.animationDelay = Math.random() * 1.5 + 's';
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 4000);
+    }, i * 30);
+  }
+}
+</script>
+</body>
+</html>

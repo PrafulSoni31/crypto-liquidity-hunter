@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>History — {{ child_name }}</title>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Segoe UI',sans-serif; background:#f0f4f8; }
+    .topbar {
+      background:linear-gradient(135deg,#667eea,#764ba2);
+      color:white; padding:20px; text-align:center;
+    }
+    .topbar h1 { font-size:1.4em; }
+    .container { max-width:860px; margin:0 auto; padding:16px; }
+    .day-card {
+      background:white; border-radius:16px; padding:16px;
+      margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,.08);
+    }
+    .day-header {
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:10px;
+    }
+    .day-label { font-weight:700; font-size:1em; color:#333; }
+    .day-pct {
+      font-size:.85em; font-weight:700; padding:4px 10px;
+      border-radius:8px; color:white;
+    }
+    .task-chips { display:flex; flex-wrap:wrap; gap:6px; }
+    .chip {
+      padding:4px 10px; border-radius:8px;
+      font-size:.78em; font-weight:600;
+    }
+    .chip-done   { background:#e8f5e9; color:#2e7d32; }
+    .chip-missed { background:#fce4ec; color:#c62828; }
+    .progress-mini {
+      height:8px; background:#eee; border-radius:4px; margin:8px 0;
+    }
+    .progress-mini-fill {
+      height:100%; border-radius:4px;
+    }
+    .nav-links {
+      display:flex; gap:10px; justify-content:center;
+      flex-wrap:wrap; margin:10px 0 24px;
+    }
+    .nav-btn {
+      padding:10px 18px; background:linear-gradient(135deg,#667eea,#764ba2);
+      color:white; text-decoration:none; border-radius:10px;
+      font-size:.85em; font-weight:600;
+    }
+    .empty { text-align:center; color:#999; padding:40px; }
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <h1>📜 {{ child_name }}'s History</h1>
+</div>
+<div class="container">
+  <div class="nav-links" style="margin-top:14px;">
+    <a href="/" class="nav-btn">🏠 Child View</a>
+    <a href="/parent?pin={{ pin }}" class="nav-btn">📊 Dashboard</a>
+  </div>
+
+  {% if not history %}
+  <div class="empty">No history yet. Start ticking tasks! 🌟</div>
+  {% endif %}
+
+  {% for day in history %}
+  {% set color = '#4CAF50' if day.pct == 100 else '#FF9800' if day.pct >= 50 else '#f44336' %}
+  <div class="day-card">
+    <div class="day-header">
+      <div class="day-label">{{ day.label }}</div>
+      <div class="day-pct" style="background:{{ color }}">{{ day.pct }}%</div>
+    </div>
+    <div class="progress-mini">
+      <div class="progress-mini-fill" style="width:{{ day.pct }}%;background:{{ color }};"></div>
+    </div>
+    <div style="font-size:.78em;color:#888;margin-bottom:8px;">
+      {{ day.count }} / {{ day.total }} tasks completed
+    </div>
+    <div class="task-chips">
+      {% set done_ids = day.ticks | map(attribute='task_id') | list %}
+      {% for task_id, label in task_label.items() %}
+        {% if task_id in done_ids %}
+        <span class="chip chip-done">{{ label }}</span>
+        {% else %}
+        <span class="chip chip-missed">{{ label }} ✗</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <!-- Tick times -->
+    {% if day.ticks %}
+    <div style="margin-top:10px;font-size:.75em;color:#999;">
+      Tick times:
+      {% for t in day.ticks %}
+        <span style="margin-right:8px;">{{ task_label.get(t.task_id, t.task_id) }}: <strong>{{ t.ticked_at.split(' ')[1] if ' ' in t.ticked_at else t.ticked_at }}</strong></span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+</div>
+</body>
+</html>

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parent Dashboard — {{ child_name }}</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f0f4f8; color: #333; }
+
+    .topbar {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      padding: 20px;
+      text-align: center;
+    }
+    .topbar h1 { font-size: 1.5em; }
+    .topbar .sub { font-size: 0.85em; opacity: .8; margin-top: 4px; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 16px; }
+
+    /* ── KPI cards ─────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: white;
+      border-radius: 16px;
+      padding: 18px 14px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+    .kpi-value { font-size: 2.2em; font-weight: 800; line-height: 1; }
+    .kpi-label { font-size: 0.78em; color: #777; margin-top: 6px; }
+    .kpi-icon  { font-size: 1.5em; margin-bottom: 4px; }
+
+    .kv-streak  { color: #FF6B35; }
+    .kv-perfect { color: #4CAF50; }
+    .kv-avg     { color: #2196F3; }
+    .kv-missed  { color: #f44336; }
+
+    /* ── Section cards ─────────────────────────── */
+    .section-card {
+      background: white;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.08);
+    }
+    .section-title {
+      font-size: 1em;
+      font-weight: 700;
+      color: #444;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ── Week chart ────────────────────────────── */
+    .chart-wrap { max-height: 220px; }
+
+    /* ── Task bars ─────────────────────────────── */
+    .task-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .task-bar-label { width: 160px; font-size: 0.85em; flex-shrink: 0; }
+    .bar-outer {
+      flex: 1;
+      background: #eee;
+      border-radius: 6px;
+      height: 14px;
+    }
+    .bar-inner {
+      height: 100%;
+      border-radius: 6px;
+      transition: width .6s ease;
+    }
+    .task-bar-pct { width: 36px; text-align: right; font-size: 0.8em; color: #555; }
+
+    /* ── Star highlight ────────────────────────── */
+    .highlight-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .highlight-chip {
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-size: 0.85em;
+      font-weight: 600;
+    }
+    .chip-good  { background: #e8f5e9; color: #2e7d32; }
+    .chip-bad   { background: #fce4ec; color: #c62828; }
+
+    /* ── Nav ──────────────────────────────────── */
+    .nav-links {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      padding-bottom: 24px;
+    }
+    .nav-btn {
+      padding: 10px 18px;
+      background: linear-gradient(135deg,#667eea,#764ba2);
+      color: white;
+      text-decoration: none;
+      border-radius: 10px;
+      font-size: 0.85em;
+      font-weight: 600;
+    }
+    .nav-btn.outline {
+      background: transparent;
+      border: 2px solid #764ba2;
+      color: #764ba2;
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>👩 Parent Dashboard</h1>
+  <div class="sub">{{ child_name }} · Last 30 weekdays · {{ today }}</div>
+</div>
+
+<div class="container">
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid" style="margin-top:16px;">
+    <div class="kpi-card">
+      <div class="kpi-icon">🔥</div>
+      <div class="kpi-value kv-streak">{{ kpis.streak }}</div>
+      <div class="kpi-label">Day Streak</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">⭐</div>
+      <div class="kpi-value kv-perfect">{{ kpis.perfect_days }}</div>
+      <div class="kpi-label">Perfect Days</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-value kv-avg">{{ kpis.avg_completion }}%</div>
+      <div class="kpi-label">Avg Completion</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">😅</div>
+      <div class="kpi-value kv-missed">{{ kpis.missed_days }}</div>
+      <div class="kpi-label">Missed Days</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-value" style="color:#607D8B;">{{ kpis.total_weekdays }}</div>
+      <div class="kpi-label">Weekdays Tracked</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">🌤️</div>
+      <div class="kpi-value" style="color:#FF9800;">{{ kpis.partial_days }}</div>
+      <div class="kpi-label">Partial Days</div>
+    </div>
+  </div>
+
+  <!-- Weekly Chart -->
+  <div class="section-card">
+    <div class="section-title">📅 Last 7 Weekdays — Completion</div>
+    <div class="chart-wrap">
+      <canvas id="weekChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Highlights -->
+  <div class="section-card">
+    <div class="section-title">💡 Task Highlights</div>
+    <div class="highlight-row">
+      <div class="highlight-chip chip-good">
+        ✅ Most consistent: <strong>{{ per_task | selectattr('pct', 'equalto', per_task | map(attribute='pct') | max) | first | attr('emoji') }}
+        {{ per_task | selectattr('pct', 'equalto', per_task | map(attribute='pct') | max) | first | attr('label') }}</strong>
+      </div>
+      <div class="highlight-chip chip-bad">
+        ⚠️ Needs attention: <strong>{{ per_task[0].emoji }} {{ per_task[0].label }}</strong>
+        ({{ per_task[0].pct }}% done)
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-task breakdown -->
+  <div class="section-card">
+    <div class="section-title">📋 Task-by-Task Regularity (last 30 weekdays)</div>
+    {% for t in per_task %}
+    <div class="task-bar-row">
+      <div class="task-bar-label">{{ t.emoji }} {{ t.label }}</div>
+      <div class="bar-outer">
+        <div class="bar-inner"
+             style="width:{{ t.pct }}%;
+                    background: {% if t.pct >= 80 %}#4CAF50{% elif t.pct >= 50 %}#FF9800{% else %}#f44336{% endif %};">
+        </div>
+      </div>
+      <div class="task-bar-pct">{{ t.pct }}%</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Nav -->
+  <div class="nav-links">
+    <a href="/" class="nav-btn">🏠 Child View</a>
+    <a href="/history?pin=1234" class="nav-btn">📜 Full History</a>
+  </div>
+
+</div>
+
+<script>
+const weekData = {{ weekly | tojson }};
+const ctx = document.getElementById('weekChart').getContext('2d');
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: weekData.map(d => d.label),
+    datasets: [{
+      label: '% Completed',
+      data:  weekData.map(d => d.pct),
+      backgroundColor: weekData.map(d =>
+        d.pct === 100 ? '#4CAF50' : d.pct >= 50 ? '#FF9800' : '#f44336'
+      ),
+      borderRadius: 8,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => `${ctx.raw}% (${weekData[ctx.dataIndex].count} tasks)`
+        }
+      }
+    },
+    scales: {
+      y: {
+        min: 0, max: 100,
+        ticks: { callback: v => v + '%' }
+      }
+    }
+  }
+});
+</script>
+</body>
+</html>

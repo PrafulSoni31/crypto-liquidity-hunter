@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Parent Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg,#667eea,#764ba2);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .box {
+      background: white; border-radius: 24px;
+      padding: 40px 32px; text-align: center; width: 320px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.2);
+    }
+    .icon { font-size: 3em; margin-bottom: 12px; }
+    h2 { font-size: 1.4em; color: #333; margin-bottom: 6px; }
+    p  { color: #777; font-size: .9em; margin-bottom: 24px; }
+    input[type=password] {
+      width: 100%; padding: 14px; border: 2px solid #ddd;
+      border-radius: 12px; font-size: 1.1em; text-align: center;
+      letter-spacing: 6px; margin-bottom: 16px;
+      outline: none;
+    }
+    input[type=password]:focus { border-color: #764ba2; }
+    button {
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg,#667eea,#764ba2);
+      color: white; border: none; border-radius: 12px;
+      font-size: 1em; font-weight: bold; cursor: pointer;
+    }
+    .error { color: #f44336; font-size: .85em; margin-top: 10px; }
+    .back  { display: block; margin-top: 16px; color: #764ba2; font-size:.85em; text-decoration:none; }
+  </style>
+</head>
+<body>
+<div class="box">
+  <div class="icon">🔒</div>
+  <h2>Parent Dashboard</h2>
+  <p>Enter your PIN to view {{ child_name }}'s progress</p>
+  <form method="GET" action="/parent">
+    <input type="password" name="pin" placeholder="••••" maxlength="6" autofocus>
+    {% if error %}<div class="error">❌ Wrong PIN. Try again.</div>{% endif %}
+    <button type="submit">Enter</button>
+  </form>
+  <a href="/" class="back">← Back to child view</a>
+</div>
+</body>
+</html>
