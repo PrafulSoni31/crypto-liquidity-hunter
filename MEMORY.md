@@ -81,6 +81,16 @@ When spawning subagents, always pass these instructions:
 
 ## Recent Projects
 
+### Devanshi Soni Daily Routine Tracker (March 23, 2026)
+- Charlie's daughter: **Devanshi Soni**
+- App: `/projects/daughter-routine/` running on port **5002**
+- URL: `http://76.13.247.112:5002` (child view) | `/parent?pin=1234` (parent)
+- Service: `devanshi-routine.service` (systemd, auto-start)
+- Features: 16 daily tasks, tick timestamps, streak, KPIs, history, parent dashboard
+- Parent PIN: `1234` (Charlie should change this in app.py → PARENT_PIN)
+
+
+
 ### Gold Trading Strategy
 - Working on building profitable gold (XAUUSD) strategy for Charlie
 - Analyzed his existing MT5 strategy from Excel (1,416 trades, 58% win rate)

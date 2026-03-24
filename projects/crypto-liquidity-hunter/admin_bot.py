@@ -134,6 +134,7 @@ Sweep Detector:
 
 Signal Engine:
   /set_min_risk_reward &lt;value&gt; — 0.5–20.0
+  /set_min_confidence &lt;0.0–1.0&gt; — alert confidence threshold
 
 Data Fetch:
   /set_ohlcv_limit &lt;bars&gt; — 100–5000
@@ -284,6 +285,30 @@ async def set_min_risk_reward(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(f"✅ min_risk_reward set to {val}")
     except (IndexError, ValueError):
         await update.message.reply_text("Usage: /set_min_risk_reward <value>")
+
+async def set_min_confidence(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set minimum confidence threshold for Telegram alerts (0.0 – 1.0)."""
+    if not auth_required(update):
+        return
+    try:
+        val = float(context.args[0])
+        if not (0.0 <= val <= 1.0):
+            await update.message.reply_text("❌ Value must be between 0.0 and 1.0 (e.g. 0.6 = 60%)")
+            return
+        config_mgr.set('alerts.telegram.min_confidence', val)
+        pct = int(val * 100)
+        await update.message.reply_text(
+            f"✅ Min confidence set to {pct}%\n"
+            f"Signals below {pct}% confidence will NOT trigger Telegram alerts."
+        )
+    except (IndexError, ValueError):
+        await update.message.reply_text(
+            "Usage: /set_min_confidence <0.0–1.0>\n"
+            "Examples:\n"
+            "  /set_min_confidence 0.6  → only 60%+ conf alerts\n"
+            "  /set_min_confidence 0.8  → only 80%+ conf alerts\n"
+            "  /set_min_confidence 0.0  → all alerts (no filter)"
+        )
 
 async def set_fixed_notional(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not config_mgr:
@@ -483,6 +508,7 @@ def main():
     app.add_handler(CommandHandler("set_wick_ratio", set_wick_ratio))
     app.add_handler(CommandHandler("set_min_sweep_pct", set_min_sweep_pct))
     app.add_handler(CommandHandler("set_min_risk_reward", set_min_risk_reward))
+    app.add_handler(CommandHandler("set_min_confidence", set_min_confidence))
     app.add_handler(CommandHandler("set_fixed_notional", set_fixed_notional))
     app.add_handler(CommandHandler("set_margin_leverage", set_margin_leverage))
     app.add_handler(CommandHandler("set_ohlcv_limit", set_ohlcv_limit))

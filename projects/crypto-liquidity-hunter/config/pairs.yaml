@@ -466,7 +466,7 @@ sweep_detector:
   lookback_bars: 10
 signal_engine:
   risk_per_trade: 0.01
-  min_risk_reward: 1.8
+  min_risk_reward: 5.0
   stop_buffer_pct: 0.001
   target_buffer_pct: 0.001
   retracement_levels:
@@ -496,7 +496,7 @@ trading:
   api_secret_env: BINANCE_TESTNET_SECRET
   max_concurrent: 3
 volume_filter:
-  min_24h_volume_usd: 5000000.0
+  min_24h_volume_usd: 1000000.0
   enabled: true
 cron:
   scan_interval_minutes: 5

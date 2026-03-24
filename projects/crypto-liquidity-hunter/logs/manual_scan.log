@@ -1915,3 +1915,714 @@ Traceback (most recent call last):
     cur.execute("SELECT * FROM trades WHERE status='open' ORDER BY entry_time DESC")
     ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 sqlite3.OperationalError: no such column: status
+10:26:54 __main__ INFO: Volume filter: fetching all tickers in one call...
+10:26:56 __main__ INFO: Volume filter: 60/446 pairs pass $5M threshold
+10:26:58 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:26:58 core.signal_engine INFO: Signal rejected: R:R too low 2.06 < 5.0
+10:26:58 core.signal_engine INFO: Signal rejected: R:R too low 0.19 < 5.0
+10:26:58 core.signal_engine INFO: Signal rejected: R:R too low 0.27 < 5.0
+10:26:58 core.signal_engine INFO: Signal rejected: R:R too low 2.62 < 5.0
+10:26:59 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 4 confirmed
+10:26:59 core.signal_engine INFO: Signal rejected: R:R too low 0.13 < 5.0
+10:26:59 core.signal_engine INFO: Signal rejected: R:R too low 0.52 < 5.0
+10:26:59 core.signal_engine INFO: Signal rejected: R:R too low 2.12 < 5.0
+10:26:59 core.signal_engine INFO: Signal rejected: R:R too low 0.49 < 5.0
+10:27:01 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:27:01 core.signal_engine INFO: Signal rejected: R:R too low 1.27 < 5.0
+10:27:01 core.signal_engine INFO: Signal rejected: R:R too low 0.71 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:27:13 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 5 confirmed
+10:27:13 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:27:13 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:27:13 core.signal_engine INFO: Signal rejected: R:R too low 0.16 < 5.0
+10:27:13 core.signal_engine INFO: Signal rejected: R:R too low 1.31 < 5.0
+10:27:13 core.signal_engine INFO: Signal rejected: R:R too low 0.01 < 5.0
+10:27:15 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 4 confirmed
+10:27:15 core.signal_engine INFO: Signal rejected: R:R too low 1.02 < 5.0
+10:27:15 core.signal_engine INFO: Signal rejected: R:R too low 0.52 < 5.0
+10:27:15 core.signal_engine INFO: Signal rejected: R:R too low 2.80 < 5.0
+10:27:15 core.signal_engine INFO: Signal rejected: R:R too low 0.30 < 5.0
+10:27:16 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:27:16 core.signal_engine INFO: Signal rejected: R:R too low 0.17 < 5.0
+10:27:16 core.signal_engine INFO: Signal rejected: R:R too low 1.01 < 5.0
+10:27:18 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 6 confirmed
+10:27:18 core.signal_engine INFO: Signal rejected: R:R too low 0.23 < 5.0
+10:27:18 core.signal_engine INFO: Signal rejected: R:R too low 0.69 < 5.0
+10:27:18 core.signal_engine INFO: Signal rejected: R:R too low 0.18 < 5.0
+10:27:18 core.signal_engine INFO: Signal rejected: R:R too low 0.13 < 5.0
+10:27:18 core.signal_engine INFO: Signal rejected: R:R too low 0.62 < 5.0
+10:27:20 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 7 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:27:30 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:27:30 core.signal_engine INFO: Signal rejected: R:R too low 0.23 < 5.0
+10:27:41 core.signal_engine INFO: Signal rejected: R:R too low 0.24 < 5.0
+10:27:42 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:27:42 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:27:42 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:27:42 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:27:44 core.sweep_detector INFO: SweepDetector: 10 raw sweeps → 9 confirmed
+10:27:44 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:27:44 core.signal_engine INFO: Signal rejected: R:R too low 0.05 < 5.0
+10:27:44 core.signal_engine INFO: Signal rejected: R:R too low 0.16 < 5.0
+10:27:44 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:27:44 core.signal_engine INFO: Signal rejected: R:R too low 1.13 < 5.0
+10:27:45 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 3 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:27:56 core.signal_engine INFO: Signal rejected: R:R too low 1.33 < 5.0
+10:27:56 core.signal_engine INFO: Signal rejected: R:R too low 3.69 < 5.0
+10:27:58 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 2 confirmed
+10:27:58 core.signal_engine INFO: Signal rejected: R:R too low 0.54 < 5.0
+10:27:58 core.signal_engine INFO: Signal rejected: R:R too low 1.92 < 5.0
+10:27:59 core.sweep_detector INFO: SweepDetector: 10 raw sweeps → 7 confirmed
+10:27:59 core.signal_engine INFO: Signal rejected: R:R too low 0.41 < 5.0
+10:27:59 core.signal_engine INFO: Signal rejected: R:R too low 1.23 < 5.0
+10:27:59 core.signal_engine INFO: Signal rejected: R:R too low 1.17 < 5.0
+10:27:59 core.signal_engine INFO: Signal rejected: R:R too low 0.13 < 5.0
+10:27:59 core.signal_engine INFO: Signal rejected: R:R too low 0.70 < 5.0
+10:28:01 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 4 confirmed
+10:28:01 core.signal_engine INFO: Signal rejected: R:R too low 0.07 < 5.0
+10:28:01 core.signal_engine INFO: Signal rejected: R:R too low 0.26 < 5.0
+10:28:01 core.signal_engine INFO: Signal rejected: R:R too low 0.53 < 5.0
+10:28:01 core.signal_engine INFO: Signal rejected: R:R too low 0.27 < 5.0
+10:28:02 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:28:02 core.signal_engine INFO: Signal rejected: R:R too low 0.59 < 5.0
+10:28:02 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:28:02 core.signal_engine INFO: Signal rejected: R:R too low 3.26 < 5.0
+10:28:04 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 7 confirmed
+10:28:04 core.signal_engine INFO: Signal rejected: R:R too low 0.05 < 5.0
+10:28:04 core.signal_engine INFO: Signal rejected: R:R too low 1.12 < 5.0
+10:28:04 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:28:04 core.signal_engine INFO: Signal rejected: R:R too low 1.33 < 5.0
+10:28:04 core.signal_engine INFO: Signal rejected: R:R too low 2.29 < 5.0
+10:28:06 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 3 confirmed
+10:28:06 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:28:06 core.signal_engine INFO: Signal rejected: R:R too low 0.14 < 5.0
+10:28:08 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:28:08 core.signal_engine INFO: Signal rejected: R:R too low 2.02 < 5.0
+10:28:08 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:28:08 core.signal_engine INFO: Signal rejected: R:R too low 0.29 < 5.0
+10:28:10 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:28:10 core.signal_engine INFO: Signal rejected: R:R too low 2.69 < 5.0
+10:28:12 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 4 confirmed
+10:28:12 core.signal_engine INFO: Signal rejected: R:R too low 1.60 < 5.0
+10:28:12 core.signal_engine INFO: Signal rejected: R:R too low 2.59 < 5.0
+10:28:12 core.signal_engine INFO: Signal rejected: R:R too low 1.00 < 5.0
+10:28:12 core.signal_engine INFO: Signal rejected: R:R too low 0.53 < 5.0
+10:28:13 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 0 confirmed
+10:28:15 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:28:16 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:28:18 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:28:20 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:28:20 core.signal_engine INFO: Signal rejected: R:R too low 2.02 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:28:20 core.signal_engine INFO: Signal rejected: R:R too low 0.61 < 5.0
+10:28:20 core.signal_engine INFO: Signal rejected: R:R too low 0.43 < 5.0
+10:28:20 core.signal_engine INFO: Signal rejected: R:R too low 0.17 < 5.0
+10:28:22 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 4 confirmed
+10:28:22 core.signal_engine INFO: Signal rejected: R:R too low 0.42 < 5.0
+10:28:22 core.signal_engine INFO: Signal rejected: R:R too low 4.87 < 5.0
+10:28:22 core.signal_engine INFO: Signal rejected: R:R too low 0.05 < 5.0
+10:28:22 core.signal_engine INFO: Signal rejected: R:R too low 0.77 < 5.0
+10:28:24 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 0 confirmed
+10:28:26 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:28:26 core.signal_engine INFO: Signal rejected: R:R too low 3.68 < 5.0
+10:28:26 core.signal_engine INFO: Signal rejected: R:R too low 2.08 < 5.0
+10:28:26 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:28:26 core.signal_engine INFO: Signal rejected: R:R too low 0.22 < 5.0
+10:28:27 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:28:27 core.signal_engine INFO: Signal rejected: R:R too low 0.55 < 5.0
+10:28:27 core.signal_engine INFO: Signal rejected: R:R too low 0.61 < 5.0
+10:28:27 core.signal_engine INFO: Signal rejected: R:R too low 3.37 < 5.0
+10:28:28 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 3 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:28:39 core.signal_engine INFO: Signal rejected: R:R too low 1.58 < 5.0
+10:28:39 core.signal_engine INFO: Signal rejected: R:R too low 1.01 < 5.0
+10:28:41 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 4 confirmed
+10:28:41 core.signal_engine INFO: Signal rejected: R:R too low 2.39 < 5.0
+10:28:41 core.signal_engine INFO: Signal rejected: R:R too low 2.47 < 5.0
+10:28:41 core.signal_engine INFO: Signal rejected: R:R too low 0.44 < 5.0
+10:28:41 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:28:43 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 1 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:28:45 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 1 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:28:57 core.sweep_detector INFO: SweepDetector: 8 raw sweeps → 6 confirmed
+10:28:57 core.signal_engine INFO: Signal rejected: R:R too low 0.95 < 5.0
+10:28:57 core.signal_engine INFO: Signal rejected: R:R too low 0.37 < 5.0
+10:28:57 core.signal_engine INFO: Signal rejected: R:R too low 0.12 < 5.0
+10:28:57 core.signal_engine INFO: Signal rejected: R:R too low 0.54 < 5.0
+10:28:57 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:28:59 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 3 confirmed
+10:28:59 core.signal_engine INFO: Signal rejected: R:R too low 0.41 < 5.0
+10:28:59 core.signal_engine INFO: Signal rejected: R:R too low 0.58 < 5.0
+10:28:59 core.signal_engine INFO: Signal rejected: R:R too low 2.58 < 5.0
+10:29:00 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 4 confirmed
+10:29:00 core.signal_engine INFO: Signal rejected: R:R too low 1.05 < 5.0
+10:29:00 core.signal_engine INFO: Signal rejected: R:R too low 2.83 < 5.0
+10:29:00 core.signal_engine INFO: Signal rejected: R:R too low 1.83 < 5.0
+10:29:00 core.signal_engine INFO: Signal rejected: R:R too low 1.47 < 5.0
+10:29:02 core.sweep_detector INFO: SweepDetector: 8 raw sweeps → 6 confirmed
+10:29:02 core.signal_engine INFO: Signal rejected: R:R too low 0.13 < 5.0
+10:29:02 core.signal_engine INFO: Signal rejected: R:R too low 0.17 < 5.0
+10:29:02 core.signal_engine INFO: Signal rejected: R:R too low 1.30 < 5.0
+10:29:02 core.signal_engine INFO: Signal rejected: R:R too low 1.97 < 5.0
+10:29:02 core.signal_engine INFO: Signal rejected: R:R too low 4.85 < 5.0
+10:29:04 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:29:04 core.signal_engine INFO: Signal rejected: R:R too low 0.31 < 5.0
+10:29:04 core.signal_engine INFO: Signal rejected: R:R too low 0.26 < 5.0
+10:29:05 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:29:05 core.signal_engine INFO: Signal rejected: R:R too low 0.26 < 5.0
+10:29:05 core.signal_engine INFO: Signal rejected: R:R too low 0.58 < 5.0
+10:29:05 core.signal_engine INFO: Signal rejected: R:R too low 2.18 < 5.0
+10:29:07 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:29:07 core.signal_engine INFO: Signal rejected: R:R too low 1.83 < 5.0
+10:29:07 core.signal_engine INFO: Signal rejected: R:R too low 0.21 < 5.0
+10:29:07 core.signal_engine INFO: Signal rejected: R:R too low 3.11 < 5.0
+10:29:07 core.signal_engine INFO: Signal rejected: R:R too low 0.32 < 5.0
+10:29:07 core.signal_engine INFO: Signal rejected: R:R too low 2.78 < 5.0
+10:29:08 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:29:08 core.signal_engine INFO: Signal rejected: R:R too low 1.07 < 5.0
+10:29:08 core.signal_engine INFO: Signal rejected: R:R too low 4.35 < 5.0
+10:29:08 core.signal_engine INFO: Signal rejected: R:R too low 1.13 < 5.0
+10:29:11 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 2 confirmed
+10:29:11 core.signal_engine INFO: Signal rejected: R:R too low 2.86 < 5.0
+10:29:11 core.signal_engine INFO: Signal rejected: R:R too low 3.23 < 5.0
+10:29:12 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 1 confirmed
+10:29:12 core.signal_engine INFO: Signal rejected: R:R too low 2.64 < 5.0
+10:29:14 core.sweep_detector INFO: SweepDetector: 12 raw sweeps → 6 confirmed
+10:29:14 core.signal_engine INFO: Signal rejected: R:R too low 4.95 < 5.0
+10:29:14 core.signal_engine INFO: Signal rejected: R:R too low 1.06 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:29:25 core.signal_engine INFO: Signal rejected: R:R too low 0.91 < 5.0
+10:29:25 core.signal_engine INFO: Signal rejected: R:R too low 4.01 < 5.0
+10:29:27 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 0 confirmed
+10:29:29 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 3 confirmed
+10:29:29 core.signal_engine INFO: Signal rejected: R:R too low 0.00 < 5.0
+10:29:29 core.signal_engine INFO: Signal rejected: R:R too low 0.06 < 5.0
+10:29:29 core.signal_engine INFO: Signal rejected: R:R too low 0.66 < 5.0
+10:29:30 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 4 confirmed
+10:29:30 core.signal_engine INFO: Signal rejected: R:R too low 3.33 < 5.0
+10:29:30 core.signal_engine INFO: Signal rejected: R:R too low 4.53 < 5.0
+10:29:30 core.signal_engine INFO: Signal rejected: R:R too low 0.44 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:29:32 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:29:32 core.signal_engine INFO: Signal rejected: R:R too low 2.04 < 5.0
+10:29:34 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 3 confirmed
+10:29:34 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:29:34 core.signal_engine INFO: Signal rejected: R:R too low 0.07 < 5.0
+10:29:34 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:29:36 core.sweep_detector INFO: SweepDetector: 9 raw sweeps → 4 confirmed
+10:29:36 core.signal_engine INFO: Signal rejected: R:R too low 0.09 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:29:46 core.signal_engine INFO: Signal rejected: R:R too low 0.25 < 5.0
+10:29:59 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 4 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:30:10 core.signal_engine INFO: Signal rejected: R:R too low 2.05 < 5.0
+10:30:10 core.signal_engine INFO: Signal rejected: R:R too low 0.48 < 5.0
+10:30:13 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:30:13 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:30:15 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:30:16 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:30:18 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:30:19 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:30:21 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:30:22 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 1 confirmed
+10:30:22 core.signal_engine INFO: Signal rejected: R:R too low 1.61 < 5.0
+10:30:24 core.sweep_detector INFO: SweepDetector: 9 raw sweeps → 8 confirmed
+10:30:24 core.signal_engine INFO: Signal rejected: R:R too low 0.16 < 5.0
+10:30:24 core.signal_engine INFO: Signal rejected: R:R too low 0.26 < 5.0
+10:30:24 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:30:24 core.signal_engine INFO: Signal rejected: R:R too low 1.13 < 5.0
+10:30:24 core.signal_engine INFO: Signal rejected: R:R too low 1.73 < 5.0
+10:30:25 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:30:25 core.signal_engine INFO: Signal rejected: R:R too low 1.54 < 5.0
+10:30:25 core.signal_engine INFO: Signal rejected: R:R too low 1.70 < 5.0
+10:30:25 core.signal_engine INFO: Signal rejected: R:R too low 4.33 < 5.0
+10:30:25 core.signal_engine INFO: Signal rejected: R:R too low 2.74 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:30:38 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 2 confirmed
+10:30:38 core.signal_engine INFO: Signal rejected: R:R too low 1.29 < 5.0
+10:30:38 core.signal_engine INFO: Signal rejected: R:R too low 0.16 < 5.0
+10:30:40 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 2 confirmed
+10:30:40 core.signal_engine INFO: Signal rejected: R:R too low 0.83 < 5.0
+10:30:40 core.signal_engine INFO: Signal rejected: R:R too low 0.63 < 5.0
+10:30:41 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 3 confirmed
+10:30:41 core.signal_engine INFO: Signal rejected: R:R too low 4.90 < 5.0
+10:30:41 core.signal_engine INFO: Signal rejected: R:R too low 1.85 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:30:44 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:30:44 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:30:44 core.signal_engine INFO: Signal rejected: R:R too low 0.35 < 5.0
+10:30:44 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:30:44 core.signal_engine INFO: Signal rejected: R:R too low 0.27 < 5.0
+10:30:46 core.sweep_detector INFO: SweepDetector: 9 raw sweeps → 9 confirmed
+10:30:46 core.signal_engine INFO: Signal rejected: R:R too low 0.00 < 5.0
+10:30:46 core.signal_engine INFO: Signal rejected: R:R too low 0.12 < 5.0
+10:30:46 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:30:46 core.signal_engine INFO: Signal rejected: R:R too low 3.00 < 5.0
+10:30:46 core.signal_engine INFO: Signal rejected: R:R too low 0.46 < 5.0
+10:30:47 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 6 confirmed
+10:30:47 core.signal_engine INFO: Signal rejected: R:R too low 0.32 < 5.0
+10:30:47 core.signal_engine INFO: Signal rejected: R:R too low 2.87 < 5.0
+10:30:47 core.signal_engine INFO: Signal rejected: R:R too low 0.96 < 5.0
+10:30:47 core.signal_engine INFO: Signal rejected: R:R too low 0.16 < 5.0
+10:30:47 core.signal_engine INFO: Signal rejected: R:R too low 4.65 < 5.0
+10:30:49 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:30:49 core.signal_engine INFO: Signal rejected: R:R too low 1.02 < 5.0
+10:30:59 core.data_fetcher ERROR: Fetch OHLCV failed: binance GET https://api.binance.com/api/v3/exchangeInfo
+10:30:59 __main__ ERROR: Error scanning binance:GUN/USDT 1h: binance GET https://api.binance.com/api/v3/exchangeInfo
+10:31:02 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 1 confirmed
+10:31:02 core.signal_engine INFO: Signal rejected: R:R too low 0.30 < 5.0
+10:31:03 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 5 confirmed
+10:31:03 core.signal_engine INFO: Signal rejected: R:R too low 4.64 < 5.0
+10:31:03 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:31:03 core.signal_engine INFO: Signal rejected: R:R too low 0.01 < 5.0
+10:31:03 core.signal_engine INFO: Signal rejected: R:R too low 0.24 < 5.0
+10:31:03 core.signal_engine INFO: Signal rejected: R:R too low 2.61 < 5.0
+10:31:05 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:31:16 core.signal_engine INFO: Signal rejected: R:R too low 0.44 < 5.0
+10:31:18 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 0 confirmed
+10:31:20 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:31:22 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:31:22 core.signal_engine INFO: Signal rejected: R:R too low 0.06 < 5.0
+10:31:23 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 4 confirmed
+10:31:23 core.signal_engine INFO: Signal rejected: R:R too low 1.99 < 5.0
+10:31:23 core.signal_engine INFO: Signal rejected: R:R too low 1.22 < 5.0
+10:31:23 core.signal_engine INFO: Signal rejected: R:R too low 3.70 < 5.0
+10:31:23 core.signal_engine INFO: Signal rejected: R:R too low 0.24 < 5.0
+10:31:25 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:31:25 core.signal_engine INFO: Signal rejected: R:R too low 0.00 < 5.0
+10:31:27 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:31:27 core.signal_engine INFO: Signal rejected: R:R too low 0.56 < 5.0
+10:31:27 core.signal_engine INFO: Signal rejected: R:R too low 0.84 < 5.0
+10:31:27 core.signal_engine INFO: Signal rejected: R:R too low 3.55 < 5.0
+10:31:27 core.signal_engine INFO: Signal rejected: R:R too low 1.97 < 5.0
+10:31:28 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 1 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:31:41 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:31:41 core.signal_engine INFO: Signal rejected: R:R too low 2.54 < 5.0
+10:31:41 core.signal_engine INFO: Signal rejected: R:R too low 0.21 < 5.0
+10:31:41 core.signal_engine INFO: Signal rejected: R:R too low 0.19 < 5.0
+10:31:41 core.signal_engine INFO: Signal rejected: R:R too low 1.09 < 5.0
+10:31:41 core.signal_engine INFO: Signal rejected: R:R too low 0.16 < 5.0
+10:31:42 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 2 confirmed
+10:31:42 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:31:42 core.signal_engine INFO: Signal rejected: R:R too low 0.72 < 5.0
+10:31:43 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:31:43 core.signal_engine INFO: Signal rejected: R:R too low 1.96 < 5.0
+10:31:43 core.signal_engine INFO: Signal rejected: R:R too low 1.52 < 5.0
+10:31:45 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 1 confirmed
+10:31:45 core.signal_engine INFO: Signal rejected: R:R too low 0.23 < 5.0
+10:31:46 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:31:46 core.signal_engine INFO: Signal rejected: R:R too low 0.91 < 5.0
+10:31:46 core.signal_engine INFO: Signal rejected: R:R too low 0.51 < 5.0
+10:31:46 core.signal_engine INFO: Signal rejected: R:R too low 2.15 < 5.0
+10:31:48 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:31:48 core.signal_engine INFO: Signal rejected: R:R too low 0.60 < 5.0
+10:31:48 core.signal_engine INFO: Signal rejected: R:R too low 2.23 < 5.0
+10:31:48 core.signal_engine INFO: Signal rejected: R:R too low 2.43 < 5.0
+10:31:50 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 1 confirmed
+10:31:50 core.signal_engine INFO: Signal rejected: R:R too low 0.12 < 5.0
+10:31:52 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 4 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:32:02 core.signal_engine INFO: Signal rejected: R:R too low 2.01 < 5.0
+10:32:02 core.signal_engine INFO: Signal rejected: R:R too low 3.97 < 5.0
+10:32:14 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 3 confirmed
+10:32:14 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:32:14 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:32:14 core.signal_engine INFO: Signal rejected: R:R too low 1.99 < 5.0
+10:32:16 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:32:18 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:32:18 core.signal_engine INFO: Signal rejected: R:R too low 0.99 < 5.0
+10:32:18 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:32:20 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:32:20 core.signal_engine INFO: Signal rejected: R:R too low 0.15 < 5.0
+10:32:20 core.signal_engine INFO: Signal rejected: R:R too low 1.23 < 5.0
+10:32:21 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:32:21 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:32:23 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:32:23 core.signal_engine INFO: Signal rejected: R:R too low 0.29 < 5.0
+10:32:23 core.signal_engine INFO: Signal rejected: R:R too low 0.36 < 5.0
+10:32:23 core.signal_engine INFO: Signal rejected: R:R too low 0.18 < 5.0
+10:32:23 core.signal_engine INFO: Signal rejected: R:R too low 2.27 < 5.0
+10:32:24 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 2 confirmed
+10:32:24 core.signal_engine INFO: Signal rejected: R:R too low 1.31 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:32:36 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 6 confirmed
+10:32:36 core.signal_engine INFO: Signal rejected: R:R too low 0.60 < 5.0
+10:32:36 core.signal_engine INFO: Signal rejected: R:R too low 2.98 < 5.0
+10:32:36 core.signal_engine INFO: Signal rejected: R:R too low 3.59 < 5.0
+10:32:36 core.signal_engine INFO: Signal rejected: R:R too low 3.41 < 5.0
+10:32:36 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:32:38 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:32:38 core.signal_engine INFO: Signal rejected: R:R too low 4.40 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:32:49 core.signal_engine INFO: Signal rejected: R:R too low 3.98 < 5.0
+10:32:51 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:32:51 core.signal_engine INFO: Signal rejected: R:R too low 4.70 < 5.0
+10:32:51 core.signal_engine INFO: Signal rejected: R:R too low 1.28 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:32:53 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:32:53 core.signal_engine INFO: Signal rejected: R:R too low 3.18 < 5.0
+10:32:53 core.signal_engine INFO: Signal rejected: R:R too low 0.30 < 5.0
+10:32:53 core.signal_engine INFO: Signal rejected: R:R too low 0.06 < 5.0
+10:32:53 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:32:55 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:32:55 core.signal_engine INFO: Signal rejected: R:R too low 0.05 < 5.0
+10:32:55 core.signal_engine INFO: Signal rejected: R:R too low 0.36 < 5.0
+10:32:55 core.signal_engine INFO: Signal rejected: R:R too low 0.74 < 5.0
+10:32:57 core.sweep_detector INFO: SweepDetector: 9 raw sweeps → 8 confirmed
+10:32:57 core.signal_engine INFO: Signal rejected: R:R too low 1.85 < 5.0
+10:32:57 core.signal_engine INFO: Signal rejected: R:R too low 2.69 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:33:08 core.signal_engine INFO: Signal rejected: R:R too low 1.83 < 5.0
+10:33:08 core.signal_engine INFO: Signal rejected: R:R too low 0.61 < 5.0
+10:33:09 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 2 confirmed
+10:33:09 core.signal_engine INFO: Signal rejected: R:R too low 1.66 < 5.0
+10:33:09 core.signal_engine INFO: Signal rejected: R:R too low 0.12 < 5.0
+10:33:10 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:33:10 core.signal_engine INFO: Signal rejected: R:R too low 0.33 < 5.0
+10:33:10 core.signal_engine INFO: Signal rejected: R:R too low 0.01 < 5.0
+10:33:10 core.signal_engine INFO: Signal rejected: R:R too low 0.72 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:33:23 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:33:23 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:33:23 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:33:23 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:33:24 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 0 confirmed
+10:33:25 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 3 confirmed
+10:33:25 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:33:25 core.signal_engine INFO: Signal rejected: R:R too low 2.19 < 5.0
+10:33:25 core.signal_engine INFO: Signal rejected: R:R too low 0.29 < 5.0
+10:33:27 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:33:27 core.signal_engine INFO: Signal rejected: R:R too low 3.99 < 5.0
+10:33:27 core.signal_engine INFO: Signal rejected: R:R too low 1.64 < 5.0
+10:33:29 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:33:30 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:33:32 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:33:33 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:33:33 core.signal_engine INFO: Signal rejected: R:R too low 0.16 < 5.0
+10:33:35 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:33:35 core.signal_engine INFO: Signal rejected: R:R too low 0.39 < 5.0
+10:33:35 core.signal_engine INFO: Signal rejected: R:R too low 0.85 < 5.0
+10:33:35 core.signal_engine INFO: Signal rejected: R:R too low 0.52 < 5.0
+10:33:35 core.signal_engine INFO: Signal rejected: R:R too low 0.87 < 5.0
+10:33:37 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:33:37 core.signal_engine INFO: Signal rejected: R:R too low 0.29 < 5.0
+10:33:37 core.signal_engine INFO: Signal rejected: R:R too low 0.66 < 5.0
+10:33:37 core.signal_engine INFO: Signal rejected: R:R too low 0.08 < 5.0
+10:33:37 core.signal_engine INFO: Signal rejected: R:R too low 0.72 < 5.0
+10:33:37 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:33:38 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:33:38 core.signal_engine INFO: Signal rejected: R:R too low 0.18 < 5.0
+10:33:38 core.signal_engine INFO: Signal rejected: R:R too low 0.28 < 5.0
+10:33:38 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:33:40 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 0 confirmed
+10:33:42 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 5 confirmed
+10:33:42 core.signal_engine INFO: Signal rejected: R:R too low 0.15 < 5.0
+10:33:42 core.signal_engine INFO: Signal rejected: R:R too low 0.08 < 5.0
+10:33:42 core.signal_engine INFO: Signal rejected: R:R too low 0.07 < 5.0
+10:33:42 core.signal_engine INFO: Signal rejected: R:R too low 0.49 < 5.0
+10:33:42 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:33:43 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:33:43 core.signal_engine INFO: Signal rejected: R:R too low 0.48 < 5.0
+10:33:43 core.signal_engine INFO: Signal rejected: R:R too low 0.12 < 5.0
+10:33:43 core.signal_engine INFO: Signal rejected: R:R too low 0.41 < 5.0
+10:33:45 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:33:45 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:33:45 core.signal_engine INFO: Signal rejected: R:R too low 1.94 < 5.0
+10:33:46 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:33:46 core.signal_engine INFO: Signal rejected: R:R too low 0.23 < 5.0
+10:33:46 core.signal_engine INFO: Signal rejected: R:R too low 0.85 < 5.0
+10:33:46 core.signal_engine INFO: Signal rejected: R:R too low 2.72 < 5.0
+10:33:48 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:33:48 core.signal_engine INFO: Signal rejected: R:R too low 3.45 < 5.0
+10:33:48 core.signal_engine INFO: Signal rejected: R:R too low 0.06 < 5.0
+10:33:48 core.signal_engine INFO: Signal rejected: R:R too low 0.42 < 5.0
+10:33:48 core.signal_engine INFO: Signal rejected: R:R too low 0.16 < 5.0
+10:33:48 core.signal_engine INFO: Signal rejected: R:R too low 0.13 < 5.0
+10:33:49 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 1 confirmed
+10:33:49 core.signal_engine INFO: Signal rejected: R:R too low 0.01 < 5.0
+10:33:51 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:33:51 core.signal_engine INFO: Signal rejected: R:R too low 0.91 < 5.0
+10:33:51 core.signal_engine INFO: Signal rejected: R:R too low 0.17 < 5.0
+10:33:52 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 4 confirmed
+10:33:52 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:33:52 core.signal_engine INFO: Signal rejected: R:R too low 2.24 < 5.0
+10:33:52 core.signal_engine INFO: Signal rejected: R:R too low 0.36 < 5.0
+10:33:52 core.signal_engine INFO: Signal rejected: R:R too low 0.92 < 5.0
+10:33:54 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 5 confirmed
+10:33:54 core.signal_engine INFO: Signal rejected: R:R too low 0.28 < 5.0
+10:33:54 core.signal_engine INFO: Signal rejected: R:R too low 1.05 < 5.0
+10:33:54 core.signal_engine INFO: Signal rejected: R:R too low 1.87 < 5.0
+10:33:54 core.signal_engine INFO: Signal rejected: R:R too low 0.97 < 5.0
+10:33:54 core.signal_engine INFO: Signal rejected: R:R too low 0.68 < 5.0
+10:33:55 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 2 confirmed
+10:33:55 core.signal_engine INFO: Signal rejected: R:R too low 0.63 < 5.0
+10:33:55 core.signal_engine INFO: Signal rejected: R:R too low 0.70 < 5.0
+10:33:56 core.sweep_detector INFO: SweepDetector: 10 raw sweeps → 7 confirmed
+10:33:56 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:33:56 core.signal_engine INFO: Signal rejected: R:R too low 0.05 < 5.0
+10:33:56 core.signal_engine INFO: Signal rejected: R:R too low 0.05 < 5.0
+10:33:56 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:33:56 core.signal_engine INFO: Signal rejected: R:R too low 0.15 < 5.0
+10:33:58 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 2 confirmed
+10:33:58 core.signal_engine INFO: Signal rejected: R:R too low 0.29 < 5.0
+10:33:58 core.signal_engine INFO: Signal rejected: R:R too low 0.98 < 5.0
+10:34:00 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 2 confirmed
+10:34:00 core.signal_engine INFO: Signal rejected: R:R too low 0.37 < 5.0
+10:34:00 core.signal_engine INFO: Signal rejected: R:R too low 0.08 < 5.0
+10:34:01 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:34:01 core.signal_engine INFO: Signal rejected: R:R too low 1.81 < 5.0
+10:34:01 core.signal_engine INFO: Signal rejected: R:R too low 0.37 < 5.0
+10:34:03 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 4 confirmed
+10:34:03 core.signal_engine INFO: Signal rejected: R:R too low 0.25 < 5.0
+10:34:03 core.signal_engine INFO: Signal rejected: R:R too low 1.09 < 5.0
+10:34:03 core.signal_engine INFO: Signal rejected: R:R too low 0.60 < 5.0
+10:34:03 core.signal_engine INFO: Signal rejected: R:R too low 0.20 < 5.0
+10:34:04 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:34:04 core.signal_engine INFO: Signal rejected: R:R too low 4.62 < 5.0
+10:34:04 core.signal_engine INFO: Signal rejected: R:R too low 0.83 < 5.0
+10:34:04 core.signal_engine INFO: Signal rejected: R:R too low 2.69 < 5.0
+10:34:04 core.signal_engine INFO: Signal rejected: R:R too low 0.92 < 5.0
+10:34:06 core.sweep_detector INFO: SweepDetector: 9 raw sweeps → 8 confirmed
+10:34:06 core.signal_engine INFO: Signal rejected: R:R too low 0.01 < 5.0
+10:34:06 core.signal_engine INFO: Signal rejected: R:R too low 0.00 < 5.0
+10:34:06 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:34:06 core.signal_engine INFO: Signal rejected: R:R too low 0.70 < 5.0
+10:34:06 core.signal_engine INFO: Signal rejected: R:R too low 0.14 < 5.0
+10:34:08 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 3 confirmed
+10:34:08 core.signal_engine INFO: Signal rejected: R:R too low 1.04 < 5.0
+10:34:08 core.signal_engine INFO: Signal rejected: R:R too low 1.32 < 5.0
+10:34:08 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:34:10 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:34:10 core.signal_engine INFO: Signal rejected: R:R too low 0.52 < 5.0
+10:34:10 core.signal_engine INFO: Signal rejected: R:R too low 1.51 < 5.0
+10:34:10 core.signal_engine INFO: Signal rejected: R:R too low 1.17 < 5.0
+10:34:10 core.signal_engine INFO: Signal rejected: R:R too low 1.99 < 5.0
+10:34:11 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 0 confirmed
+10:34:13 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 4 confirmed
+10:34:13 core.signal_engine INFO: Signal rejected: R:R too low 2.82 < 5.0
+10:34:13 core.signal_engine INFO: Signal rejected: R:R too low 1.84 < 5.0
+10:34:13 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:34:13 core.signal_engine INFO: Signal rejected: R:R too low 0.26 < 5.0
+10:34:14 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:34:14 core.signal_engine INFO: Signal rejected: R:R too low 0.48 < 5.0
+10:34:14 core.signal_engine INFO: Signal rejected: R:R too low 2.30 < 5.0
+10:34:14 core.signal_engine INFO: Signal rejected: R:R too low 4.73 < 5.0
+10:34:14 core.signal_engine INFO: Signal rejected: R:R too low 4.85 < 5.0
+10:34:16 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 2 confirmed
+10:34:16 core.signal_engine INFO: Signal rejected: R:R too low 0.18 < 5.0
+10:34:16 core.signal_engine INFO: Signal rejected: R:R too low 0.52 < 5.0
+10:34:17 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:34:17 core.signal_engine INFO: Signal rejected: R:R too low 2.68 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:34:18 core.signal_engine INFO: Signal rejected: R:R too low 2.12 < 5.0
+10:34:19 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:34:19 core.signal_engine INFO: Signal rejected: R:R too low 0.24 < 5.0
+10:34:21 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:34:21 core.signal_engine INFO: Signal rejected: R:R too low 0.20 < 5.0
+10:34:22 core.sweep_detector INFO: SweepDetector: 10 raw sweeps → 6 confirmed
+10:34:22 core.signal_engine INFO: Signal rejected: R:R too low 0.12 < 5.0
+10:34:22 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:34:33 core.signal_engine INFO: Signal rejected: R:R too low 0.74 < 5.0
+10:34:33 core.signal_engine INFO: Signal rejected: R:R too low 0.09 < 5.0
+10:34:35 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 4 confirmed
+10:34:35 core.signal_engine INFO: Signal rejected: R:R too low 0.68 < 5.0
+10:34:35 core.signal_engine INFO: Signal rejected: R:R too low 0.83 < 5.0
+10:34:35 core.signal_engine INFO: Signal rejected: R:R too low 0.20 < 5.0
+10:34:35 core.signal_engine INFO: Signal rejected: R:R too low 0.07 < 5.0
+10:34:37 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:38 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:40 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:42 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:34:42 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:34:42 core.signal_engine INFO: Signal rejected: R:R too low 0.23 < 5.0
+10:34:42 core.signal_engine INFO: Signal rejected: R:R too low 0.54 < 5.0
+10:34:43 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 4 confirmed
+10:34:43 core.signal_engine INFO: Signal rejected: R:R too low 0.90 < 5.0
+10:34:43 core.signal_engine INFO: Signal rejected: R:R too low 0.65 < 5.0
+10:34:43 core.signal_engine INFO: Signal rejected: R:R too low 1.92 < 5.0
+10:34:43 core.signal_engine INFO: Signal rejected: R:R too low 4.52 < 5.0
+10:34:45 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 5 confirmed
+10:34:45 core.signal_engine INFO: Signal rejected: R:R too low 1.76 < 5.0
+10:34:45 core.signal_engine INFO: Signal rejected: R:R too low 2.88 < 5.0
+10:34:45 core.signal_engine INFO: Signal rejected: R:R too low 3.71 < 5.0
+10:34:45 core.signal_engine INFO: Signal rejected: R:R too low 0.37 < 5.0
+10:34:45 core.signal_engine INFO: Signal rejected: R:R too low 3.52 < 5.0
+10:34:46 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:34:46 core.signal_engine INFO: Signal rejected: R:R too low 1.77 < 5.0
+10:34:48 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:50 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:51 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:53 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:55 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:56 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:34:58 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:35:00 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:35:02 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 4 confirmed
+10:35:02 core.signal_engine INFO: Signal rejected: R:R too low 4.12 < 5.0
+10:35:02 core.signal_engine INFO: Signal rejected: R:R too low 1.09 < 5.0
+10:35:02 core.signal_engine INFO: Signal rejected: R:R too low 0.06 < 5.0
+10:35:02 core.signal_engine INFO: Signal rejected: R:R too low 1.00 < 5.0
+10:35:04 core.sweep_detector INFO: SweepDetector: 8 raw sweeps → 6 confirmed
+10:35:04 core.signal_engine INFO: Signal rejected: R:R too low 0.12 < 5.0
+10:35:04 core.signal_engine INFO: Signal rejected: R:R too low 0.01 < 5.0
+10:35:04 core.signal_engine INFO: Signal rejected: R:R too low 0.55 < 5.0
+10:35:04 core.signal_engine INFO: Signal rejected: R:R too low 0.26 < 5.0
+10:35:04 core.signal_engine INFO: Signal rejected: R:R too low 3.97 < 5.0
+10:35:05 core.sweep_detector INFO: SweepDetector: 7 raw sweeps → 5 confirmed
+10:35:05 core.signal_engine INFO: Signal rejected: R:R too low 1.56 < 5.0
+10:35:05 core.signal_engine INFO: Signal rejected: R:R too low 3.82 < 5.0
+10:35:05 core.signal_engine INFO: Signal rejected: R:R too low 1.83 < 5.0
+10:35:05 core.signal_engine INFO: Signal rejected: R:R too low 1.87 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:35:17 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:35:17 core.signal_engine INFO: Signal rejected: R:R too low 3.09 < 5.0
+10:35:17 core.signal_engine INFO: Signal rejected: R:R too low 2.99 < 5.0
+10:35:17 core.signal_engine INFO: Signal rejected: R:R too low 0.55 < 5.0
+10:35:17 core.signal_engine INFO: Signal rejected: R:R too low 0.97 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:35:29 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 2 confirmed
+10:35:29 core.signal_engine INFO: Signal rejected: R:R too low 3.98 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:35:42 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 4 confirmed
+10:35:42 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:35:42 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:35:42 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:35:42 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:35:43 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 2 confirmed
+10:35:43 core.signal_engine INFO: Signal rejected: R:R too low 0.24 < 5.0
+10:35:43 core.signal_engine INFO: Signal rejected: R:R too low 0.28 < 5.0
+10:35:45 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 5 confirmed
+10:35:45 core.signal_engine INFO: Signal rejected: R:R too low 0.09 < 5.0
+10:35:45 core.signal_engine INFO: Signal rejected: R:R too low 0.25 < 5.0
+10:35:45 core.signal_engine INFO: Signal rejected: R:R too low 0.62 < 5.0
+10:35:45 core.signal_engine INFO: Signal rejected: R:R too low 0.90 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:35:57 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:35:57 core.signal_engine INFO: Signal rejected: R:R too low 1.38 < 5.0
+10:35:57 core.signal_engine INFO: Signal rejected: R:R too low 0.82 < 5.0
+10:35:57 core.signal_engine INFO: Signal rejected: R:R too low 0.08 < 5.0
+10:35:59 core.sweep_detector INFO: SweepDetector: 8 raw sweeps → 5 confirmed
+10:35:59 core.signal_engine INFO: Signal rejected: R:R too low 0.10 < 5.0
+10:35:59 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:35:59 core.signal_engine INFO: Signal rejected: R:R too low 0.31 < 5.0
+10:35:59 core.signal_engine INFO: Signal rejected: R:R too low 0.09 < 5.0
+10:35:59 core.signal_engine INFO: Signal rejected: R:R too low 1.08 < 5.0
+10:36:00 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 5 confirmed
+10:36:00 core.signal_engine INFO: Signal rejected: R:R too low 2.65 < 5.0
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:36:22 core.signal_engine INFO: Signal rejected: R:R too low 0.08 < 5.0
+10:36:24 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 2 confirmed
+10:36:24 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:36:24 core.signal_engine INFO: Signal rejected: R:R too low 0.33 < 5.0
+10:36:25 core.sweep_detector INFO: SweepDetector: 4 raw sweeps → 3 confirmed
+10:36:25 core.signal_engine INFO: Signal rejected: R:R too low 1.58 < 5.0
+10:36:25 core.signal_engine INFO: Signal rejected: R:R too low 0.02 < 5.0
+10:36:25 core.signal_engine INFO: Signal rejected: R:R too low 0.74 < 5.0
+10:36:27 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:36:27 core.signal_engine INFO: Signal rejected: R:R too low 1.85 < 5.0
+10:36:28 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 0 confirmed
+10:36:30 core.sweep_detector INFO: SweepDetector: 8 raw sweeps → 4 confirmed
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:363: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  entry_time=datetime.utcnow(),
+10:36:51 core.signal_engine INFO: Signal rejected: R:R too low 0.33 < 5.0
+10:36:51 core.signal_engine INFO: Signal rejected: R:R too low 0.01 < 5.0
+10:36:53 core.sweep_detector INFO: SweepDetector: 2 raw sweeps → 2 confirmed
+10:36:53 core.signal_engine INFO: Signal rejected: R:R too low 2.74 < 5.0
+10:36:53 core.signal_engine INFO: Signal rejected: R:R too low 1.51 < 5.0
+10:36:55 core.sweep_detector INFO: SweepDetector: 5 raw sweeps → 4 confirmed
+10:36:55 core.signal_engine INFO: Signal rejected: R:R too low 0.36 < 5.0
+10:36:55 core.signal_engine INFO: Signal rejected: R:R too low 2.79 < 5.0
+10:36:55 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:36:55 core.signal_engine INFO: Signal rejected: R:R too low 0.34 < 5.0
+10:36:56 core.sweep_detector INFO: SweepDetector: 1 raw sweeps → 1 confirmed
+10:36:56 core.signal_engine INFO: Signal rejected: R:R too low 2.00 < 5.0
+10:36:58 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:37:00 core.sweep_detector INFO: SweepDetector: 0 raw sweeps → 0 confirmed
+10:37:01 core.sweep_detector INFO: SweepDetector: 3 raw sweeps → 3 confirmed
+10:37:01 core.signal_engine INFO: Signal rejected: R:R too low 2.55 < 5.0
+10:37:01 core.signal_engine INFO: Signal rejected: R:R too low 0.03 < 5.0
+10:37:01 core.signal_engine INFO: Signal rejected: R:R too low 0.08 < 5.0
+10:37:03 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 3 confirmed
+10:37:03 core.signal_engine INFO: Signal rejected: R:R too low 0.04 < 5.0
+10:37:03 core.signal_engine INFO: Signal rejected: R:R too low 0.30 < 5.0
+10:37:03 core.signal_engine INFO: Signal rejected: R:R too low 3.87 < 5.0
+10:37:04 core.sweep_detector INFO: SweepDetector: 6 raw sweeps → 6 confirmed
+10:37:04 core.signal_engine INFO: Signal rejected: R:R too low 0.86 < 5.0
+10:37:04 core.signal_engine INFO: Signal rejected: R:R too low 1.83 < 5.0
+10:37:04 core.signal_engine INFO: Signal rejected: R:R too low 0.36 < 5.0
+10:37:04 core.signal_engine INFO: Signal rejected: R:R too low 0.88 < 5.0
+10:37:04 core.signal_engine INFO: Signal rejected: R:R too low 1.89 < 5.0
+10:37:04 __main__ INFO: Checking 294 open trades for exit conditions
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:453: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  store.close_trade(trade['id'], exit_price, datetime.utcnow(), status, pnl_usd)
+10:37:04 __main__ INFO: Closed trade 1277 binance:WLFI/USDT target_hit P&L=$7.44
+10:37:04 __main__ INFO: Closed trade 1276 binance:WLFI/USDT stop_loss P&L=$-5.63
+10:37:04 __main__ INFO: Closed trade 1275 binance:WLFI/USDT stop_loss P&L=$-7.42
+10:37:04 __main__ INFO: Closed trade 1270 binance:TURBO/USDT target_hit P&L=$13.57
+10:37:04 __main__ INFO: Closed trade 1266 binance:PAXG/USDT target_hit P&L=$2.89
+10:37:04 __main__ INFO: Closed trade 1264 binance:PAXG/USDT stop_loss P&L=$-11.92
+10:37:04 __main__ INFO: Closed trade 1263 binance:PAXG/USDT stop_loss P&L=$-14.10
+10:37:04 __main__ INFO: Closed trade 1262 binance:OPN/USDT stop_loss P&L=$-4.12
+10:37:04 __main__ INFO: Closed trade 1261 binance:NEAR/USDT stop_loss P&L=$-0.95
+10:37:04 __main__ INFO: Closed trade 1260 binance:NEAR/USDT stop_loss P&L=$-3.27
+10:37:04 __main__ INFO: Closed trade 1259 binance:KITE/USDT target_hit P&L=$5.46
+10:37:04 __main__ INFO: Closed trade 1258 binance:HBAR/USDT stop_loss P&L=$-1.35
+10:37:04 __main__ INFO: Closed trade 1257 binance:HBAR/USDT stop_loss P&L=$-2.10
+10:37:04 __main__ INFO: Closed trade 1253 binance:ETH/USDT stop_loss P&L=$-3.78
+10:37:04 __main__ INFO: Closed trade 1252 binance:ETH/USDT stop_loss P&L=$-1.36
+10:37:04 __main__ INFO: Closed trade 1251 binance:ETH/USDT stop_loss P&L=$-2.45
+10:37:04 __main__ INFO: Closed trade 1249 binance:DOT/USDT stop_loss P&L=$-5.79
+10:37:04 __main__ INFO: Closed trade 1245 binance:BNB/USDT target_hit P&L=$7.68
+10:37:04 __main__ INFO: Closed trade 1175 binance:PENGU/USDT stop_loss P&L=$-1.09
+10:37:04 __main__ INFO: Closed trade 1158 binance:NEAR/USDT stop_loss P&L=$-0.91
+10:37:04 __main__ INFO: Closed trade 1156 binance:NEAR/USDT stop_loss P&L=$-0.95
+10:37:04 __main__ INFO: Closed trade 1154 binance:NEAR/USDT target_hit P&L=$5.79
+10:37:04 __main__ INFO: Closed trade 1148 binance:LINK/USDT stop_loss P&L=$-1.06
+
+=== SCAN ALL: 60 pairs, 3 timeframes ===
+Total signals generated: 40
+  binance:TURBO/USDT 1h LONG Entry=0.00 SL=0.00 TP=0.00 R:R=12.07
+  binance:VIRTUAL/USDT 15m LONG Entry=0.66 SL=0.65 TP=0.68 R:R=8.57
+  binance:WIF/USDT 4h LONG Entry=0.17 SL=0.17 TP=0.19 R:R=12.67
+  binance:WIF/USDT 1h LONG Entry=0.17 SL=0.17 TP=0.19 R:R=13.47
+  binance:WLD/USDT 1h LONG Entry=0.30 SL=0.30 TP=0.31 R:R=5.10
+  binance:WLFI/USDT 1h LONG Entry=0.10 SL=0.10 TP=0.11 R:R=6.66
+  binance:WLFI/USDT 1h LONG Entry=0.10 SL=0.10 TP=0.11 R:R=8.58
+  binance:WLFI/USDT 1h LONG Entry=0.09 SL=0.09 TP=0.09 R:R=5.82
+  binance:XRP/USDT 4h LONG Entry=1.28 SL=1.27 TP=1.40 R:R=11.66
+  binance:XRP/USDT 4h LONG Entry=1.33 SL=1.32 TP=1.40 R:R=8.30
