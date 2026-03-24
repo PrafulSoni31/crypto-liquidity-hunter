@@ -30,6 +30,16 @@ except ImportError:
     config_mgr = None
     logger.error("ConfigManager not available - parameter commands disabled")
 
+# === Auth helper ===
+def auth_required(update: Update) -> bool:
+    """Return True if sender is the admin; send error and return False otherwise."""
+    uid = update.effective_user.id if update.effective_user else None
+    if uid != ADMIN_USER_ID:
+        import asyncio
+        logger.warning(f"Unauthorised access attempt from user_id={uid}")
+        return False
+    return True
+
 # === System Commands ===
 
 async def restart_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -289,6 +299,7 @@ async def set_min_risk_reward(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def set_min_confidence(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Set minimum confidence threshold for Telegram alerts (0.0 – 1.0)."""
     if not auth_required(update):
+        await update.message.reply_text("❌ Unauthorised.")
         return
     try:
         val = float(context.args[0])
