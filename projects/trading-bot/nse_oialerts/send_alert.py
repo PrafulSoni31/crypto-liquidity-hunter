@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict
 
 # ─── Config ────────────────────────────────────────────────────────────────────
-BOT_TOKEN  = "8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys"
+BOT_TOKEN  = "8734017273:AAG5CQL90qARQPsB9Qr0JOcf4w-0tSBGGXY"  # ⚡ SHIVA OI MOMENTUM ALERT bot
 CHARLIE_ID = "686482312"
 IST        = timezone(timedelta(hours=5, minutes=30))
 CACHE_DIR  = "projects/trading-bot/nse_oialerts/cache"
