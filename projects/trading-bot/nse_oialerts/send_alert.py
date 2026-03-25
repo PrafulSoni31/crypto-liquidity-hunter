@@ -54,21 +54,67 @@ def load_signals(trade_type: str) -> Dict:
     return data
 
 
+def format_ce_pe_block(s: Dict) -> str:
+    """
+    Render CE/PE OI analysis block from cached signal dict.
+    CE/PE interpretation:
+      CE OI ↑ = Call writing = Resistance (bearish pressure)
+      PE OI ↑ = Put writing  = Support    (bullish pressure)
+      CE OI ↓ = Calls exiting = Bullish
+      PE OI ↓ = Puts exiting  = Bearish
+    """
+    ce_pe_bias = s.get("ce_pe_bias", "N/A")
+    pcr        = s.get("pcr", 0.0)
+
+    if ce_pe_bias == "N/A" or not pcr:
+        return "  🔲 Options: N/A\n"
+
+    ce_chg = s.get("ce_oi_change", 0.0)
+    pe_chg = s.get("pe_oi_change", 0.0)
+
+    ce_arrow   = "↑ Building" if ce_chg >= 5 else ("↓ Unwinding" if ce_chg <= -5 else "→ Stable")
+    pe_arrow   = "↑ Building" if pe_chg >= 5 else ("↓ Unwinding" if pe_chg <= -5 else "→ Stable")
+    ce_meaning = "⚠️ Resistance" if ce_chg >= 5 else ("✅ Easing" if ce_chg <= -5 else "")
+    pe_meaning = "✅ Support"    if pe_chg >= 5 else ("⚠️ Weakening" if pe_chg <= -5 else "")
+
+    bias_emoji = {"bullish": "🟢", "bearish": "🔴", "neutral": "⚪"}.get(ce_pe_bias, "⚪")
+    pcr_label  = "Bullish" if pcr >= 1.2 else ("Bearish" if pcr <= 0.8 else "Neutral")
+
+    max_pain = s.get("max_pain")
+    mp_txt   = f"  💥 Max Pain: ₹{max_pain:.0f}\n" if max_pain else ""
+
+    return (
+        f"  📋 *Options Chain:*\n"
+        f"  • CE OI: {ce_arrow} ({ce_chg:+.1f}%) {ce_meaning}\n"
+        f"  • PE OI: {pe_arrow} ({pe_chg:+.1f}%) {pe_meaning}\n"
+        f"  • PCR: {pcr:.2f} → {pcr_label}\n"
+        f"  • Bias: {bias_emoji} {ce_pe_bias.upper()}\n"
+        f"{mp_txt}"
+    )
+
+
 def format_signal_block(s: Dict, rank: int) -> str:
     is_buy     = s.get("signal_type", "") == "LONG_BUILDUP"
     emoji      = "🟢" if is_buy else "🔴"
-    action     = "BUY" if is_buy else "SELL / SHORT"
+    action     = "BUY (buy CE / sell PE)" if is_buy else "SELL (buy PE / sell CE)"
     conviction = s.get("conviction_score", 0)
+    aligned    = s.get("options_aligned", False)
+    align_tag  = " ✅ *Options Aligned*" if aligned else ""
+    deliv      = s.get("delivery_pct")
+    deliv_txt  = f"\n  📦 Delivery: {deliv:.0f}%" if deliv else ""
+
+    ce_pe_block = format_ce_pe_block(s)
 
     return (
-        f"\n{emoji} *{rank}. {s['symbol']}*  — Conviction {conviction:.0f}/100\n"
+        f"\n{emoji} *{rank}. {s['symbol']}*  ⭐ {conviction:.0f}/100{align_tag}\n"
         f"`━━━━━━━━━━━━━━━━━━━━━`\n"
         f"📌 *Action:*    {action}\n"
         f"💰 *Entry:*     ₹{s['current_price']}\n"
         f"🎯 *Target:*    ₹{s['target']}\n"
         f"🛑 *Stop Loss:* ₹{s['stop_loss']}\n"
         f"⚖️ *R:R:*       1:{s['risk_reward']:.1f}\n"
-        f"📊 Price: {s['price_change_pct']:+.2f}%  |  OI: {s['oi_change_pct']:+.2f}%  |  Vol: {s['volume_spike']:.1f}x\n"
+        f"📊 Price: {s['price_change_pct']:+.2f}%  |  OI: {s['oi_change_pct']:+.2f}%  |  Vol: {s['volume_spike']:.1f}×{deliv_txt}\n"
+        f"{ce_pe_block}"
         f"💬 _{s.get('reasoning','')}_\n"
     )
 
@@ -110,7 +156,13 @@ def build_message(data: Dict, trade_type: str) -> str:
 
     footer = (
         "\n`━━━━━━━━━━━━━━━━━━━━━`\n"
-        "📚 *OI Signal Cheat Sheet:*\n"
+        "📖 *CE/PE OI Guide:*\n"
+        "• CE OI ↑ = Call writing = *Resistance* (bearish)\n"
+        "• PE OI ↑ = Put writing  = *Support* (bullish)\n"
+        "• CE OI ↓ = Calls exiting = *Bullish*\n"
+        "• PE OI ↓ = Puts exiting  = *Bearish*\n"
+        "• PCR > 1.2 = Bullish  |  PCR < 0.8 = Bearish\n\n"
+        "📚 *OI Signal Rules:*\n"
         "```\n"
         "Price↑ + OI↑ = Long Buildup  ✅ BUY\n"
         "Price↓ + OI↑ = Short Buildup ✅ SELL\n"
@@ -118,7 +170,7 @@ def build_message(data: Dict, trade_type: str) -> str:
         "Price↓ + OI↓ = Long Unwinding ❌ Avoid\n"
         "```\n"
         "⚠️ _Risk max 2% per trade. Always check Nifty trend._\n"
-        "🎃 _Shiva watching the markets for you._"
+        "🎃 _Shiva — OI + Options confirmed, no noise._"
     )
 
     return header + body + footer
