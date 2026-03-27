@@ -26,49 +26,101 @@ class BinanceConnector:
         mode: 'paper' | 'testnet' | 'live'
         testnet flag only used when mode != 'paper'.
         """
-        self.api_key    = api_key
-        self.api_secret = api_secret
-        self.testnet    = testnet
-        self.mode       = mode  # paper / testnet / live
-        self.exchange   = None
-        self.markets    = {}
-        self._connected = False
+        self.api_key      = api_key
+        self.api_secret   = api_secret
+        self.testnet      = testnet
+        self.mode         = mode  # paper / testnet / live
+        self.exchange     = None
+        self.markets      = {}
+        self._connected   = False
+        self.last_error   = None   # human-readable last error
+        self.account_type = None   # 'paper' / 'spot' / 'futures'
 
     # ─── Connection ────────────────────────────────────────────────────────────
 
     def connect(self) -> bool:
         """Initialise ccxt exchange and test connectivity. Returns True if OK."""
+        self.last_error = None
         try:
-            self.exchange = ccxt.binanceusdm({
-                'apiKey': self.api_key,
-                'secret': self.api_secret,
-                'options': {'defaultType': 'future'},
-                'enableRateLimit': True,
-            })
-            if self.mode in ('testnet',) or (self.mode == 'paper' and self.testnet):
-                self.exchange.set_sandbox_mode(True)
-
             if self.mode == 'paper':
-                # In paper mode: skip load_markets() on connect — do it lazily on first
-                # lot-info request. This keeps connect() instant.
+                # Paper mode — no real API calls, instant
                 self.markets = {}
                 self._connected = True
+                self.account_type = 'paper'
                 logger.info("BinanceConnector: paper mode — no real API calls")
                 return True
 
-            # Testnet / live: verify credentials by fetching balance
-            self.markets = self.exchange.load_markets()
-            self.exchange.fetch_balance()  # raises on bad creds
-            self._connected = True
-            env = 'TESTNET' if self.testnet else 'LIVE'
-            logger.info(f"BinanceConnector: connected [{env}]")
-            return True
+            creds = {
+                'apiKey': self.api_key,
+                'secret': self.api_secret,
+                'enableRateLimit': True,
+            }
 
-        except ccxt.AuthenticationError as e:
-            logger.error(f"BinanceConnector auth failed: {e}")
-            self._connected = False
-            return False
+            # Try Futures (USDM) first, fall back to Spot if Futures not enabled
+            tried_futures = False
+            tried_spot    = False
+
+            # Step 1: try Futures USDM
+            try:
+                tried_futures = True
+                ex = ccxt.binanceusdm({**creds, 'options': {'defaultType': 'future'}})
+                if self.testnet:
+                    ex.set_sandbox_mode(True)
+                ex.fetch_balance()
+                self.exchange    = ex
+                self.account_type = 'futures'
+                self.markets     = {}  # lazy-load
+                self._connected  = True
+                env = 'TESTNET' if self.testnet else 'MAINNET'
+                logger.info(f"BinanceConnector: connected [FUTURES {env}]")
+                return True
+            except ccxt.AuthenticationError as e:
+                err_str = str(e)
+                # Code -2015 = invalid permissions (Spot key used on Futures)
+                # Code -2008 = invalid API key entirely
+                if '-2015' in err_str or 'futures' in err_str.lower():
+                    logger.info("Futures API not enabled, trying Spot fallback...")
+                elif '-2008' in err_str or 'Invalid Api-Key' in err_str:
+                    self.last_error = f"Invalid API Key — double-check the key is correct. ({err_str.split('msg')[1][:60] if 'msg' in err_str else err_str[:80]})"
+                    self._connected = False
+                    return False
+                else:
+                    # Unknown auth error — still try spot
+                    logger.warning(f"Futures auth error: {err_str[:100]}")
+            except Exception as e:
+                logger.warning(f"Futures connect error: {e}")
+
+            # Step 2: fall back to Spot
+            try:
+                tried_spot = True
+                ex = ccxt.binance({**creds})
+                if self.testnet:
+                    ex.set_sandbox_mode(True)
+                ex.fetch_balance()
+                self.exchange     = ex
+                self.account_type = 'spot'
+                self.markets      = {}
+                self._connected   = True
+                env = 'TESTNET' if self.testnet else 'MAINNET'
+                logger.info(f"BinanceConnector: connected [SPOT {env}]")
+                return True
+            except ccxt.AuthenticationError as e:
+                err_str = str(e)
+                if '-2008' in err_str or 'Invalid Api-Key' in err_str:
+                    self.last_error = "Invalid API Key ID — key may be deleted or wrong. Check Binance API Management."
+                elif '-2015' in err_str:
+                    self.last_error = "API key permissions insufficient. Enable 'Enable Reading' in Binance API Management."
+                else:
+                    self.last_error = f"Authentication failed: {err_str[:120]}"
+                self._connected = False
+                return False
+            except Exception as e:
+                self.last_error = f"Connection error: {str(e)[:120]}"
+                self._connected = False
+                return False
+
         except Exception as e:
+            self.last_error = str(e)[:200]
             logger.error(f"BinanceConnector connect error: {e}")
             self._connected = False
             return False
@@ -76,21 +128,38 @@ class BinanceConnector:
     # ─── Account ───────────────────────────────────────────────────────────────
 
     def get_balance(self, currency: str = 'USDT') -> Dict:
-        """Returns {free, used, total} for given currency."""
+        """Returns {free, used, total, account_type} for given currency."""
         if self.mode == 'paper':
-            return {'free': 10000.0, 'used': 0.0, 'total': 10000.0, 'currency': currency}
+            return {'free': 10000.0, 'used': 0.0, 'total': 10000.0,
+                    'currency': currency, 'account_type': 'paper'}
         try:
             bal = self.exchange.fetch_balance()
             cur = bal.get(currency, {})
+            # For futures, total equity may be in 'info'
+            if self.account_type == 'futures':
+                info = bal.get('info', {})
+                assets = info.get('assets', [])
+                for a in assets:
+                    if a.get('asset') == currency:
+                        return {
+                            'free':         float(a.get('availableBalance', 0) or 0),
+                            'used':         float(a.get('initialMargin',    0) or 0),
+                            'total':        float(a.get('walletBalance',    0) or 0),
+                            'unrealized_pnl': float(a.get('unrealizedProfit', 0) or 0),
+                            'currency':     currency,
+                            'account_type': 'futures',
+                        }
             return {
-                'free':     float(cur.get('free',  0) or 0),
-                'used':     float(cur.get('used',  0) or 0),
-                'total':    float(cur.get('total', 0) or 0),
-                'currency': currency,
+                'free':         float(cur.get('free',  0) or 0),
+                'used':         float(cur.get('used',  0) or 0),
+                'total':        float(cur.get('total', 0) or 0),
+                'currency':     currency,
+                'account_type': self.account_type or 'spot',
             }
         except Exception as e:
             logger.error(f"get_balance error: {e}")
-            return {'free': 0.0, 'used': 0.0, 'total': 0.0, 'currency': currency}
+            return {'free': 0.0, 'used': 0.0, 'total': 0.0,
+                    'currency': currency, 'account_type': self.account_type}
 
     def get_positions(self) -> List[Dict]:
         """Return open futures positions."""

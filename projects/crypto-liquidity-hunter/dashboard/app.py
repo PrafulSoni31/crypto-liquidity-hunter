@@ -575,6 +575,7 @@ def binance_status():
             return jsonify({
                 'connected':           True,
                 'mode':                'paper',
+                'account_type':        'paper',
                 'testnet':             bc_cfg.get('testnet', True),
                 'enabled':             bc_cfg.get('enabled', False),
                 'balance_usdt_free':   10000.0,
@@ -611,14 +612,18 @@ def binance_status():
 
 @app.route('/api/binance/connect', methods=['POST'])
 def binance_connect():
-    """Save and test Binance API credentials."""
+    """Save and test Binance API credentials. Returns detailed error on failure."""
     from core.trade_executor import TradeExecutor
     from core.binance_connector import BinanceConnector
     data       = request.get_json() or {}
-    api_key    = data.get('api_key', '')
-    api_secret = data.get('api_secret', '')
+    api_key    = data.get('api_key', '').strip()
+    api_secret = data.get('api_secret', '').strip()
     testnet    = bool(data.get('testnet', True))
     mode       = data.get('mode', 'paper')
+
+    if not api_key or not api_secret:
+        return jsonify({'status': 'error',
+                        'message': '⚠️ API Key and Secret cannot be empty'}), 400
 
     try:
         connector = BinanceConnector(api_key=api_key, api_secret=api_secret,
@@ -626,18 +631,39 @@ def binance_connect():
         ok = connector.connect()
         if ok:
             TradeExecutor.save_connection_config(api_key, api_secret, testnet, mode)
-            balance = connector.get_balance('USDT')
+            balance      = connector.get_balance('USDT')
+            account_type = connector.account_type or mode
+            env_label    = 'Testnet' if testnet else 'Mainnet (LIVE)'
+            type_label   = {'futures': '📊 Futures USDM', 'spot': '🔵 Spot',
+                            'paper': '📝 Paper'}.get(account_type, account_type)
             return jsonify({
-                'status':    'connected',
-                'mode':      mode,
-                'testnet':   testnet,
-                'balance':   round(balance.get('free', 0), 2),
-                'message':   f"Connected in {mode.upper()} mode ({'Testnet' if testnet else 'Live'})"
+                'status':       'connected',
+                'mode':         mode,
+                'account_type': account_type,
+                'testnet':      testnet,
+                'balance':      round(balance.get('free', 0), 2),
+                'balance_total':round(balance.get('total', 0), 2),
+                'message':      f"✅ Connected — {type_label} | {env_label} | Balance: ${balance.get('free',0):.2f} USDT free"
             })
         else:
-            return jsonify({'status': 'error', 'message': 'Connection failed — check API keys'}), 400
+            # Return the actual error from the connector
+            err = connector.last_error or 'Connection failed'
+            tips = []
+            if 'Invalid Api-Key' in err or 'invalid' in err.lower():
+                tips.append("• Make sure you copied the full API key (no spaces)")
+                tips.append("• Key must not be deleted or expired in Binance")
+            if 'permission' in err.lower() or '2015' in err:
+                tips.append("• Enable 'Enable Reading' permission on the API key")
+                tips.append("• For Futures trading, enable 'Enable Futures' in Binance API settings")
+            tip_str = '\n'.join(tips)
+            return jsonify({
+                'status':  'error',
+                'message': f"❌ {err}",
+                'tips':    tips,
+            }), 400
     except Exception as e:
-        return jsonify({'status': 'error', 'message': str(e)}), 400
+        return jsonify({'status': 'error', 'message': f"❌ Unexpected error: {str(e)[:200]}",
+                        'tips': ['Check your internet connection', 'Try Paper Trading mode first']}), 400
 
 
 @app.route('/api/binance/execute', methods=['POST'])

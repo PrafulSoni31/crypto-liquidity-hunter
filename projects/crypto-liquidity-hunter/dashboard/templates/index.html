@@ -1463,6 +1463,18 @@ document.addEventListener('DOMContentLoaded', () => {
         <button onclick="connectBinance()" style="background:var(--blue);color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:600">🔌 Connect &amp; Save</button>
       </div>
       <div id="connDetail" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6"></div>
+
+      <!-- API Permissions Guide -->
+      <div style="margin-top:14px;background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.25);border-radius:6px;padding:10px 14px;font-size:11px;line-height:1.8">
+        <strong style="color:var(--blue2)">ℹ️ Required Binance API Permissions:</strong><br>
+        <span style="color:var(--muted)">
+        ✅ <strong>Enable Reading</strong> — mandatory for all modes<br>
+        ✅ <strong>Enable Futures</strong> — needed for Futures USDM trading (go to API Management → Edit restrictions)<br>
+        ✅ <strong>Enable Spot &amp; Margin Trading</strong> — needed for Spot mode only<br>
+        ⚠️ Do <strong>NOT</strong> enable Withdrawals for a trading bot key<br>
+        💡 If you see "Connection failed": your key likely needs <strong>Futures</strong> permission enabled in Binance → API Management → Edit restrictions
+        </span>
+      </div>
     </div>
   </div>
 
@@ -1588,7 +1600,8 @@ async function loadBinanceStatus() {
       badge.style.borderColor = 'var(--green)';
       badge.style.color = 'var(--green)';
       badge.textContent = '🟢 Connected';
-      detail.innerHTML = `Mode: <strong>${d.mode.toUpperCase()}</strong> | ${d.testnet ? '🔵 Testnet' : '🔴 Mainnet'} | Balance: <strong>$${d.balance_usdt_free} USDT free</strong> / $${d.balance_usdt_total} total | Positions: ${d.positions_count}`;
+      const accType = {'futures':'📊 Futures USDM','spot':'🔵 Spot','paper':'📝 Paper'}[d.account_type||d.mode]||d.mode;
+      detail.innerHTML = `Mode: <strong>${d.mode.toUpperCase()}</strong> (${accType}) | ${d.testnet ? '🔵 Testnet' : '<span style="color:#e74c3c">🔴 Mainnet LIVE</span>'} | Balance: <strong>$${d.balance_usdt_free} USDT free</strong> / $${d.balance_usdt_total} total | Positions: ${d.positions_count}`;
     } else {
       badge.style.background = 'rgba(192,57,43,0.15)';
       badge.style.borderColor = 'var(--red)';
@@ -1607,24 +1620,42 @@ async function loadBinanceStatus() {
 async function connectBinance() {
   const btn = event.target;
   btn.disabled = true; btn.textContent = '⏳ Connecting…';
+  const detail = document.getElementById('connDetail');
+  const badge  = document.getElementById('connStatusBadge');
+  detail.innerHTML = '<span style="color:var(--muted)">⏳ Testing connection…</span>';
+
   const body = {
-    api_key:    document.getElementById('tradeApiKey').value,
-    api_secret: document.getElementById('tradeApiSecret').value,
+    api_key:    document.getElementById('tradeApiKey').value.trim(),
+    api_secret: document.getElementById('tradeApiSecret').value.trim(),
     testnet:    document.getElementById('tradeEnv').value === 'testnet',
     mode:       document.getElementById('tradeMode').value,
   };
+
   try {
-    const r = await fetch('/api/binance/connect', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const r = await fetch('/api/binance/connect', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
     const d = await r.json();
-    const detail = document.getElementById('connDetail');
+
     if (d.status === 'connected') {
-      detail.innerHTML = `✅ ${d.message} | Balance: <strong>$${d.balance} USDT</strong>`;
+      badge.style.cssText = 'font-size:11px;padding:3px 10px;border-radius:10px;background:rgba(39,174,96,0.15);border:1px solid var(--green);color:var(--green)';
+      badge.textContent = '🟢 Connected';
+      const accLabel = {'futures':'📊 Futures','spot':'🔵 Spot','paper':'📝 Paper'}[d.account_type] || d.account_type;
+      detail.innerHTML = `<strong style="color:var(--green)">${d.message}</strong><br>
+        <span style="color:var(--muted)">Account type: ${accLabel} | ${d.testnet ? 'Testnet' : '<span style="color:#e74c3c">⚠️ MAINNET — Real Money</span>'}</span>`;
       loadBinanceStatus();
     } else {
-      detail.innerHTML = `❌ ${d.message || 'Connection failed'}`;
+      badge.style.cssText = 'font-size:11px;padding:3px 10px;border-radius:10px;background:rgba(192,57,43,0.15);border:1px solid var(--red);color:var(--red)';
+      badge.textContent = '🔴 Failed';
+      let html = `<strong style="color:var(--red)">${d.message || 'Connection failed'}</strong>`;
+      if (d.tips && d.tips.length) {
+        html += '<br><br><span style="color:var(--muted);font-size:11px"><strong>💡 How to fix:</strong><br>' + d.tips.join('<br>') + '</span>';
+      }
+      detail.innerHTML = html;
     }
   } catch(e) {
-    document.getElementById('connDetail').innerHTML = `❌ Error: ${e}`;
+    detail.innerHTML = `<strong style="color:var(--red)">❌ Network error: ${e}</strong>`;
   }
   btn.disabled = false; btn.textContent = '🔌 Connect & Save';
 }
