@@ -49,12 +49,9 @@ class BinanceConnector:
                 self.exchange.set_sandbox_mode(True)
 
             if self.mode == 'paper':
-                # In paper mode we still load markets for lot-size info — but don't
-                # need valid API keys.
-                try:
-                    self.markets = self.exchange.load_markets()
-                except Exception:
-                    self.markets = {}
+                # In paper mode: skip load_markets() on connect — do it lazily on first
+                # lot-info request. This keeps connect() instant.
+                self.markets = {}
                 self._connected = True
                 logger.info("BinanceConnector: paper mode — no real API calls")
                 return True
@@ -145,25 +142,40 @@ class BinanceConnector:
 
     # ─── Lot Size / Precision ─────────────────────────────────────────────────
 
+    # Hardcoded sensible defaults for common symbols (used in paper mode to avoid API calls)
+    _KNOWN_LOTS = {
+        'BTC/USDT':  {'min_qty':0.001,  'step_size':0.001,  'tick_size':0.1,     'min_notional':100.0, 'precision_qty':3, 'precision_price':1},
+        'ETH/USDT':  {'min_qty':0.001,  'step_size':0.001,  'tick_size':0.01,    'min_notional':5.0,   'precision_qty':3, 'precision_price':2},
+        'SOL/USDT':  {'min_qty':0.01,   'step_size':0.01,   'tick_size':0.001,   'min_notional':5.0,   'precision_qty':2, 'precision_price':3},
+        'BNB/USDT':  {'min_qty':0.01,   'step_size':0.01,   'tick_size':0.001,   'min_notional':5.0,   'precision_qty':2, 'precision_price':3},
+        'XRP/USDT':  {'min_qty':1.0,    'step_size':1.0,    'tick_size':0.0001,  'min_notional':5.0,   'precision_qty':0, 'precision_price':4},
+        'DOGE/USDT': {'min_qty':1.0,    'step_size':1.0,    'tick_size':0.00001, 'min_notional':5.0,   'precision_qty':0, 'precision_price':5},
+    }
+
     def get_lot_info(self, symbol: str) -> Dict:
         """
         Return lot-size / precision info for a symbol.
         {min_qty, step_size, tick_size, min_notional, precision_qty, precision_price}
         """
         defaults = {
-            'min_qty': 0.001,
-            'step_size': 0.001,
-            'tick_size': 0.1,
+            'min_qty': 1.0,
+            'step_size': 1.0,
+            'tick_size': 0.0001,
             'min_notional': 5.0,
-            'precision_qty': 3,
-            'precision_price': 1,
+            'precision_qty': 0,
+            'precision_price': 4,
         }
+        # In paper mode, use hardcoded table first to avoid API calls
+        sym_clean = symbol.replace(':USDT', '/USDT').upper()
+        if self.mode == 'paper' and sym_clean in self._KNOWN_LOTS:
+            return dict(self._KNOWN_LOTS[sym_clean])
+
         try:
-            if not self.markets:
+            if not self.markets and self.mode != 'paper':
                 try:
                     self.markets = self.exchange.load_markets()
                 except Exception:
-                    return defaults
+                    return self._KNOWN_LOTS.get(sym_clean, defaults)
             # Normalise symbol (e.g. BTC/USDT → BTC/USDT:USDT for futures)
             mkt = self.markets.get(symbol) or self.markets.get(symbol + ':USDT')
             if not mkt:

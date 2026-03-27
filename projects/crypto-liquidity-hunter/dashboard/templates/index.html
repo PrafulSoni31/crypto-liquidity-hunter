@@ -1421,142 +1421,152 @@ document.addEventListener('DOMContentLoaded', () => {
      Completely isolated from existing tabs. New section only.
      ═══════════════════════════════════════════════════════════════════════════ -->
 
-<!-- Trading Tab Page -->
-<div class="page" id="tab-trading" style="display:none">
-  <div style="max-width:900px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:16px;">
+<!-- ═══ Phase 3A — Trading Tab ═══════════════════════════════════════════════ -->
+<div class="page" id="tab-trading">
 
-    <!-- ── Connection Panel ────────────────────────────────────────────────── -->
-    <div class="card" style="padding:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:12px">🔗 BINANCE CONNECTION</div>
+  <!-- ── Connection Panel ─────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">🔗 Binance Connection</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div id="connStatusBadge" style="font-size:11px;padding:3px 10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--muted)">⏳ Not checked</div>
+        <button onclick="loadBinanceStatus()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">🔄</button>
+      </div>
+    </div>
+    <div class="card-body">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
         <div>
-          <label style="font-size:11px;color:var(--muted)">Mode</label><br>
-          <select id="tradeMode" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px">
-            <option value="paper">📝 Paper Trading</option>
-            <option value="testnet">🧪 Testnet (Real API, Fake Funds)</option>
-            <option value="live">🚀 Live Trading</option>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Trading Mode</div>
+          <select id="tradeMode" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px">
+            <option value="paper">📝 Paper Trading (no API needed)</option>
+            <option value="testnet">🧪 Testnet (API + fake funds)</option>
+            <option value="live">🚀 Live Trading (real money)</option>
           </select>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Environment</label><br>
-          <select id="tradeEnv" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px">
-            <option value="testnet">🔵 Testnet (Binance Futures Testnet)</option>
-            <option value="mainnet">🔴 Mainnet (REAL MONEY)</option>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Environment</div>
+          <select id="tradeEnv" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px">
+            <option value="testnet">🔵 Binance Futures Testnet</option>
+            <option value="mainnet">🔴 Mainnet — REAL MONEY</option>
           </select>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">API Key</label><br>
-          <input id="tradeApiKey" type="password" placeholder="Binance API Key" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">API Key</div>
+          <input id="tradeApiKey" type="password" placeholder="Paste Binance API Key" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box">
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">API Secret</label><br>
-          <input id="tradeApiSecret" type="password" placeholder="Binance API Secret" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">API Secret</div>
+          <input id="tradeApiSecret" type="password" placeholder="Paste Binance API Secret" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px;box-sizing:border-box">
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button onclick="connectBinance()" style="background:var(--blue);color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:600">🔌 Connect & Save</button>
-        <button onclick="loadBinanceStatus()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 12px;font-size:12px;cursor:pointer">🔄 Refresh</button>
-        <div id="connStatusBadge" style="font-size:12px;padding:4px 10px;border-radius:12px;background:var(--bg2);border:1px solid var(--border)">⏳ Not checked</div>
+        <button onclick="connectBinance()" style="background:var(--blue);color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:600">🔌 Connect &amp; Save</button>
       </div>
-      <div id="connDetail" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+      <div id="connDetail" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.6"></div>
     </div>
+  </div>
 
-    <!-- ── Position Sizing ─────────────────────────────────────────────────── -->
-    <div class="card" style="padding:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:12px">📐 POSITION SIZING</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+  <!-- ── Position Sizing ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">📐 Position Sizing</span>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
         <div>
-          <label style="font-size:11px;color:var(--muted)">Notional / Trade (USDT)</label><br>
-          <input id="psNotional" type="number" value="100" min="5" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Notional / Trade (USDT)</div>
+          <input id="psNotional" type="number" value="100" min="5" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;font-weight:700;box-sizing:border-box">
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Leverage (×)</label><br>
-          <input id="psLeverage" type="number" value="20" min="1" max="125" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Leverage (×)</div>
+          <input id="psLeverage" type="number" value="20" min="1" max="125" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;font-weight:700;box-sizing:border-box">
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Max Concurrent</label><br>
-          <input id="psMaxConc" type="number" value="3" min="1" max="10" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Max Concurrent</div>
+          <input id="psMaxConc" type="number" value="3" min="1" max="10" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;font-weight:700;box-sizing:border-box">
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Risk per Trade (%)</label><br>
-          <input id="psRisk" type="number" value="1.0" min="0.1" max="5" step="0.1" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Risk / Trade (%)</div>
+          <input id="psRisk" type="number" value="1.0" min="0.1" max="5" step="0.1" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;font-weight:700;box-sizing:border-box">
         </div>
       </div>
       <button onclick="savePositionSettings()" style="background:var(--blue);color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:600">💾 Save Settings</button>
       <span id="psSaveMsg" style="font-size:12px;color:var(--green);margin-left:10px"></span>
     </div>
+  </div>
 
-    <!-- ── Manual Trade Entry ──────────────────────────────────────────────── -->
-    <div class="card" style="padding:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:12px">✏️ MANUAL TRADE</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+  <!-- ── Manual Trade ─────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">✏️ Manual Trade</span>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
         <div>
-          <label style="font-size:11px;color:var(--muted)">Symbol</label><br>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Symbol (e.g. BTC/USDT)</div>
           <input id="mtSymbol" type="text" value="BTC/USDT" placeholder="BTC/USDT" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box" oninput="fetchLotInfo()">
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Direction</label><br>
-          <select id="mtDir" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px">
-            <option value="long">📈 LONG</option>
-            <option value="short">📉 SHORT</option>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Direction</div>
+          <select id="mtDir" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:12px">
+            <option value="long">📈 LONG (Buy)</option>
+            <option value="short">📉 SHORT (Sell)</option>
           </select>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Notional (USDT)</label><br>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Notional (USDT)</div>
           <input id="mtNotional" type="number" value="100" min="5" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box" oninput="fetchLotInfo()">
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Entry Price (0 = Market)</label><br>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Entry Price (0 = Market)</div>
           <input id="mtEntry" type="number" value="0" min="0" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box" oninput="fetchLotInfo()">
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Stop Loss</label><br>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Stop Loss</div>
           <input id="mtSL" type="number" value="0" min="0" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box">
         </div>
         <div>
-          <label style="font-size:11px;color:var(--muted)">Target</label><br>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Take Profit</div>
           <input id="mtTP" type="number" value="0" min="0" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;box-sizing:border-box">
         </div>
       </div>
-      <div id="lotInfoBox" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--muted);margin-bottom:12px;display:none">
-        📦 Loading lot info…
-      </div>
+      <div id="lotInfoBox" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--muted);margin-bottom:12px;display:none">📦 Loading lot info…</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button onclick="executeTrade('paper')" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:600">📝 Paper Execute</button>
-        <button onclick="executeTrade('live')"  style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:7px 14px;font-size:12px;cursor:pointer;font-weight:600">🚀 Live Execute</button>
-        <span id="mtMsg" style="font-size:12px;color:var(--muted)"></span>
+        <button onclick="executeTrade('paper')" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:600">📝 Paper Execute</button>
+        <button onclick="executeTrade('live')" style="background:#c0392b;color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:600">🚀 Live Execute</button>
+        <span id="mtMsg" style="font-size:12px"></span>
       </div>
     </div>
+  </div>
 
-    <!-- ── Open Positions ──────────────────────────────────────────────────── -->
-    <div class="card" style="padding:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:var(--muted);letter-spacing:.06em">📊 OPEN POSITIONS / PAPER TRADES</div>
-        <button onclick="loadPositions()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:5px 10px;font-size:11px;cursor:pointer">🔄 Refresh</button>
-      </div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px" id="posTable">
-          <thead>
-            <tr style="color:var(--muted);border-bottom:1px solid var(--border)">
-              <th style="padding:6px 8px;text-align:left">Symbol</th>
-              <th style="padding:6px 8px;text-align:left">Side</th>
-              <th style="padding:6px 8px;text-align:right">Entry</th>
-              <th style="padding:6px 8px;text-align:right">SL</th>
-              <th style="padding:6px 8px;text-align:right">TP</th>
-              <th style="padding:6px 8px;text-align:right">Notional</th>
-              <th style="padding:6px 8px;text-align:left">Mode</th>
-              <th style="padding:6px 8px;text-align:left">Time</th>
-              <th style="padding:6px 8px;text-align:center">Action</th>
-            </tr>
-          </thead>
-          <tbody id="posTableBody">
-            <tr><td colspan="9" style="padding:20px;text-align:center;color:var(--muted)">Click Refresh to load</td></tr>
-          </tbody>
-        </table>
-      </div>
+  <!-- ── Open Positions ───────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">📊 Open Positions / Paper Trades</span>
+      <button onclick="loadPositions()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">🔄 Refresh</button>
     </div>
+    <div class="card-body card-scroll" style="overflow-x:auto;padding:0">
+      <table style="width:100%;border-collapse:collapse;font-size:12px" id="posTable">
+        <thead>
+          <tr style="color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg2)">
+            <th style="padding:8px 10px;text-align:left;font-weight:600">Symbol</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:600">Side</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">Entry</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">SL</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">TP</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">Notional</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:600">Mode</th>
+            <th style="padding:8px 10px;text-align:left;font-weight:600">Time (IST)</th>
+            <th style="padding:8px 10px;text-align:center;font-weight:600">Action</th>
+          </tr>
+        </thead>
+        <tbody id="posTableBody">
+          <tr><td colspan="9" style="padding:24px;text-align:center;color:var(--muted)">Click 🔄 Refresh to load positions</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-  </div><!-- end max-width wrapper -->
 </div><!-- end tab-trading -->
 
 <script>

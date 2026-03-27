@@ -546,30 +546,54 @@ def health():
 # These routes are NEW and completely isolated from existing strategy logic.
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _get_connector():
-    """Build a BinanceConnector from current config. Fresh each call."""
+def _get_connector(connect=False):
+    """Build a BinanceConnector from current config. Fresh each call. connect=True tests the link."""
     from core.binance_connector import BinanceConnector
     config = load_config()
     bc = config.get('binance_connection', {})
-    return BinanceConnector(
+    c = BinanceConnector(
         api_key    = bc.get('api_key', ''),
         api_secret = bc.get('api_secret', ''),
         testnet    = bc.get('testnet', True),
         mode       = bc.get('mode', 'paper'),
     )
+    if connect:
+        c.connect()
+    return c
 
 
 @app.route('/api/binance/status')
 def binance_status():
-    """Return Binance connection status, balance, mode."""
+    """Return Binance connection status, balance, mode. Fast — no network in paper mode."""
     try:
-        connector = _get_connector()
-        config    = load_config()
-        bc_cfg    = config.get('binance_connection', {})
-        mode      = bc_cfg.get('mode', 'paper')
+        config = load_config()
+        bc_cfg = config.get('binance_connection', {})
+        mode   = bc_cfg.get('mode', 'paper')
+
+        if mode == 'paper':
+            # Paper mode: instant response, no network call
+            return jsonify({
+                'connected':           True,
+                'mode':                'paper',
+                'testnet':             bc_cfg.get('testnet', True),
+                'enabled':             bc_cfg.get('enabled', False),
+                'balance_usdt_free':   10000.0,
+                'balance_usdt_total':  10000.0,
+                'balance_usdt_locked': 0.0,
+                'positions_count':     0,
+            })
+
+        # Testnet/live: actually check
+        from core.binance_connector import BinanceConnector
+        connector = BinanceConnector(
+            api_key    = bc_cfg.get('api_key', ''),
+            api_secret = bc_cfg.get('api_secret', ''),
+            testnet    = bc_cfg.get('testnet', True),
+            mode       = mode,
+        )
         connected = connector.connect()
-        balance   = connector.get_balance('USDT') if connected else {'free': 0, 'total': 0}
-        positions = connector.get_positions() if connected and mode != 'paper' else []
+        balance   = connector.get_balance('USDT') if connected else {'free': 0, 'total': 0, 'used': 0}
+        positions = connector.get_positions() if connected else []
         return jsonify({
             'connected':           connected,
             'mode':                mode,
@@ -674,8 +698,7 @@ def binance_positions():
                 t['mode'] = 'paper'
             return jsonify(trades)
         else:
-            connector = _get_connector()
-            connector.connect()
+            connector = _get_connector(connect=True)
             positions = connector.get_positions()
             return jsonify(positions)
     except Exception as e:
@@ -689,8 +712,7 @@ def binance_cancel():
     order_id = data.get('order_id', '')
     symbol   = data.get('symbol', '')
     try:
-        connector = _get_connector()
-        connector.connect()
+        connector = _get_connector(connect=True)
         ok = connector.cancel_order(order_id, symbol)
         return jsonify({'status': 'ok' if ok else 'error', 'order_id': order_id})
     except Exception as e:
@@ -699,10 +721,11 @@ def binance_cancel():
 
 @app.route('/api/binance/lot_info/<path:symbol>')
 def binance_lot_info(symbol):
-    """Return lot-size/precision info for a symbol."""
+    """Return lot-size/precision info for a symbol. Fast in paper mode."""
     try:
-        connector = _get_connector()
-        connector.connect()
+        cfg  = load_config()
+        mode = cfg.get('binance_connection', {}).get('mode', 'paper')
+        connector = _get_connector(connect=(mode != 'paper'))
         info = connector.get_lot_info(symbol)
         # Also compute estimated qty
         price_hint = float(request.args.get('price', 0))
