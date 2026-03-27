@@ -100,20 +100,42 @@ def format_signal_block(s: Dict, rank: int) -> str:
     conviction = s.get("conviction_score", 0)
     aligned    = s.get("options_aligned", False)
     align_tag  = " ✅ *Options Aligned*" if aligned else ""
-    deliv      = s.get("delivery_pct")
-    deliv_txt  = f"\n  📦 Delivery: {deliv:.0f}%" if deliv else ""
+
+    # ── v3.0 fields ──────────────────────────────────────────────────────────
+    eq = s.get("entry_quality", "FRESH")
+    eq_badge = {"FRESH": "🟢 FRESH", "MODERATE": "🟡 MODERATE", "EXTENDED": "🔴 EXTENDED"}.get(eq, eq)
+
+    vwap         = s.get("vwap")
+    vwap_aligned = s.get("vwap_aligned", True)
+    vwap_txt     = ""
+    if vwap:
+        vwap_icon = "✅" if vwap_aligned else "⚠️ below VWAP"
+        vwap_txt  = f"\n  📍 VWAP: ₹{vwap} {vwap_icon}"
+
+    is_repeat   = s.get("is_repeat", False)
+    repeat_days = s.get("repeat_days", 0)
+    repeat_txt  = f"  🔁 _Repeat signal — Day {repeat_days}_\n" if is_repeat else ""
+
+    session_ctx = s.get("session_context", "")
+    sc_badge    = {"OPENING": "⏰ Opening", "MIDDAY": "📊 Midday",
+                   "CLOSING": "🏁 Closing", "BTST": "🌙 BTST"}.get(session_ctx, "")
+
+    deliv     = s.get("delivery_pct")
+    deliv_txt = f"\n  📦 Delivery: {deliv:.0f}%" if deliv else ""
 
     ce_pe_block = format_ce_pe_block(s)
 
     return (
         f"\n{emoji} *{rank}. {s['symbol']}*  ⭐ {conviction:.0f}/100{align_tag}\n"
+        f"🏷️ {eq_badge}  {sc_badge}\n"
+        f"{repeat_txt}"
         f"`━━━━━━━━━━━━━━━━━━━━━`\n"
         f"📌 *Action:*    {action}\n"
-        f"💰 *Entry:*     ₹{s['current_price']}\n"
+        f"💰 *Entry:*     ₹{s['current_price']}{vwap_txt}{deliv_txt}\n"
         f"🎯 *Target:*    ₹{s['target']}\n"
         f"🛑 *Stop Loss:* ₹{s['stop_loss']}\n"
         f"⚖️ *R:R:*       1:{s['risk_reward']:.1f}\n"
-        f"📊 Price: {s['price_change_pct']:+.2f}%  |  OI: {s['oi_change_pct']:+.2f}%  |  Vol: {s['volume_spike']:.1f}×{deliv_txt}\n"
+        f"📊 Price: {s['price_change_pct']:+.2f}%  |  OI: {s['oi_change_pct']:+.2f}%  |  Vol: {s['volume_spike']:.1f}×\n"
         f"{ce_pe_block}"
         f"💬 _{s.get('reasoning','')}_\n"
     )
@@ -128,9 +150,22 @@ def build_message(data: Dict, trade_type: str) -> str:
 
     trade_emoji = {"INTRADAY": "⚡", "BTST": "🌙", "STBT": "🌙"}.get(type_upper, "📊")
 
+    # Market bias from signal counts
+    if len(buys) > len(sells) * 1.5:   market_bias = "🟢 BULLISH BIAS"
+    elif len(sells) > len(buys) * 1.5: market_bias = "🔴 BEARISH BIAS"
+    else:                               market_bias = "⚪ MIXED"
+
+    # Session context from first signal
+    all_sigs = buys + sells
+    sc = all_sigs[0].get("session_context", "") if all_sigs else ""
+    sc_badge = {"OPENING":"⏰ OPENING","MIDDAY":"📊 MIDDAY",
+                "CLOSING":"🏁 CLOSING","BTST":"🌙 BTST"}.get(sc, "")
+
     header = (
         f"{trade_emoji} *SHIVA OI MOMENTUM — {type_upper}*\n"
-        f"📅 {now.strftime('%A, %d %b %Y')}  🕐 {now.strftime('%I:%M %p IST')}\n"
+        f"📅 {now.strftime('%A, %d %b %Y')}  🕐 {now.strftime('%I:%M %p IST')}"
+        f"  {sc_badge}\n"
+        f"Market: {market_bias}\n"
         f"{'─'*30}\n"
     )
 
@@ -156,21 +191,14 @@ def build_message(data: Dict, trade_type: str) -> str:
 
     footer = (
         "\n`━━━━━━━━━━━━━━━━━━━━━`\n"
-        "📖 *CE/PE OI Guide:*\n"
-        "• CE OI ↑ = Call writing = *Resistance* (bearish)\n"
-        "• PE OI ↑ = Put writing  = *Support* (bullish)\n"
-        "• CE OI ↓ = Calls exiting = *Bullish*\n"
-        "• PE OI ↓ = Puts exiting  = *Bearish*\n"
-        "• PCR > 1.2 = Bullish  |  PCR < 0.8 = Bearish\n\n"
-        "📚 *OI Signal Rules:*\n"
         "```\n"
-        "Price↑ + OI↑ = Long Buildup  ✅ BUY\n"
-        "Price↓ + OI↑ = Short Buildup ✅ SELL\n"
-        "Price↑ + OI↓ = Short Covering ❌ Avoid\n"
-        "Price↓ + OI↓ = Long Unwinding ❌ Avoid\n"
+        "✅ BUY:  Price↑ + OI↑ = Long Buildup\n"
+        "✅ SELL: Price↓ + OI↑ = Short Buildup\n"
+        "❌ SKIP: Short Covering / Long Unwinding\n"
         "```\n"
-        "⚠️ _Risk max 2% per trade. Always check Nifty trend._\n"
-        "🎃 _Shiva — OI + Options confirmed, no noise._"
+        "🟢 FRESH = ideal size  |  🟡 MODERATE = normal  |  🔴 EXTENDED = small size\n"
+        "⚠️ _Max 2% risk per trade. Book 50% at 1:1, trail rest._\n"
+        "🎃 _Shiva — OI + VWAP + Options confirmed._"
     )
 
     return header + body + footer
