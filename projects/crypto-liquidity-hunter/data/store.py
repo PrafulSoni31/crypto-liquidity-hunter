@@ -110,6 +110,8 @@ class DataStore:
             'status':       "TEXT NOT NULL DEFAULT 'open'",
             'notes':        'TEXT',
             'signal_id':    'INTEGER',
+            'mode':         "TEXT NOT NULL DEFAULT 'paper'",   # paper / live
+            'order_id':     'TEXT',                             # exchange order id
         }
         for col, col_def in required.items():
             if col not in existing:
@@ -150,10 +152,27 @@ class DataStore:
                 ))
             conn.commit()
 
-    def save_signal(self, pair: str, timeframe: str, signal, sweep_id: Optional[int] = None):
-        """Insert a trade signal."""
+    def save_signal(self, pair: str, timeframe: str, signal, sweep_id: Optional[int] = None) -> Optional[int]:
+        """Insert a trade signal. Deduplicates: skips if same pair+tf+direction+~entry already exists
+        within a timeframe-appropriate window. Returns signal_id or existing id if duplicate."""
+        # Dedup window per timeframe — matches the sweep age limits in signal engine
+        tf_dedup_hours = {'15m': 2, '1h': 6, '4h': 16, '1d': 48}
+        dedup_hours = tf_dedup_hours.get(timeframe, 6)
+        # Dedup: check for recent identical signal (same pair+tf+direction, entry within 0.5%)
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            rows = conn.execute(
+                f"""SELECT id, entry_price FROM signals
+                   WHERE pair=? AND timeframe=? AND direction=?
+                   AND generated_at >= datetime('now', '-{dedup_hours} hours')""",
+                (pair, timeframe, signal.direction)
+            ).fetchall()
+            for (sig_id, ep) in rows:
+                if abs(ep - signal.entry_price) / max(signal.entry_price, 1e-9) < 0.005:
+                    logger.debug(f"Signal dedup: {pair} {timeframe} {signal.direction} ~{signal.entry_price:.6g} already saved (id={sig_id})")
+                    return sig_id  # return existing id so trade can still link to it
+            # Not a duplicate — insert
+            cur = conn.cursor()
+            cur.execute("""
                 INSERT INTO signals
                 (pair, timeframe, generated_at, direction, entry_price, stop_loss,
                  target, risk_reward, confidence, zone_strength, sweep_id)
@@ -164,7 +183,7 @@ class DataStore:
                 signal.zone_strength, sweep_id
             ))
             conn.commit()
-            return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            return cur.lastrowid
 
     def save_trade(self, pair: str, timeframe: str, trade: Dict, signal_id: Optional[int] = None):
         """
@@ -198,25 +217,33 @@ class DataStore:
                          entry_price: float, sl: float, tp: float,
                          entry_time: datetime, notional_usd: float,
                          commission_usd: float, signal_id: Optional[int] = None,
-                         notes: str = '') -> int:
+                         notes: str = '', mode: str = 'paper',
+                         order_id: str = None) -> int:
         """Create an open trade (paper trade). Returns trade ID, or None if duplicate."""
-        # Avoid duplicate open trades for the same signal
-        if signal_id is not None:
-            with sqlite3.connect(self.db_path) as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT id FROM trades WHERE signal_id = ? AND status='open'", (signal_id,))
-                if cur.fetchone():
+        # Dedup: block if an open trade already exists for same pair+direction+entry (±0.5%)
+        with sqlite3.connect(self.db_path) as conn:
+            existing = conn.execute(
+                "SELECT entry_price FROM trades WHERE pair=? AND direction=? AND status='open'",
+                (pair, direction)
+            ).fetchall()
+            for (ep,) in existing:
+                if abs(ep - entry_price) / max(entry_price, 1e-9) < 0.005:
+                    logger.debug(f"Dedup: open trade already exists for {pair} {direction} ~{entry_price}")
                     return None
+            # Also cap at max 1 open trade per pair+direction
+            if len(existing) >= 1:
+                logger.debug(f"Dedup: max open trades reached for {pair} {direction}")
+                return None
         with sqlite3.connect(self.db_path) as conn:
             cur = conn.cursor()
             cur.execute("""
                 INSERT INTO trades
                 (pair, timeframe, entry_time, direction, entry_price, sl, tp,
-                 notional_usd, commission_usd, status, notes, signal_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
+                 notional_usd, commission_usd, status, notes, signal_id, mode, order_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)
             """, (
                 pair, timeframe, entry_time.isoformat(), direction, entry_price,
-                sl, tp, notional_usd, commission_usd, notes, signal_id
+                sl, tp, notional_usd, commission_usd, notes, signal_id, mode, order_id
             ))
             conn.commit()
             return cur.lastrowid
