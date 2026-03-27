@@ -165,7 +165,9 @@ class NSEOIScanner:
     def __init__(self):
         self.session   = requests.Session()
         self.session.headers.update(self.HEADERS)
-        self.cache_dir = "projects/trading-bot/nse_oialerts/cache"
+        # Use absolute path based on script location so it works regardless of cwd
+        _script_dir    = os.path.dirname(os.path.abspath(__file__))
+        self.cache_dir = os.path.join(_script_dir, "cache")
         os.makedirs(self.cache_dir, exist_ok=True)
 
     # ── Helpers ────────────────────────────────────────────────────────────────
@@ -886,6 +888,144 @@ class NSEOIScanner:
         print(f"💾 Saved to {path}")
 
 
+# ─── Previous Signal Status Checker ──────────────────────────────────────────
+
+def check_previous_signals(scanner: 'NSEOIScanner', trade_type: TradeType) -> Optional[str]:
+    """
+    Load the most recent saved cache for the given trade_type (could be yesterday for BTST,
+    or earlier today for INTRADAY), fetch current prices, and return a formatted status block.
+    Returns None if no previous signals found.
+    """
+    cache_dir = scanner.cache_dir  # Always absolute, script-relative
+    today_str = datetime.now(IST).strftime('%Y%m%d')
+
+    # For INTRADAY: check today's earlier save first, then yesterday
+    # For BTST: check yesterday (today's BTST hasn't run yet at 9:30 AM)
+    candidates = []
+    if trade_type == TradeType.INTRADAY:
+        # Could be same-day earlier save or prior trading day
+        for days_back in range(0, 4):
+            d = (datetime.now(IST) - timedelta(days=days_back)).strftime('%Y%m%d')
+            candidates.append(f"{cache_dir}/INTRADAY_{d}.json")
+    else:
+        # BTST — look for yesterday's BTST signal
+        for days_back in range(1, 5):
+            d = (datetime.now(IST) - timedelta(days=days_back)).strftime('%Y%m%d')
+            candidates.append(f"{cache_dir}/BTST_{d}.json")
+
+    # Find most recent cache file with actual signals
+    cache_file = None
+    cache_data = None
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+                buy_sigs  = data.get('buy_signals', [])
+                sell_sigs = data.get('sell_signals', [])
+                if buy_sigs or sell_sigs:
+                    cache_file = path
+                    cache_data = data
+                    break
+            except Exception:
+                continue
+
+    if not cache_file or not cache_data:
+        return None
+
+    # Parse the timestamp of when signals were generated
+    try:
+        sig_time_raw = cache_data.get('timestamp', '')
+        sig_time     = datetime.fromisoformat(sig_time_raw).astimezone(IST)
+        sig_date_str = sig_time.strftime('%d %b %Y %I:%M %p IST')
+    except Exception:
+        sig_date_str = "previous session"
+
+    all_signals = cache_data.get('buy_signals', []) + cache_data.get('sell_signals', [])
+
+    if not all_signals:
+        return None
+
+    print(f"\n📋 Checking status of {len(all_signals)} previous {trade_type.value} signal(s)...")
+
+    status_lines = []
+    for sig in all_signals:
+        symbol      = sig.get('symbol', '')
+        entry_price = sig.get('current_price', 0)
+        target      = sig.get('target', 0)
+        sl          = sig.get('stop_loss', 0)
+        sig_type    = sig.get('signal_type', '')
+        rr          = sig.get('risk_reward', 0)
+        is_buy      = sig_type == 'LONG_BUILDUP'
+
+        # Fetch current price
+        try:
+            quote = scanner.fetch_real_quote(symbol)
+            if not quote:
+                status_lines.append(f"• *{symbol}*: ⚠️ Data unavailable")
+                continue
+            current = quote['current_price']
+        except Exception:
+            status_lines.append(f"• *{symbol}*: ⚠️ Fetch error")
+            continue
+
+        # Calculate move from entry
+        move_pct = ((current - entry_price) / entry_price) * 100
+
+        # Determine status
+        if is_buy:
+            if current >= target:
+                status = "✅ *TARGET HIT* 🎯"
+                action = "EXIT NOW — full profit"
+            elif current <= sl:
+                status = "🛑 *SL HIT* — exit"
+                action = "Already exited or exit immediately"
+            elif current > entry_price:
+                pct_to_target = ((target - current) / (target - entry_price)) * 100
+                status = f"🟡 *RUNNING* +{move_pct:.1f}%"
+                action = f"Hold — {pct_to_target:.0f}% to target"
+            else:
+                dist_to_sl = ((current - sl) / (entry_price - sl)) * 100
+                status = f"🔴 *BELOW ENTRY* {move_pct:.1f}%"
+                action = f"Caution — {dist_to_sl:.0f}% buffer to SL"
+        else:  # SHORT
+            if current <= target:
+                status = "✅ *TARGET HIT* 🎯"
+                action = "EXIT NOW — full profit"
+            elif current >= sl:
+                status = "🛑 *SL HIT* — exit"
+                action = "Already exited or exit immediately"
+            elif current < entry_price:
+                pct_to_target = ((current - target) / (entry_price - target)) * 100
+                status = f"🟡 *RUNNING* {move_pct:.1f}%"
+                action = f"Hold — {pct_to_target:.0f}% to target"
+            else:
+                dist_to_sl = ((sl - current) / (sl - entry_price)) * 100
+                status = f"🔴 *ABOVE ENTRY* +{move_pct:.1f}%"
+                action = f"Caution — {dist_to_sl:.0f}% buffer to SL"
+
+        direction = "📈 BUY" if is_buy else "📉 SELL"
+        status_lines.append(
+            f"• *{symbol}* ({direction}) — Entry ₹{entry_price}  Now ₹{current:.2f}\n"
+            f"  {status}\n"
+            f"  🎯 T: ₹{target}  🛑 SL: ₹{sl}  ⚖️ R:R 1:{rr:.1f}\n"
+            f"  ↳ _{action}_"
+        )
+
+    if not status_lines:
+        return None
+
+    trade_label = trade_type.value
+    block = (
+        f"📋 *PREV {trade_label} SIGNAL STATUS*\n"
+        f"_Signals from: {sig_date_str}_\n"
+        f"{'─'*30}\n"
+        + "\n\n".join(status_lines) +
+        f"\n{'─'*30}\n"
+    )
+    return block
+
+
 # ─── CE/PE Block Formatter ────────────────────────────────────────────────────
 
 def _format_ce_pe_block(s) -> str:
@@ -930,7 +1070,7 @@ def _entry_quality_badge(eq: str) -> str:
 def _session_badge(sc: str) -> str:
     return {"OPENING":"⏰ OPENING","MIDDAY":"📊 MIDDAY","CLOSING":"🏁 CLOSING","BTST":"🌙 BTST"}.get(sc, sc)
 
-def format_telegram_alert(signals_dict: Dict, trade_type: TradeType) -> str:
+def format_telegram_alert(signals_dict: Dict, trade_type: TradeType, prev_status_block: Optional[str] = None) -> str:
     buy_signals  = signals_dict.get('buy', [])
     sell_signals = signals_dict.get('sell', [])
     total        = len(buy_signals) + len(sell_signals)
@@ -961,8 +1101,11 @@ def format_telegram_alert(signals_dict: Dict, trade_type: TradeType) -> str:
         f"{'─'*30}\n"
     )
 
+    # Prepend previous signal status block if available
+    prev_block = (prev_status_block + "\n") if prev_status_block else ""
+
     if total == 0:
-        return header + (
+        return header + prev_block + (
             "✋ *No high-conviction setups today*\n\n"
             "_All signals rejected — thresholds not met._\n"
             "_No trade is better than a bad trade._ 🎃"
@@ -1043,7 +1186,7 @@ def format_telegram_alert(signals_dict: Dict, trade_type: TradeType) -> str:
         "_🎃 Shiva — OI + VWAP + Options confirmed._"
     )
 
-    return header + body + footer
+    return header + prev_block + body + footer
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
@@ -1067,6 +1210,10 @@ def main():
     print("=" * 60)
 
     scanner      = NSEOIScanner()
+
+    # Check status of previous signals before running new scan
+    prev_status = check_previous_signals(scanner, trade_type)
+
     signals_dict = scanner.scan_for_opportunities(trade_type, top_n=args.top)
 
     total = len(signals_dict.get('buy', [])) + len(signals_dict.get('sell', []))
@@ -1076,7 +1223,7 @@ def main():
     if args.save:
         scanner.save_signals(signals_dict, trade_type)
 
-    telegram_msg = format_telegram_alert(signals_dict, trade_type)
+    telegram_msg = format_telegram_alert(signals_dict, trade_type, prev_status_block=prev_status)
     print("\n" + "=" * 60)
     print("📤 TELEGRAM PREVIEW:")
     print("=" * 60)
