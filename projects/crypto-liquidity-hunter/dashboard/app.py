@@ -30,6 +30,51 @@ def load_config():
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
+
+def _auto_start_monitor():
+    """
+    Auto-start position monitor on gunicorn startup for the active live account.
+    Called once per worker via with app.app_context().
+    """
+    try:
+        config = load_config()
+        active_id = config.get('active_account_id')
+        if not active_id:
+            return
+        store = DataStore()
+        acct  = store.get_account(int(active_id))
+        if not acct or acct.get('mode', 'paper') == 'paper':
+            return
+        connector = _make_connector_from_account(acct, connect=True)
+        if connector and connector.connected:
+            from core.position_monitor import start_monitor
+            start_monitor(connector, store, account_id=int(active_id), interval=5)
+            logger.info(f"[Startup] Position monitor auto-started for account {active_id}")
+        else:
+            # API restricted — still start monitor in price-watch-only mode
+            from core.position_monitor import start_monitor, PositionMonitor
+            m = PositionMonitor(connector, store, account_id=int(active_id), interval=5)
+            m._api_ok = False   # skip API calls, use public price only
+            m.start()
+            from core.position_monitor import _monitors, _monitors_lock
+            with _monitors_lock:
+                _monitors[int(active_id)] = m
+            logger.info(f"[Startup] Position monitor started (price-watch mode) for account {active_id}")
+    except Exception as e:
+        logger.warning(f"[Startup] Auto-start monitor failed: {e}")
+
+
+# Auto-start monitor when gunicorn worker first handles a request
+_monitor_started = False
+
+@app.before_request
+def _on_first_request():
+    global _monitor_started
+    if not _monitor_started:
+        _monitor_started = True
+        _auto_start_monitor()
+
+
 @app.route('/')
 def index():
     """Dashboard home: list pairs, timeframes."""
@@ -870,6 +915,44 @@ def binance_positions():
 
 
 # (old binance_positions stub removed — replaced by the new implementation above)
+
+
+@app.route('/api/monitor/status')
+def monitor_status():
+    """Return position monitor status per account."""
+    try:
+        from core.position_monitor import _monitors
+        result = {}
+        for acct_id, m in _monitors.items():
+            result[acct_id] = {
+                'running':    m.is_running(),
+                'api_ok':     m._api_ok,
+                'interval':   m.interval,
+                'sltp_placed': list(m._sltp_placed),
+                'closed_this_session': list(m._closed_trades),
+            }
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/monitor/restart', methods=['POST'])
+def monitor_restart():
+    """Restart position monitor (after fixing API key permissions)."""
+    try:
+        from core.position_monitor import stop_monitor, start_monitor, _monitors
+        config    = load_config()
+        store     = DataStore()
+        active_id = int(config.get('active_account_id', 0))
+        acct      = store.get_account(active_id) if active_id else None
+        if not acct:
+            return jsonify({'error': 'No active account'}), 400
+        stop_monitor(active_id)
+        connector = _make_connector_from_account(acct, connect=True)
+        m = start_monitor(connector, store, account_id=active_id, interval=5)
+        return jsonify({'status': 'ok', 'running': m.is_running(), 'api_ok': m._api_ok})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/binance/positions/live_pnl')

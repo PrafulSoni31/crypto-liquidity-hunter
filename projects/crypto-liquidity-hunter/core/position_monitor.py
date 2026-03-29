@@ -1,53 +1,53 @@
 """
-Position Monitor — Live Binance position sync + SL/TP management.
+Position Monitor — Price-based SL/TP monitoring + auto-close.
 
-Runs as a background thread. Every `interval` seconds:
-  1. Fetches open Binance Futures positions via ccxt
-  2. Compares with DB open trades
-  3. For newly opened positions → places SL + TP bracket orders
-  4. For positions that closed (TP hit, SL hit, manual close) → marks DB trade closed, records PnL
-  5. Updates unrealised PnL on all open DB trades
+Two modes depending on API key permissions:
 
-Thread-safe: all DB writes use DataStore (sqlite) which handles concurrent access.
+MODE A (full API access — preferred):
+  - Polls Binance via ccxt every interval seconds
+  - Reconciles live positions, places bracket orders, detects closes
+
+MODE B (IP-restricted key — fallback):
+  - Uses Binance PUBLIC price API (no auth needed)
+  - Watches prices against SL/TP stored in DB
+  - When price hits SL or TP → places market close order
+  - Falls back to MODE A when permissions are restored
+
+Runs as daemon background thread. Thread-safe via SQLite DataStore.
 """
 import threading
 import logging
 import time
+import json
+import urllib.request
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 
 class PositionMonitor:
     """
-    Background thread that keeps DB trades in sync with live Binance positions.
-    One instance per account/connector.
+    Background thread: monitors open positions and enforces SL/TP.
     """
 
     def __init__(self, connector, store, account_id: int = None,
-                 interval: int = 10, sl_tp_already_placed: bool = False):
-        """
-        connector  : BinanceConnector (must be connected, mode != 'paper')
-        store      : DataStore
-        account_id : filter DB trades by this account
-        interval   : poll interval in seconds
-        sl_tp_already_placed : if True, don't re-place bracket orders
-        """
+                 interval: int = 5):
         self.connector   = connector
+                                     # DataStore
         self.store       = store
         self.account_id  = account_id
         self.interval    = interval
         self._stop_event = threading.Event()
         self._thread     = None
         self._lock       = threading.Lock()
-        # Track which trade IDs have already had SL/TP placed
-        self._sltp_placed: set = set()
+        self._sltp_placed: set = set()          # trade_ids with bracket orders placed
+        self._closed_trades: set = set()        # trade_ids already closed this session
+        self._api_ok: bool = True               # False when API key has IP restriction
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
     def start(self):
-        """Start the background monitor thread."""
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
@@ -58,7 +58,6 @@ class PositionMonitor:
         logger.info(f"[PositionMonitor] Started (account={self.account_id}, interval={self.interval}s)")
 
     def stop(self):
-        """Stop the monitor thread."""
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=15)
@@ -68,7 +67,6 @@ class PositionMonitor:
         return self._thread is not None and self._thread.is_alive()
 
     def mark_sltp_placed(self, trade_id: int):
-        """Call this after placing SL/TP for a trade so monitor doesn't re-place."""
         self._sltp_placed.add(trade_id)
 
     # ── Main loop ──────────────────────────────────────────────────────────────
@@ -82,116 +80,86 @@ class PositionMonitor:
             self._stop_event.wait(timeout=self.interval)
 
     def _sync(self):
-        """One sync cycle: fetch Binance positions → reconcile with DB."""
-        if not self.connector or not self.connector.connected:
+        if not self.connector or self.connector.mode == 'paper':
             return
-        if self.connector.mode == 'paper':
-            return  # paper mode has no real positions
 
-        # 1. Fetch live positions from Binance
-        live_positions = self._fetch_positions()          # {symbol → pos_dict}
+        db_trades = self._get_open_trades()
+        if not db_trades:
+            return
 
-        # 2. Load open DB trades for this account
-        db_trades = self._get_open_trades()               # list of trade dicts
+        # Fetch current prices from Binance public API (no auth, no IP restriction)
+        symbols_binance = []
+        for t in db_trades:
+            sym = t['pair'].split(':', 1)[1] if ':' in t['pair'] else t['pair']
+            symbols_binance.append(sym.replace('/', ''))
 
-        # 3. For each open DB trade, check if still open on exchange
+        price_map = self._fetch_public_prices(symbols_binance)
+
         for trade in db_trades:
-            self._reconcile_trade(trade, live_positions)
-
-        # 4. For each live Binance position, place SL/TP if not already set
-        for trade in db_trades:
-            trade_id = trade['id']
-            if trade_id in self._sltp_placed:
+            if trade['id'] in self._closed_trades:
                 continue
-            symbol = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
-            # Normalise to ccxt symbol (e.g. BTC/USDT → BTC/USDT:USDT)
-            ccxt_sym = self._normalise_symbol(symbol)
-            pos = live_positions.get(ccxt_sym) or live_positions.get(symbol)
-            if not pos:
-                continue
-            sl = float(trade.get('sl') or 0)
-            tp = float(trade.get('tp') or 0)
-            direction = trade.get('direction', 'long')
-            qty = abs(float(pos.get('contracts', 0)))
-            if qty > 0 and (sl > 0 or tp > 0):
-                logger.info(f"[PositionMonitor] Placing bracket orders for trade {trade_id} {symbol}")
-                result = self._place_bracket(symbol, direction, qty, sl, tp, trade_id)
-                if result:
-                    self._sltp_placed.add(trade_id)
+            self._check_trade(trade, price_map)
 
-    def _fetch_positions(self) -> Dict:
-        """Return live positions as {ccxt_symbol → position_dict}."""
-        out = {}
-        try:
-            positions = self.connector.exchange.fetch_positions()
-            for p in positions:
-                contracts = float(p.get('contracts') or 0)
-                if contracts == 0:
-                    continue
-                sym = p.get('symbol', '')
-                out[sym] = {
-                    'symbol':          sym,
-                    'side':            p.get('side', ''),    # 'long' or 'short'
-                    'contracts':       contracts,
-                    'entry_price':     float(p.get('entryPrice')     or 0),
-                    'mark_price':      float(p.get('markPrice')      or 0),
-                    'unrealized_pnl':  float(p.get('unrealizedPnl')  or 0),
-                    'leverage':        float(p.get('leverage')        or 1),
-                    'notional':        float(p.get('notional')        or 0),
-                    'liquidation_price': float(p.get('liquidationPrice') or 0),
-                    'margin':          float(p.get('initialMargin')   or 0),
-                }
-        except Exception as e:
-            logger.error(f"[PositionMonitor] fetch_positions error: {e}")
-        return out
+        # Try to place SL/TP bracket orders if API is accessible
+        if self._api_ok:
+            self._try_place_bracket_orders(db_trades)
 
-    def _get_open_trades(self) -> List[Dict]:
-        """Get open DB trades for this account."""
-        all_open = self.store.get_open_trades()
-        if self.account_id is not None:
-            return [t for t in all_open
-                    if t.get('account_id') == self.account_id
-                    and t.get('mode', 'paper') != 'paper']
-        # No account_id filter — return all non-paper open trades
-        return [t for t in all_open if t.get('mode', 'paper') != 'paper']
+    # ── Price-based SL/TP enforcement ─────────────────────────────────────────
 
-    def _normalise_symbol(self, symbol: str) -> str:
-        """Convert BTC/USDT → BTC/USDT:USDT for futures ccxt."""
-        if ':' not in symbol and '/' in symbol:
-            base, quote = symbol.split('/', 1)
-            return f"{base}/{quote}:{quote}"
-        return symbol
-
-    def _reconcile_trade(self, trade: Dict, live_positions: Dict):
+    def _check_trade(self, trade: Dict, price_map: Dict):
         """
-        Check if a DB trade is still live on Binance.
-        If the position no longer exists → trade was closed (TP/SL hit or manual).
-        Update DB with exit price and actual PnL.
+        Check if current price has hit SL or TP.
+        If yes → place market close order (or update DB if API restricted).
         """
-        trade_id = trade['id']
-        symbol   = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
-        ccxt_sym = self._normalise_symbol(symbol)
+        trade_id  = trade['id']
+        pair      = trade['pair']
+        sym       = pair.split(':', 1)[1] if ':' in pair else pair
+        binance_sym = sym.replace('/', '')
         direction = trade.get('direction', 'long')
+        sl        = float(trade.get('sl') or 0)
+        tp        = float(trade.get('tp') or 0)
+        ep        = float(trade.get('entry_price') or 0)
 
-        pos = live_positions.get(ccxt_sym) or live_positions.get(symbol)
+        mark = price_map.get(binance_sym, 0.0)
+        if mark <= 0:
+            return  # price not available
 
-        if pos:
-            # Position still open — update unrealised PnL in memory (not DB, too noisy)
-            upnl = float(pos.get('unrealized_pnl', 0))
-            mark = float(pos.get('mark_price', 0))
-            # Only update DB if PnL is significantly different (avoid write storms)
-            # We expose this via the /api/positions live endpoint instead
-            return
+        hit_sl = False
+        hit_tp = False
 
-        # Position NOT found on exchange → it closed
-        # Find out the exit price via recent order history
-        exit_price, status = self._get_exit_details(symbol, trade)
+        if direction == 'long':
+            if sl > 0 and mark <= sl:
+                hit_sl = True
+                logger.warning(f"[Monitor] SL hit: {sym} mark={mark} <= sl={sl} (LONG)")
+            if tp > 0 and mark >= tp:
+                hit_tp = True
+                logger.info(f"[Monitor] TP hit: {sym} mark={mark} >= tp={tp} (LONG)")
+        else:  # short
+            if sl > 0 and mark >= sl:
+                hit_sl = True
+                logger.warning(f"[Monitor] SL hit: {sym} mark={mark} >= sl={sl} (SHORT)")
+            if tp > 0 and mark <= tp:
+                hit_tp = True
+                logger.info(f"[Monitor] TP hit: {sym} mark={mark} <= tp={tp} (SHORT)")
 
-        # Recalculate PnL with actual exit
-        ep       = float(trade.get('entry_price', 0))
-        notional = float(trade.get('notional_usd', 0))
-        commission = float(trade.get('commission_usd', 0))
-        if exit_price > 0 and ep > 0 and notional > 0:
+        if hit_tp or hit_sl:
+            status = 'target_hit' if hit_tp else 'stop_loss'
+            exit_price = mark
+            self._close_trade_now(trade, exit_price, status, sym)
+
+    def _close_trade_now(self, trade: Dict, exit_price: float, status: str, sym: str):
+        """
+        Attempt to close position on Binance and update DB.
+        Falls back to DB-only update if API is IP-restricted.
+        """
+        trade_id  = trade['id']
+        direction = trade.get('direction', 'long')
+        notional  = float(trade.get('notional_usd', 0) or 0)
+        ep        = float(trade.get('entry_price', exit_price) or exit_price)
+        commission= float(trade.get('commission_usd', 0) or 0)
+
+        # Compute PnL
+        if ep > 0 and notional > 0:
             if direction == 'long':
                 pnl = (exit_price - ep) / ep * notional - commission * 2
             else:
@@ -199,94 +167,184 @@ class PositionMonitor:
         else:
             pnl = 0.0
 
-        logger.info(f"[PositionMonitor] Trade {trade_id} ({symbol}) closed "
-                    f"exit={exit_price:.6g} pnl={pnl:.2f} status={status}")
+        # Try actual exchange close
+        close_placed = False
+        if self._api_ok:
+            close_placed = self._place_market_close(sym, direction, trade, exit_price)
 
-        self.store.close_trade(
-            trade_id   = trade_id,
-            exit_price = exit_price,
-            exit_time  = datetime.now(timezone.utc),
-            status     = status,
-            pnl_usd    = round(pnl, 4),
-        )
-        # Remove from SL/TP tracking
-        self._sltp_placed.discard(trade_id)
+        # Always update DB
+        try:
+            self.store.close_trade(
+                trade_id   = trade_id,
+                exit_price = exit_price,
+                exit_time  = datetime.now(timezone.utc),
+                status     = status,
+                pnl_usd    = round(pnl, 4),
+            )
+            self._closed_trades.add(trade_id)
+            self._sltp_placed.discard(trade_id)
+            logger.info(
+                f"[Monitor] Trade {trade_id} {sym} closed "
+                f"exit={exit_price:.6g} pnl=${pnl:.2f} status={status} "
+                f"exchange_close={'ok' if close_placed else 'FAILED-IP-restricted'}"
+            )
+        except Exception as e:
+            logger.error(f"[Monitor] DB close error trade {trade_id}: {e}")
 
-    def _get_exit_details(self, symbol: str, trade: Dict):
+    def _place_market_close(self, sym: str, direction: str, trade: Dict,
+                            exit_price: float) -> bool:
+        """Place a reduceOnly market order to close position. Returns success."""
+        try:
+            ccxt_sym   = self._normalise_symbol(sym)
+            close_side = 'sell' if direction == 'long' else 'buy'
+            notional   = float(trade.get('notional_usd', 0) or 0)
+            ep         = float(trade.get('entry_price', exit_price) or exit_price)
+            qty        = notional / ep if ep > 0 else 0
+            if qty <= 0:
+                return False
+            qty_r = self.connector._round_qty(ccxt_sym, qty)
+            order = self.connector.exchange.create_order(
+                ccxt_sym, 'market', close_side, qty_r,
+                params={'reduceOnly': True}
+            )
+            actual_exit = float(order.get('average') or order.get('price') or exit_price)
+            logger.info(f"[Monitor] Market close placed: {close_side} {qty_r} {ccxt_sym} @ {actual_exit}")
+            return True
+        except Exception as e:
+            err = str(e)
+            if '-2015' in err or 'Invalid API-key' in err or 'IP' in err:
+                logger.warning(f"[Monitor] API IP-restricted, cannot place close order: {e}")
+                self._api_ok = False   # stop trying until reconnect
+            else:
+                logger.error(f"[Monitor] Market close error for {sym}: {e}")
+            return False
+
+    # ── Bracket order placement ────────────────────────────────────────────────
+
+    def _try_place_bracket_orders(self, db_trades: List[Dict]):
+        """Try to place SL+TP bracket orders for trades that don't have them yet."""
+        for trade in db_trades:
+            trade_id = trade['id']
+            if trade_id in self._sltp_placed:
+                continue
+            sl = float(trade.get('sl') or 0)
+            tp = float(trade.get('tp') or 0)
+            if sl <= 0 and tp <= 0:
+                continue
+
+            sym     = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
+            ccxt_sym = self._normalise_symbol(sym)
+            direction = trade.get('direction', 'long')
+
+            # Estimate qty from notional
+            notional = float(trade.get('notional_usd', 0) or 0)
+            ep       = float(trade.get('entry_price', 0) or 0)
+            qty      = notional / ep if ep > 0 else 0
+
+            if qty > 0:
+                try:
+                    result = self.connector.set_sl_tp(ccxt_sym, direction, qty, sl, tp)
+                    if 'error' in result:
+                        logger.error(f"[Monitor] Bracket order failed trade {trade_id}: {result['error']}")
+                        err = result['error']
+                        if '-2015' in err or 'Invalid API-key' in err or 'IP' in err:
+                            self._api_ok = False
+                    else:
+                        logger.info(f"[Monitor] Bracket placed trade {trade_id}: SL={result.get('sl_price')} TP={result.get('tp_price')}")
+                        self._sltp_placed.add(trade_id)
+                except Exception as e:
+                    logger.error(f"[Monitor] _try_place_bracket error: {e}")
+
+    # ── Helpers ────────────────────────────────────────────────────────────────
+
+    def _get_open_trades(self) -> List[Dict]:
+        all_open = self.store.get_open_trades()
+        result = []
+        for t in all_open:
+            if t['id'] in self._closed_trades:
+                continue
+            # Include live trades (not paper) for this account
+            if t.get('mode', 'paper') == 'paper':
+                continue
+            if self.account_id is not None and t.get('account_id') != self.account_id:
+                continue
+            result.append(t)
+        return result
+
+    def _normalise_symbol(self, symbol: str) -> str:
+        """BTC/USDT → BTC/USDT:USDT for futures ccxt."""
+        if ':' not in symbol and '/' in symbol:
+            base, quote = symbol.split('/', 1)
+            return f"{base}/{quote}:{quote}"
+        return symbol
+
+    def _fetch_public_prices(self, binance_symbols: List[str]) -> Dict[str, float]:
         """
-        Try to find exit price from recent filled orders.
-        Returns (exit_price, status_string).
+        Fetch current prices from Binance public REST (no auth, no IP restriction).
+        Returns {BINANCESYM: price} e.g. {'BTCUSDT': 66500.0}
         """
+        try:
+            with urllib.request.urlopen(
+                'https://api.binance.com/api/v3/ticker/price', timeout=5
+            ) as resp:
+                data = json.loads(resp.read())
+            price_map = {item['symbol']: float(item['price']) for item in data}
+            return price_map
+        except Exception as e:
+            logger.warning(f"[Monitor] Public price fetch error: {e}")
+            return {}
+
+    def _get_exit_details(self, symbol: str, trade: Dict) -> Tuple[float, str]:
+        """Try to find exit price from order history. Fallback to last ticker price."""
         ccxt_sym   = self._normalise_symbol(symbol)
         direction  = trade.get('direction', 'long')
         entry_price = float(trade.get('entry_price', 0))
         sl         = float(trade.get('sl') or 0)
         tp         = float(trade.get('tp') or 0)
-
         exit_price = 0.0
-        try:
-            # Fetch recent closed orders for this symbol
-            orders = self.connector.exchange.fetch_orders(
-                ccxt_sym, limit=20, params={'startTime': int(time.time() * 1000) - 3_600_000}
-            )
-            # Find the most recent filled closing order
-            close_side = 'sell' if direction == 'long' else 'buy'
-            filled_closes = [
-                o for o in orders
-                if o.get('status') == 'closed'
-                and o.get('side') == close_side
-                and (o.get('reduceOnly') or o.get('type') in ('stop_market', 'take_profit_market', 'market'))
-                and float(o.get('filled', 0) or 0) > 0
-            ]
-            if filled_closes:
-                # Use the most recent fill
-                filled_closes.sort(key=lambda o: o.get('timestamp', 0), reverse=True)
-                best = filled_closes[0]
-                exit_price = float(best.get('average') or best.get('price') or 0)
-        except Exception as e:
-            logger.debug(f"[PositionMonitor] fetch_orders error for {symbol}: {e}")
 
-        # Fall back to mark price from exchange if order history failed
-        if exit_price <= 0:
+        if self._api_ok:
             try:
-                ticker = self.connector.exchange.fetch_ticker(ccxt_sym)
-                exit_price = float(ticker.get('last', 0) or 0)
-            except Exception:
-                exit_price = entry_price  # last resort
+                orders = self.connector.exchange.fetch_orders(
+                    ccxt_sym, limit=20,
+                    params={'startTime': int(time.time() * 1000) - 3_600_000}
+                )
+                close_side = 'sell' if direction == 'long' else 'buy'
+                filled = [
+                    o for o in orders
+                    if o.get('status') == 'closed'
+                    and o.get('side') == close_side
+                    and float(o.get('filled', 0) or 0) > 0
+                ]
+                if filled:
+                    filled.sort(key=lambda o: o.get('timestamp', 0), reverse=True)
+                    exit_price = float(filled[0].get('average') or filled[0].get('price') or 0)
+            except Exception as e:
+                if '-2015' in str(e):
+                    self._api_ok = False
 
-        # Determine close reason
+        if exit_price <= 0:
+            # Fallback: use public price
+            bsym = symbol.replace('/', '')
+            prices = self._fetch_public_prices([bsym])
+            exit_price = prices.get(bsym, entry_price)
+
+        # Determine status
         status = 'closed'
         if tp > 0 and exit_price > 0:
-            if direction == 'long' and exit_price >= tp * 0.995:
-                status = 'target_hit'
-            elif direction == 'short' and exit_price <= tp * 1.005:
+            if (direction == 'long' and exit_price >= tp * 0.995) or \
+               (direction == 'short' and exit_price <= tp * 1.005):
                 status = 'target_hit'
         if sl > 0 and exit_price > 0:
-            if direction == 'long' and exit_price <= sl * 1.005:
-                status = 'stop_loss'
-            elif direction == 'short' and exit_price >= sl * 0.995:
+            if (direction == 'long' and exit_price <= sl * 1.005) or \
+               (direction == 'short' and exit_price >= sl * 0.995):
                 status = 'stop_loss'
 
         return exit_price, status
 
-    def _place_bracket(self, symbol: str, direction: str, qty: float,
-                       sl: float, tp: float, trade_id: int) -> bool:
-        """Place SL + TP bracket orders on Binance. Returns True on success."""
-        try:
-            result = self.connector.set_sl_tp(symbol, direction, qty, sl, tp)
-            if 'error' in result:
-                logger.error(f"[PositionMonitor] Bracket order failed for trade {trade_id}: {result['error']}")
-                return False
-            logger.info(f"[PositionMonitor] Bracket placed for trade {trade_id}: "
-                        f"SL={result.get('sl_price')} TP={result.get('tp_price')}")
-            return True
-        except Exception as e:
-            logger.error(f"[PositionMonitor] _place_bracket error: {e}")
-            return False
 
-
-# ── Global registry of running monitors ────────────────────────────────────────
-_monitors: Dict[int, PositionMonitor] = {}   # account_id → PositionMonitor
+# ── Global registry ────────────────────────────────────────────────────────────
+_monitors: Dict[int, 'PositionMonitor'] = {}
 _monitors_lock = threading.Lock()
 
 
@@ -295,8 +353,9 @@ def get_monitor(account_id: int) -> Optional[PositionMonitor]:
         return _monitors.get(account_id)
 
 
-def start_monitor(connector, store, account_id: int, interval: int = 10) -> PositionMonitor:
-    """Start (or restart) a monitor for an account. Returns the monitor."""
+def start_monitor(connector, store, account_id: int,
+                  interval: int = 5) -> PositionMonitor:
+    """Start (or restart) a position monitor for an account."""
     with _monitors_lock:
         existing = _monitors.get(account_id)
         if existing and existing.is_running():
@@ -312,10 +371,3 @@ def stop_monitor(account_id: int):
         m = _monitors.pop(account_id, None)
         if m:
             m.stop()
-
-
-def stop_all():
-    with _monitors_lock:
-        for m in list(_monitors.values()):
-            m.stop()
-        _monitors.clear()
