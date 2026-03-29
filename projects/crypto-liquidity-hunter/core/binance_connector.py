@@ -16,20 +16,30 @@ class BinanceConnector:
     Thin ccxt wrapper for Binance Futures USDT-M (perpetuals).
     Supports:
       - paper mode  → simulated fills, no API calls needed
+      - demo        → Binance Demo Trading (demo-fapi.binance.com)
       - testnet     → real API calls to Binance Futures Testnet
       - live        → real mainnet Binance Futures
     """
 
+    # Binance Demo Trading base URL (paper trading with real API keys)
+    DEMO_BASE_URL = 'https://demo-fapi.binance.com'
+    TESTNET_BASE_URL = 'https://testnet.binancefuture.com'
+
     def __init__(self, api_key: str = '', api_secret: str = '',
-                 testnet: bool = True, mode: str = 'paper'):
+                 testnet: bool = True, mode: str = 'paper',
+                 is_demo: bool = False, environment: str = 'mainnet'):
         """
-        mode: 'paper' | 'testnet' | 'live'
+        mode: 'paper' | 'demo' | 'testnet' | 'live'
+        is_demo: True if using Binance Demo Trading (demo-fapi.binance.com)
+        environment: 'mainnet' | 'testnet' | 'demo'
         testnet flag only used when mode != 'paper'.
         """
         self.api_key      = api_key
         self.api_secret   = api_secret
         self.testnet      = testnet
-        self.mode         = mode  # paper / testnet / live
+        self.mode         = mode  # paper / demo / testnet / live
+        self.is_demo      = is_demo or (environment == 'demo') or (mode == 'demo')
+        self.environment  = environment
         self.exchange     = None
         self.markets      = {}
         self._connected   = False
@@ -56,62 +66,105 @@ class BinanceConnector:
                 'enableRateLimit': True,
             }
 
-            # Try Futures (USDM) first, fall back to Spot if Futures not enabled
-            tried_futures = False
-            tried_spot    = False
+            # ── Demo Trading mode (Binance Demo — demo-fapi.binance.com) ──────
+            if self.is_demo:
+                try:
+                    ex = ccxt.binanceusdm({
+                        **creds,
+                        'options': {'defaultType': 'future'},
+                        'urls': {
+                            'api': {
+                                'public':  self.DEMO_BASE_URL,
+                                'private': self.DEMO_BASE_URL,
+                                'fapiPublic':  f'{self.DEMO_BASE_URL}/fapi/v1',
+                                'fapiPrivate': f'{self.DEMO_BASE_URL}/fapi/v1',
+                                'fapiPrivateV2': f'{self.DEMO_BASE_URL}/fapi/v2',
+                            }
+                        }
+                    })
+                    ex.fetch_balance()
+                    self.exchange    = ex
+                    self.account_type = 'futures'
+                    self._connected  = True
+                    logger.info("BinanceConnector: connected [DEMO TRADING]")
+                    return True
+                except ccxt.AuthenticationError as e:
+                    err_str = str(e)
+                    self.last_error = self._parse_auth_error(err_str, hint='demo')
+                    self._connected = False
+                    return False
+                except Exception as e:
+                    self.last_error = f"Demo connection error: {str(e)[:150]}"
+                    self._connected = False
+                    return False
 
+            # ── Testnet mode ──────────────────────────────────────────────────
+            if self.testnet or self.mode == 'testnet':
+                try:
+                    ex = ccxt.binanceusdm({
+                        **creds,
+                        'options': {'defaultType': 'future'},
+                        'urls': {
+                            'api': {
+                                'fapiPublic':  f'{self.TESTNET_BASE_URL}/fapi/v1',
+                                'fapiPrivate': f'{self.TESTNET_BASE_URL}/fapi/v1',
+                                'fapiPrivateV2': f'{self.TESTNET_BASE_URL}/fapi/v2',
+                            }
+                        }
+                    })
+                    ex.fetch_balance()
+                    self.exchange    = ex
+                    self.account_type = 'futures'
+                    self._connected  = True
+                    logger.info("BinanceConnector: connected [TESTNET FUTURES]")
+                    return True
+                except ccxt.AuthenticationError as e:
+                    err_str = str(e)
+                    self.last_error = self._parse_auth_error(err_str, hint='testnet')
+                    self._connected = False
+                    return False
+                except Exception as e:
+                    self.last_error = f"Testnet connection error: {str(e)[:150]}"
+                    self._connected = False
+                    return False
+
+            # ── Live mode — Try Futures first, fall back to Spot ──────────────
             # Step 1: try Futures USDM
             try:
-                tried_futures = True
                 ex = ccxt.binanceusdm({**creds, 'options': {'defaultType': 'future'}})
-                if self.testnet:
-                    ex.set_sandbox_mode(True)
                 ex.fetch_balance()
                 self.exchange    = ex
                 self.account_type = 'futures'
-                self.markets     = {}  # lazy-load
+                self.markets     = {}
                 self._connected  = True
-                env = 'TESTNET' if self.testnet else 'MAINNET'
-                logger.info(f"BinanceConnector: connected [FUTURES {env}]")
+                logger.info("BinanceConnector: connected [LIVE FUTURES]")
                 return True
             except ccxt.AuthenticationError as e:
                 err_str = str(e)
-                # Code -2015 = invalid permissions (Spot key used on Futures)
-                # Code -2008 = invalid API key entirely
-                if '-2015' in err_str or 'futures' in err_str.lower():
-                    logger.info("Futures API not enabled, trying Spot fallback...")
+                if '-2015' in err_str:
+                    logger.info("Futures permission error, trying Spot fallback...")
                 elif '-2008' in err_str or 'Invalid Api-Key' in err_str:
-                    self.last_error = f"Invalid API Key — double-check the key is correct. ({err_str.split('msg')[1][:60] if 'msg' in err_str else err_str[:80]})"
+                    self.last_error = self._parse_auth_error(err_str, hint='live')
                     self._connected = False
                     return False
                 else:
-                    # Unknown auth error — still try spot
                     logger.warning(f"Futures auth error: {err_str[:100]}")
             except Exception as e:
                 logger.warning(f"Futures connect error: {e}")
 
             # Step 2: fall back to Spot
             try:
-                tried_spot = True
                 ex = ccxt.binance({**creds})
-                if self.testnet:
-                    ex.set_sandbox_mode(True)
                 ex.fetch_balance()
                 self.exchange     = ex
                 self.account_type = 'spot'
                 self.markets      = {}
                 self._connected   = True
-                env = 'TESTNET' if self.testnet else 'MAINNET'
-                logger.info(f"BinanceConnector: connected [SPOT {env}]")
+                logger.info("BinanceConnector: connected [LIVE SPOT]")
                 return True
             except ccxt.AuthenticationError as e:
                 err_str = str(e)
-                if '-2008' in err_str or 'Invalid Api-Key' in err_str:
-                    self.last_error = "Invalid API Key ID — key may be deleted or wrong. Check Binance API Management."
-                elif '-2015' in err_str:
-                    self.last_error = "API key permissions insufficient. Enable 'Enable Reading' in Binance API Management."
-                else:
-                    self.last_error = f"Authentication failed: {err_str[:120]}"
+                self.last_error = self._parse_auth_error(err_str, hint='live')
                 self._connected = False
                 return False
             except Exception as e:
@@ -124,6 +177,26 @@ class BinanceConnector:
             logger.error(f"BinanceConnector connect error: {e}")
             self._connected = False
             return False
+
+    def _parse_auth_error(self, err_str: str, hint: str = 'live') -> str:
+        """Convert raw Binance error codes into actionable human-readable messages."""
+        if '-2008' in err_str or 'Invalid Api-Key' in err_str:
+            return ("Invalid API Key — the key may be wrong, expired, or deleted. "
+                    "Check Binance → API Management.")
+        if '-2015' in err_str:
+            # Most common cause on a cloud server = IP whitelist restriction
+            return ("IP not whitelisted — your Binance Demo API key has IP restrictions set. "
+                    "Fix: In Binance Demo Trading → API Management → Edit key → "
+                    "under 'Access Restrictions' select 'Unrestricted (Less Secure)' OR "
+                    "add this server's IP: 76.13.247.112 to the whitelist. "
+                    "Then click Save and wait 1-2 minutes.")
+        if '-1021' in err_str or 'Timestamp' in err_str:
+            return "Timestamp error — server clock is out of sync. Check system time."
+        if 'IP' in err_str:
+            return ("IP not whitelisted — your API key has IP restrictions. "
+                    "Add this server's IP to the whitelist in Binance API Management, "
+                    "or remove IP restrictions entirely for the bot key.")
+        return f"Authentication failed: {err_str[:150]}"
 
     # ─── Account ───────────────────────────────────────────────────────────────
 
@@ -326,10 +399,44 @@ class BinanceConnector:
             'mode':      'paper',
         }
 
+    def check_trade_permissions(self) -> Dict:
+        """
+        Check if the API key has trading enabled.
+        Returns {'can_trade': bool, 'can_futures': bool, 'reason': str}
+        """
+        if self.mode == 'paper':
+            return {'can_trade': True, 'can_futures': False, 'reason': 'paper'}
+        try:
+            import time, hashlib, hmac, requests as _req
+            ts  = int(time.time() * 1000)
+            par = f"timestamp={ts}"
+            sig = hmac.new(self.api_secret.encode(), par.encode(), hashlib.sha256).hexdigest()
+            r = _req.get(
+                f"https://api.binance.com/sapi/v1/account/apiRestrictions?{par}&signature={sig}",
+                headers={"X-MBX-APIKEY": self.api_key}, timeout=5
+            )
+            d = r.json()
+            if 'code' in d:
+                return {'can_trade': False, 'can_futures': False, 'reason': str(d)}
+            can_futures = bool(d.get('enableFutures', False))
+            can_spot    = bool(d.get('enableSpotAndMarginTrading', False))
+            can_trade   = can_futures or can_spot
+            reason = []
+            if not can_futures: reason.append('Futures trading NOT enabled')
+            if not can_spot:    reason.append('Spot trading NOT enabled')
+            return {
+                'can_trade':   can_trade,
+                'can_futures': can_futures,
+                'can_spot':    can_spot,
+                'reason':      ' | '.join(reason) if reason else 'OK',
+                'raw':         d,
+            }
+        except Exception as e:
+            return {'can_trade': False, 'can_futures': False, 'reason': str(e)}
+
     def place_market_order(self, symbol: str, side: str, qty: float) -> Dict:
         """Place a market order. In paper mode returns simulated fill."""
         if self.mode == 'paper':
-            # Use last price from exchange as fill price if available
             try:
                 ticker = self.exchange.fetch_ticker(symbol)
                 price  = float(ticker['last'])
@@ -339,14 +446,22 @@ class BinanceConnector:
         try:
             qty_r = self._round_qty(symbol, qty)
             order = self.exchange.create_order(
-                symbol=symbol, type='market', side=side, amount=qty_r,
-                params={'reduceOnly': False}
+                symbol=symbol, type='market', side=side, amount=qty_r
             )
             logger.info(f"Market order: {side} {qty_r} {symbol} → {order['id']}")
             return order
         except Exception as e:
+            err = str(e)
+            # Friendly message for -2015 on orders (trading not enabled on key)
+            if '-2015' in err:
+                return {'error': (
+                    "Trading NOT enabled on this API key. "
+                    "Go to Binance → API Management → Edit key → "
+                    "check 'Enable Futures' (and/or 'Enable Spot & Margin Trading'). "
+                    "Save and wait 30 seconds."
+                )}
             logger.error(f"place_market_order error: {e}")
-            return {'error': str(e)}
+            return {'error': err}
 
     def place_limit_order(self, symbol: str, side: str, qty: float, price: float) -> Dict:
         """Place a limit order."""

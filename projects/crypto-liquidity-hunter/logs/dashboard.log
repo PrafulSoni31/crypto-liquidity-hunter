@@ -1,0 +1,82 @@
+[2026-03-24 17:53:41 +0000] [668147] [INFO] Starting gunicorn 25.1.0
+[2026-03-24 17:53:41 +0000] [668147] [INFO] Listening at: http://0.0.0.0:5000 (668147)
+[2026-03-24 17:53:41 +0000] [668147] [INFO] Using worker: sync
+[2026-03-24 17:53:41 +0000] [668150] [INFO] Booting worker with pid: 668150
+[2026-03-24 17:53:41 +0000] [668147] [INFO] Control socket listening at /root/.openclaw/workspace/projects/crypto-liquidity-hunter/gunicorn.ctl
+[2026-03-24 17:53:41 +0000] [668151] [INFO] Booting worker with pid: 668151
+[2026-03-24 19:31:24 +0000] [668147] [INFO] Handling signal: hup
+[2026-03-24 19:31:24 +0000] [668147] [INFO] Hang up: Master
+[2026-03-24 19:31:24 +0000] [670228] [INFO] Booting worker with pid: 670228
+[2026-03-24 19:31:24 +0000] [670229] [INFO] Booting worker with pid: 670229
+[2026-03-24 19:31:24 +0000] [668147] [WARNING] Worker (pid:668150) was sent SIGHUP!
+[2026-03-24 19:31:24 +0000] [668147] [WARNING] Worker (pid:668151) was sent SIGHUP!
+[2026-03-25 03:22:32 +0000] [668147] [CRITICAL] WORKER TIMEOUT (pid:670228)
+[2026-03-25 03:22:32 +0000] [670228] [ERROR] Error handling request (no URI read)
+Traceback (most recent call last):
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/workers/sync.py", line 141, in handle
+    req = next(parser)
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/parser.py", line 56, in __next__
+    self.mesg = self.mesg_class(self.cfg, self.unreader, self.source_addr, self.req_count)
+                ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/message.py", line 324, in __init__
+    super().__init__(cfg, unreader, peer_addr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/message.py", line 110, in __init__
+    unused = self.parse(self.unreader)
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/message.py", line 336, in parse
+    self.read_into(unreader, buf, stop=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/message.py", line 375, in read_into
+    data = unreader.read()
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/unreader.py", line 36, in read
+    d = self.chunk()
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/unreader.py", line 65, in chunk
+    return self.sock.recv(self.mxchunk)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/workers/base.py", line 198, in handle_abort
+    sys.exit(1)
+    ~~~~~~~~^^^
+SystemExit: 1
+[2026-03-25 03:22:32 +0000] [670228] [INFO] Worker exiting (pid: 670228)
+[2026-03-25 03:22:32 +0000] [680435] [INFO] Booting worker with pid: 680435
+[2026-03-25 08:52:13 +0000] [668147] [CRITICAL] WORKER TIMEOUT (pid:680435)
+[2026-03-25 08:52:13 +0000] [680435] [ERROR] Error handling request (no URI read)
+Traceback (most recent call last):
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/workers/sync.py", line 141, in handle
+    req = next(parser)
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/parser.py", line 56, in __next__
+    self.mesg = self.mesg_class(self.cfg, self.unreader, self.source_addr, self.req_count)
+                ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/message.py", line 324, in __init__
+    super().__init__(cfg, unreader, peer_addr)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/message.py", line 110, in __init__
+    unused = self.parse(self.unreader)
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/message.py", line 336, in parse
+    self.read_into(unreader, buf, stop=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/message.py", line 375, in read_into
+    data = unreader.read()
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/unreader.py", line 36, in read
+    d = self.chunk()
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/http/unreader.py", line 65, in chunk
+    return self.sock.recv(self.mxchunk)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/root/.openclaw/workspace/projects/crypto-liquidity-hunter/venv/lib/python3.13/site-packages/gunicorn/workers/base.py", line 198, in handle_abort
+    sys.exit(1)
+    ~~~~~~~~^^^
+SystemExit: 1
+[2026-03-25 08:52:13 +0000] [680435] [INFO] Worker exiting (pid: 680435)
+[2026-03-25 08:52:14 +0000] [687430] [INFO] Booting worker with pid: 687430
+[2026-03-29 09:33:36 +0000] [776718] [INFO] Starting gunicorn 25.1.0
+[2026-03-29 09:33:36 +0000] [776718] [ERROR] Connection in use: ('0.0.0.0', 5000)
+[2026-03-29 09:33:36 +0000] [776718] [ERROR] connection to ('0.0.0.0', 5000) failed: [Errno 98] Address already in use
+[2026-03-29 09:33:37 +0000] [776718] [ERROR] Connection in use: ('0.0.0.0', 5000)
+[2026-03-29 09:33:37 +0000] [776718] [ERROR] connection to ('0.0.0.0', 5000) failed: [Errno 98] Address already in use
+[2026-03-29 09:33:38 +0000] [776718] [ERROR] Connection in use: ('0.0.0.0', 5000)
+[2026-03-29 09:33:38 +0000] [776718] [ERROR] connection to ('0.0.0.0', 5000) failed: [Errno 98] Address already in use
+[2026-03-29 09:33:39 +0000] [776718] [ERROR] Connection in use: ('0.0.0.0', 5000)
+[2026-03-29 09:33:39 +0000] [776718] [ERROR] connection to ('0.0.0.0', 5000) failed: [Errno 98] Address already in use
+[2026-03-29 09:33:40 +0000] [776718] [ERROR] Connection in use: ('0.0.0.0', 5000)
+[2026-03-29 09:33:40 +0000] [776718] [ERROR] connection to ('0.0.0.0', 5000) failed: [Errno 98] Address already in use
+[2026-03-29 09:33:41 +0000] [776718] [ERROR] Can't connect to ('0.0.0.0', 5000)

@@ -546,6 +546,25 @@ def health():
 # These routes are NEW and completely isolated from existing strategy logic.
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _get_active_account_id() -> int:
+    """Get the persisted active account id from config."""
+    try:
+        cfg = load_config()
+        return cfg.get('active_account_id', None)
+    except Exception:
+        return None
+
+def _set_active_account_id(account_id: int):
+    """Persist the active account id to config."""
+    try:
+        import yaml
+        cfg = load_config()
+        cfg['active_account_id'] = account_id
+        with open(CONFIG_PATH, 'w') as f:
+            yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+    except Exception as e:
+        logger.error(f"_set_active_account_id error: {e}")
+
 def _get_connector(connect=False):
     """Build a BinanceConnector from current config. Fresh each call. connect=True tests the link."""
     from core.binance_connector import BinanceConnector
@@ -615,11 +634,29 @@ def binance_connect():
     """Save and test Binance API credentials. Returns detailed error on failure."""
     from core.trade_executor import TradeExecutor
     from core.binance_connector import BinanceConnector
-    data       = request.get_json() or {}
-    api_key    = data.get('api_key', '').strip()
-    api_secret = data.get('api_secret', '').strip()
-    testnet    = bool(data.get('testnet', True))
-    mode       = data.get('mode', 'paper')
+    data        = request.get_json() or {}
+    api_key     = data.get('api_key', '').strip()
+    api_secret  = data.get('api_secret', '').strip()
+    environment = data.get('environment', 'mainnet')  # mainnet / testnet / demo
+    mode        = data.get('mode', 'paper')
+    acct_name   = data.get('account_name', '').strip() or None
+
+    # Derive flags from environment
+    testnet = (environment == 'testnet')
+    is_demo = (environment == 'demo') or (mode == 'demo')
+    if is_demo: mode = 'demo'
+
+    if mode == 'paper':
+        TradeExecutor.save_connection_config('paper', 'paper', False, 'paper',
+                                             is_demo=False, environment='mainnet')
+        store = DataStore()
+        if acct_name:
+            aid = store.save_account(name=acct_name, api_key='paper', api_secret='paper',
+                                     mode='paper', environment='mainnet')
+            store.update_account_balance(aid, 10000.0)
+        return jsonify({'status': 'connected', 'mode': 'paper', 'account_type': 'paper',
+                        'testnet': False, 'balance': 10000.0, 'balance_total': 10000.0,
+                        'message': '📝 Paper Trading active — no API key needed'})
 
     if not api_key or not api_secret:
         return jsonify({'status': 'error',
@@ -627,40 +664,56 @@ def binance_connect():
 
     try:
         connector = BinanceConnector(api_key=api_key, api_secret=api_secret,
-                                     testnet=testnet, mode=mode)
+                                     testnet=testnet, mode=mode,
+                                     is_demo=is_demo, environment=environment)
         ok = connector.connect()
         if ok:
-            TradeExecutor.save_connection_config(api_key, api_secret, testnet, mode)
+            TradeExecutor.save_connection_config(api_key, api_secret, testnet, mode,
+                                                 is_demo=is_demo, environment=environment)
+            # Also save to accounts table
+            store = DataStore()
+            name  = acct_name or f"Account ({environment.title()})"
+            aid   = store.save_account(name=name, api_key=api_key, api_secret=api_secret,
+                                       mode=mode, environment=environment,
+                                       testnet=testnet, is_demo=is_demo)
             balance      = connector.get_balance('USDT')
+            store.update_account_balance(aid, round(balance.get('free', 0), 2))
             account_type = connector.account_type or mode
-            env_label    = 'Testnet' if testnet else 'Mainnet (LIVE)'
+            env_label    = {'demo': '🟡 Demo Trading', 'testnet': '🔵 Testnet',
+                            'mainnet': '🔴 Mainnet LIVE'}.get(environment, environment)
             type_label   = {'futures': '📊 Futures USDM', 'spot': '🔵 Spot',
-                            'paper': '📝 Paper'}.get(account_type, account_type)
+                            'paper': '📝 Paper', 'demo': '🟡 Demo Futures'}.get(account_type, account_type)
             return jsonify({
                 'status':       'connected',
                 'mode':         mode,
                 'account_type': account_type,
+                'account_id':   aid,
+                'environment':  environment,
                 'testnet':      testnet,
                 'balance':      round(balance.get('free', 0), 2),
                 'balance_total':round(balance.get('total', 0), 2),
                 'message':      f"✅ Connected — {type_label} | {env_label} | Balance: ${balance.get('free',0):.2f} USDT free"
             })
         else:
-            # Return the actual error from the connector
             err = connector.last_error or 'Connection failed'
+            # Smart tips based on error
             tips = []
-            if 'Invalid Api-Key' in err or 'invalid' in err.lower():
-                tips.append("• Make sure you copied the full API key (no spaces)")
-                tips.append("• Key must not be deleted or expired in Binance")
-            if 'permission' in err.lower() or '2015' in err:
-                tips.append("• Enable 'Enable Reading' permission on the API key")
-                tips.append("• For Futures trading, enable 'Enable Futures' in Binance API settings")
-            tip_str = '\n'.join(tips)
-            return jsonify({
-                'status':  'error',
-                'message': f"❌ {err}",
-                'tips':    tips,
-            }), 400
+            if 'IP not whitelisted' in err or 'IP' in err:
+                tips.append("• In Binance Demo Trading → API Management → Edit key")
+                tips.append("• Under 'Access Restrictions' → select 'Unrestricted (Less Secure)'")
+                tips.append("• OR add server IP 76.13.247.112 to the whitelist")
+                tips.append("• Save and wait 1-2 minutes, then try again")
+            elif 'Invalid API Key' in err:
+                tips.append("• Copy the full API key (no spaces, no line breaks)")
+                tips.append("• Make sure the key isn't deleted or expired in Binance")
+            elif 'Wrong environment' in err or 'Demo' in err:
+                tips.append("• Use API keys created inside Binance Demo Trading mode")
+                tips.append("• Demo keys only work with Demo environment setting")
+            elif 'Testnet' in err:
+                tips.append("• Testnet keys must be created at testnet.binancefuture.com")
+            elif 'Futures' in err or 'permission' in err.lower():
+                tips.append("• Go to Binance → API Management → Edit → check 'Enable Futures'")
+            return jsonify({'status': 'error', 'message': f"❌ {err}", 'tips': tips}), 400
     except Exception as e:
         return jsonify({'status': 'error', 'message': f"❌ Unexpected error: {str(e)[:200]}",
                         'tips': ['Check your internet connection', 'Try Paper Trading mode first']}), 400
@@ -765,6 +818,22 @@ def binance_lot_info(symbol):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/binance/get_settings', methods=['GET'])
+def binance_get_settings():
+    """Return current position-sizing settings from pairs.yaml."""
+    try:
+        config    = load_config()
+        paper_cfg = config.get('paper_trading', {})
+        return jsonify({
+            'notional_usd':  float(paper_cfg.get('fixed_notional_usd', 100.0)),
+            'leverage':      float(paper_cfg.get('margin_leverage', 20.0)),
+            'max_concurrent':int(config.get('backtester', {}).get('max_concurrent_trades', 3)),
+            'risk_pct':      round(float(config.get('signal_engine', {}).get('risk_per_trade', 0.01)) * 100, 2),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/binance/save_settings', methods=['POST'])
 def binance_save_settings():
     """Save position-sizing settings to pairs.yaml."""
@@ -787,6 +856,539 @@ def binance_save_settings():
         return jsonify({'status': 'ok', 'message': 'Settings saved'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Multi-Account Management Routes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _make_connector_from_account(acct: dict, connect: bool = True):
+    """Build a BinanceConnector from an account dict."""
+    from core.binance_connector import BinanceConnector
+    c = BinanceConnector(
+        api_key     = acct.get('api_key', ''),
+        api_secret  = acct.get('api_secret', ''),
+        testnet     = bool(acct.get('testnet', 0)),
+        mode        = acct.get('mode', 'paper'),
+        is_demo     = bool(acct.get('is_demo', 0)),
+        environment = acct.get('environment', 'mainnet'),
+    )
+    if connect:
+        c.connect()
+    return c
+
+
+@app.route('/api/accounts/active', methods=['GET'])
+def get_active_account():
+    """Return the persisted active account id."""
+    return jsonify({'active_account_id': _get_active_account_id()})
+
+@app.route('/api/accounts/active', methods=['POST'])
+def set_active_account():
+    """Persist the active account id server-side."""
+    data = request.get_json() or {}
+    account_id = data.get('account_id')
+    _set_active_account_id(account_id)
+    return jsonify({'status': 'ok', 'active_account_id': account_id})
+
+@app.route('/api/accounts', methods=['GET'])
+def list_accounts():
+    """List all saved accounts (secrets masked)."""
+    store = DataStore()
+    accounts = store.get_accounts(include_secrets=False)
+    # Inject active_account_id so frontend knows which is active on load
+    active_id = _get_active_account_id()
+    return jsonify({'accounts': accounts, 'active_account_id': active_id})
+
+
+@app.route('/api/accounts', methods=['POST'])
+def add_account():
+    """Add a new account. Validates connectivity (unless paper mode)."""
+    from core.binance_connector import BinanceConnector
+    from core.trade_executor import TradeExecutor
+    data = request.get_json() or {}
+    name        = data.get('name', '').strip()
+    api_key     = data.get('api_key', '').strip()
+    api_secret  = data.get('api_secret', '').strip()
+    mode        = data.get('mode', 'paper')
+    environment = data.get('environment', 'mainnet')
+    notes       = data.get('notes', '')
+
+    if not name:
+        return jsonify({'status': 'error', 'message': 'Account name is required'}), 400
+
+    # Derive testnet/is_demo from environment
+    testnet = (environment == 'testnet')
+    is_demo = (environment == 'demo') or (mode == 'demo')
+    if is_demo:
+        mode = 'demo'
+
+    store = DataStore()
+
+    if mode == 'paper':
+        account_id = store.save_account(
+            name=name, api_key=api_key or 'paper', api_secret=api_secret or 'paper',
+            mode='paper', environment=environment, testnet=False, is_demo=False, notes=notes
+        )
+        store.update_account_balance(account_id, 10000.0)
+        return jsonify({
+            'status':     'ok',
+            'account_id': account_id,
+            'message':    f'✅ Paper account "{name}" added (simulated $10,000 balance)',
+            'balance':    10000.0,
+        })
+
+    if not api_key or not api_secret:
+        return jsonify({'status': 'error', 'message': 'API Key and Secret required for non-paper mode'}), 400
+
+    # Test connection
+    connector = BinanceConnector(
+        api_key=api_key, api_secret=api_secret,
+        testnet=testnet, mode=mode, is_demo=is_demo, environment=environment
+    )
+    ok = connector.connect()
+    if not ok:
+        err = connector.last_error or 'Connection failed'
+        tips = []
+        if 'IP not whitelisted' in err or 'IP' in err:
+            tips = [
+                "In Binance Demo Trading → API Management → Edit key",
+                "Under 'Access Restrictions' → select 'Unrestricted (Less Secure)'",
+                "OR add server IP 76.13.247.112 to the whitelist, then wait 1-2 min",
+            ]
+        return jsonify({'status': 'error', 'message': f'❌ {err}', 'tips': tips}), 400
+
+    balance_info = connector.get_balance('USDT')
+    balance      = round(balance_info.get('free', 0), 2)
+    account_id   = store.save_account(
+        name=name, api_key=api_key, api_secret=api_secret,
+        mode=mode, environment=environment, testnet=testnet, is_demo=is_demo, notes=notes
+    )
+    store.update_account_balance(account_id, balance)
+    env_label  = {'demo': 'Demo Trading', 'testnet': 'Testnet', 'mainnet': 'Mainnet LIVE'}.get(environment, environment)
+    acc_label  = {'futures': 'Futures USDM', 'spot': 'Spot', 'demo': 'Demo Futures'}.get(connector.account_type, connector.account_type or mode)
+    return jsonify({
+        'status':       'ok',
+        'account_id':   account_id,
+        'account_type': connector.account_type,
+        'balance':      balance,
+        'message':      f'✅ "{name}" connected — {acc_label} | {env_label} | Balance: ${balance} USDT',
+    })
+
+
+@app.route('/api/accounts/<int:account_id>', methods=['DELETE'])
+def delete_account(account_id):
+    """Delete (soft) an account."""
+    store = DataStore()
+    ok = store.delete_account(account_id)
+    return jsonify({'status': 'ok' if ok else 'error', 'account_id': account_id})
+
+
+@app.route('/api/accounts/<int:account_id>/connect', methods=['POST'])
+def connect_account(account_id):
+    """Re-test connection and refresh balance for a saved account."""
+    store = DataStore()
+    acct  = store.get_account(account_id)
+    if not acct:
+        return jsonify({'status': 'error', 'message': 'Account not found'}), 404
+
+    if acct.get('mode') == 'paper':
+        store.update_account_balance(account_id, 10000.0)
+        return jsonify({'status': 'connected', 'balance': 10000.0, 'account_type': 'paper',
+                        'message': '📝 Paper account active'})
+
+    connector = _make_connector_from_account(acct, connect=True)
+    if not connector.connected:
+        return jsonify({'status': 'error', 'message': f'❌ {connector.last_error or "Connection failed"}'}), 400
+
+    balance_info = connector.get_balance('USDT')
+    balance      = round(balance_info.get('free', 0), 2)
+    store.update_account_balance(account_id, balance)
+    return jsonify({
+        'status':       'connected',
+        'balance':      balance,
+        'account_type': connector.account_type,
+        'message':      f'✅ Connected | Balance: ${balance} USDT',
+    })
+
+
+@app.route('/api/accounts/<int:account_id>/status', methods=['GET'])
+def account_status(account_id):
+    """Get live balance + positions for a specific account."""
+    store = DataStore()
+    acct  = store.get_account(account_id)
+    if not acct:
+        return jsonify({'status': 'error', 'message': 'Account not found'}), 404
+
+    mode = acct.get('mode', 'paper')
+    if mode == 'paper':
+        return jsonify({
+            'account_id': account_id, 'name': acct['name'],
+            'connected': True, 'mode': 'paper',
+            'balance_usdt_free': 10000.0, 'balance_usdt_total': 10000.0,
+            'positions_count': 0,
+        })
+
+    connector = _make_connector_from_account(acct, connect=True)
+    if not connector.connected:
+        return jsonify({'account_id': account_id, 'name': acct['name'],
+                        'connected': False, 'error': connector.last_error or 'Failed',
+                        'mode': mode})
+
+    balance   = connector.get_balance('USDT')
+    positions = connector.get_positions()
+    perms     = connector.check_trade_permissions()
+    store.update_account_balance(account_id, round(balance.get('free', 0), 2))
+    return jsonify({
+        'account_id':          account_id,
+        'name':                acct['name'],
+        'connected':           True,
+        'mode':                mode,
+        'environment':         acct.get('environment', 'mainnet'),
+        'account_type':        connector.account_type,
+        'balance_usdt_free':   round(balance.get('free',  0), 2),
+        'balance_usdt_total':  round(balance.get('total', 0), 2),
+        'balance_usdt_locked': round(balance.get('used',  0), 2),
+        'positions_count':     len(positions),
+        'can_trade':           perms.get('can_trade', False),
+        'can_futures':         perms.get('can_futures', False),
+        'permissions_warning': perms.get('reason', '') if not perms.get('can_trade') else '',
+    })
+
+
+@app.route('/api/accounts/<int:account_id>/execute', methods=['POST'])
+def execute_on_account(account_id):
+    """Execute a trade on a specific account."""
+    from core.trade_executor import TradeExecutor
+    data = request.get_json() or {}
+    try:
+        executor = TradeExecutor(account_id=account_id)
+        pair     = data.get('pair', 'binance:BTC/USDT')
+        signal_dict = {
+            'direction':   data.get('direction', 'long'),
+            'entry_price': float(data.get('entry_price', 0)),
+            'stop_loss':   float(data.get('stop_loss', 0)),
+            'target':      float(data.get('target', 0)),
+            'timeframe':   data.get('timeframe', '1h'),
+            'confidence':  float(data.get('confidence', 0.7)),
+        }
+        notional = float(data.get('notional_usd', 0)) or None
+        leverage = float(data.get('leverage', 0)) or None
+        result   = executor.execute_signal(signal_dict, pair, notional_usd=notional, leverage=leverage)
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"execute_on_account error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/accounts/<int:account_id>/trades', methods=['GET'])
+def account_trades(account_id):
+    """Get trades for a specific account."""
+    store  = DataStore()
+    status = request.args.get('status', 'all')
+    limit  = int(request.args.get('limit', 100))
+    trades = store.get_trades_by_account(account_id=account_id, status=status, limit=limit)
+
+    def serialize(t):
+        t_ser = dict(t)
+        for field in ['entry_time', 'exit_time']:
+            val = t_ser.get(field)
+            if not val: continue
+            s = val.isoformat() if isinstance(val, datetime) else str(val)
+            if s and '+' not in s and not s.endswith('Z'): s += '+00:00'
+            t_ser[field] = s
+        return t_ser
+    return jsonify([serialize(t) for t in trades])
+
+
+@app.route('/api/accounts/<int:account_id>/positions', methods=['GET'])
+def account_positions(account_id):
+    """Get open positions for a specific account."""
+    store = DataStore()
+    acct  = store.get_account(account_id)
+    if not acct:
+        return jsonify({'error': 'Account not found'}), 404
+
+    mode = acct.get('mode', 'paper')
+    if mode == 'paper':
+        trades = store.get_trades_by_account(account_id=account_id, status='open')
+        for t in trades: t['mode'] = 'paper'
+        return jsonify(trades)
+
+    connector = _make_connector_from_account(acct, connect=True)
+    if not connector.connected:
+        return jsonify({'error': connector.last_error or 'Failed to connect'}), 400
+    positions = connector.get_positions()
+    return jsonify(positions)
+
+
+@app.route('/api/accounts/<int:account_id>/performance', methods=['GET'])
+def account_performance(account_id):
+    """Get performance metrics for a specific account."""
+    store = DataStore()
+    return jsonify(store.get_performance_by_account(account_id=account_id))
+
+
+@app.route('/api/accounts/<int:account_id>/toggle', methods=['POST'])
+def toggle_account(account_id):
+    """Enable or disable an account (toggle trading on/off)."""
+    import sqlite3
+    store   = DataStore()
+    acct    = store.get_account(account_id)
+    if not acct:
+        return jsonify({'status': 'error', 'message': 'Account not found'}), 404
+    # Toggle: if enabled=1 → set 0, if 0 → set 1
+    new_state = 0 if acct.get('enabled', 1) == 1 else 1
+    db_path = '/root/.openclaw/workspace/projects/crypto-liquidity-hunter/data/store.db'
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("UPDATE accounts SET enabled=? WHERE id=?", (new_state, account_id))
+        conn.commit()
+    state_label = 'Active' if new_state == 1 else 'Paused'
+    return jsonify({'status': 'ok', 'account_id': account_id, 'enabled': new_state, 'label': state_label})
+
+
+@app.route('/api/accounts/<int:account_id>/close', methods=['POST'])
+def close_trade_on_account(account_id):
+    """Close an open trade for a specific account."""
+    from core.trade_executor import TradeExecutor
+    data = request.get_json() or {}
+    trade_id   = int(data.get('trade_id', 0))
+    symbol     = data.get('symbol', '')
+    exit_price = float(data.get('exit_price', 0)) or None
+    try:
+        executor = TradeExecutor(account_id=account_id)
+        ok = executor.close_trade(trade_id, symbol, exit_price=exit_price, reason='manual')
+        return jsonify({'status': 'ok' if ok else 'error', 'trade_id': trade_id})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Pending Signals Routes
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/pending')
+def get_pending_signals():
+    """List pending signals."""
+    store  = DataStore()
+    status = request.args.get('status', 'pending')
+    items  = store.get_pending_signals(status=status)
+    # Attach current price + distance
+    config  = load_config()
+    results = []
+    for p in items:
+        try:
+            pair = p['pair']
+            exch, sym = pair.split(':', 1) if ':' in pair else ('binance', pair)
+            from core.data_fetcher import MarketDataFetcher
+            fetcher = MarketDataFetcher(exch)
+            df = fetcher.fetch_ohlcv(sym, timeframe='1m', limit=2)
+            cur_price = float(df.iloc[-1]['close'])
+            dist_pct  = round(abs(cur_price - p['entry_price']) / p['entry_price'] * 100, 3)
+            p['current_price'] = cur_price
+            p['distance_pct']  = dist_pct
+        except Exception:
+            p['current_price'] = None
+            p['distance_pct']  = None
+        results.append(p)
+    return jsonify(results)
+
+
+@app.route('/api/pending/<int:pid>/cancel', methods=['POST'])
+def cancel_pending_signal(pid):
+    """Cancel a pending signal."""
+    store = DataStore()
+    ok = store.cancel_pending_signal(pid)
+    return jsonify({'status': 'ok' if ok else 'error', 'id': pid})
+
+
+@app.route('/api/pending/<int:pid>/execute', methods=['POST'])
+def execute_pending_signal(pid):
+    """Manually trigger execution of a pending signal at market price."""
+    from core.trade_executor import TradeExecutor
+    store = DataStore()
+    rows  = store.get_pending_signals(status='pending')
+    ps    = next((p for p in rows if p['id'] == pid), None)
+    if not ps:
+        return jsonify({'error': 'Pending signal not found or not pending'}), 404
+    try:
+        executor = TradeExecutor(account_id=ps.get('account_id'))
+        result   = executor.execute_signal(
+            {'direction': ps['direction'], 'entry_price': 0,
+             'stop_loss': ps['stop_loss'], 'target': ps['target'],
+             'timeframe': ps['timeframe'], 'confidence': ps['confidence']},
+            ps['pair'], notional_usd=ps['notional_usd'], signal_id=ps.get('signal_id')
+        )
+        if 'error' in result:
+            return jsonify({'error': result['error']}), 400
+        store.trigger_pending_signal(pid, result.get('trade_id'))
+        return jsonify({**result, 'pending_id': pid})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades/live_pnl')
+def live_pnl():
+    """Return live unrealized PnL for all open trades."""
+    store  = DataStore()
+    trades = store.get_open_trades()
+    if not trades:
+        return jsonify({})
+    # Batch price fetch
+    result = {}
+    price_cache = {}
+    for t in trades:
+        try:
+            pair = t.get('pair', '')
+            exch, sym = pair.split(':', 1) if ':' in pair else ('binance', pair)
+            if sym not in price_cache:
+                from core.data_fetcher import MarketDataFetcher
+                fetcher = MarketDataFetcher(exch)
+                df = fetcher.fetch_ohlcv(sym, timeframe='1m', limit=2)
+                price_cache[sym] = float(df.iloc[-1]['close'])
+            cur  = price_cache[sym]
+            ep   = float(t['entry_price'] or 0)
+            not_ = float(t.get('notional_usd', 100))
+            comm = float(t.get('commission_usd', 0.05))
+            if ep > 0:
+                if t['direction'] == 'long':
+                    pnl = (cur - ep) / ep * not_ - comm * 2
+                else:
+                    pnl = (ep - cur) / ep * not_ - comm * 2
+                pnl_pct = round((cur - ep) / ep * 100 * (1 if t['direction'] == 'long' else -1), 3)
+                result[str(t['id'])] = {
+                    'current_price': cur,
+                    'pnl_usd':       round(pnl, 4),
+                    'pnl_pct':       pnl_pct,
+                }
+        except Exception:
+            pass
+    return jsonify(result)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Config API — unified GET/POST for all parameters
+# Used by dashboard Settings tab and Telegram bot for bidirectional sync
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    """Return all configurable parameters as a flat JSON object."""
+    try:
+        c = load_config()
+        return jsonify({
+            # ── Sweep Detector ──
+            'sweep_multiplier':    c.get('sweep_detector', {}).get('sweep_multiplier', 0.5),
+            'volume_multiplier':   c.get('sweep_detector', {}).get('volume_multiplier', 1.5),
+            'wick_ratio':          c.get('sweep_detector', {}).get('wick_ratio', 0.3),
+            'min_sweep_pct':       c.get('sweep_detector', {}).get('min_sweep_pct', 0.1),
+            'confirmation_bars':   c.get('sweep_detector', {}).get('confirmation_bars', 3),
+            'min_body_ratio':      c.get('sweep_detector', {}).get('min_body_ratio', 0.4),
+            'lookback_bars':       c.get('sweep_detector', {}).get('lookback_bars', 10),
+            # ── Signal Engine ──
+            'min_risk_reward':     c.get('signal_engine', {}).get('min_risk_reward', 2.0),
+            'require_confluence':  c.get('signal_engine', {}).get('require_confluence', True),
+            'risk_per_trade':      c.get('signal_engine', {}).get('risk_per_trade', 0.01),
+            'stop_buffer_pct':     c.get('signal_engine', {}).get('stop_buffer_pct', 0.001),
+            'target_buffer_pct':   c.get('signal_engine', {}).get('target_buffer_pct', 0.001),
+            # ── Alerts ──
+            'min_confidence':      c.get('alerts', {}).get('telegram', {}).get('min_confidence', 0.7),
+            'alerts_enabled':      c.get('alerts', {}).get('telegram', {}).get('enabled', True),
+            # ── Data Fetch ──
+            'ohlcv_limit':         c.get('data_fetch', {}).get('ohlcv_limit', 300),
+            'atr_period':          c.get('data_fetch', {}).get('atr_period', 14),
+            'timeframes':          c.get('data_fetch', {}).get('timeframes', ['4h','1h','15m']),
+            # ── Volume Filter ──
+            'volume_filter_enabled':   c.get('volume_filter', {}).get('enabled', True),
+            'min_24h_volume_usd':      c.get('volume_filter', {}).get('min_24h_volume_usd', 1000000.0),
+            # ── Paper Trading ──
+            'fixed_notional_usd':  c.get('paper_trading', {}).get('fixed_notional_usd', 20.0),
+            'margin_leverage':     c.get('paper_trading', {}).get('margin_leverage', 20.0),
+            'commission_per_trade':c.get('paper_trading', {}).get('commission_per_trade', 0.001),
+            'position_sizing':     c.get('paper_trading', {}).get('position_sizing', 'fixed_notional'),
+            # ── Cron / Scan ──
+            'scan_interval_minutes': c.get('cron', {}).get('scan_interval_minutes', 5),
+            # ── Signal Execution ──
+            'signal_execution_mode':    c.get('signal_execution', {}).get('mode', 'pending'),
+            'auto_execute':             c.get('signal_execution', {}).get('auto_execute', False),
+            'entry_tolerance_pct':      c.get('signal_execution', {}).get('entry_tolerance_pct', 0.3),
+            # ── Liquidity Mapper ──
+            'equal_touch_tolerance':    c.get('liquidity_mapper', {}).get('equal_touch_tolerance', 0.001),
+            'swing_lookback':           c.get('liquidity_mapper', {}).get('swing_lookback', 5),
+            'round_tolerance':          c.get('liquidity_mapper', {}).get('round_tolerance', 0.005),
+            'min_swing_strength':       c.get('liquidity_mapper', {}).get('min_swing_strength', 2),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/config', methods=['POST'])
+def update_config():
+    """
+    Update one or more config parameters from dashboard or Telegram bot.
+    Body: { "param_name": value, ... }
+    Supports dot-notation keys OR the flat keys returned by GET /api/config.
+    """
+    from core.config_manager import config_mgr
+    data = request.get_json() or {}
+    if not data:
+        return jsonify({'error': 'no data'}), 400
+
+    # Map flat keys → yaml dot-paths
+    KEY_MAP = {
+        'sweep_multiplier':       'sweep_detector.sweep_multiplier',
+        'volume_multiplier':      'sweep_detector.volume_multiplier',
+        'wick_ratio':             'sweep_detector.wick_ratio',
+        'min_sweep_pct':          'sweep_detector.min_sweep_pct',
+        'confirmation_bars':      'sweep_detector.confirmation_bars',
+        'min_body_ratio':         'sweep_detector.min_body_ratio',
+        'lookback_bars':          'sweep_detector.lookback_bars',
+        'min_risk_reward':        'signal_engine.min_risk_reward',
+        'require_confluence':     'signal_engine.require_confluence',
+        'risk_per_trade':         'signal_engine.risk_per_trade',
+        'stop_buffer_pct':        'signal_engine.stop_buffer_pct',
+        'target_buffer_pct':      'signal_engine.target_buffer_pct',
+        'min_confidence':         'alerts.telegram.min_confidence',
+        'alerts_enabled':         'alerts.telegram.enabled',
+        'ohlcv_limit':            'data_fetch.ohlcv_limit',
+        'atr_period':             'data_fetch.atr_period',
+        'timeframes':             'data_fetch.timeframes',
+        'volume_filter_enabled':  'volume_filter.enabled',
+        'min_24h_volume_usd':     'volume_filter.min_24h_volume_usd',
+        'fixed_notional_usd':     'paper_trading.fixed_notional_usd',
+        'margin_leverage':        'paper_trading.margin_leverage',
+        'commission_per_trade':   'paper_trading.commission_per_trade',
+        'position_sizing':        'paper_trading.position_sizing',
+        'scan_interval_minutes':  'cron.scan_interval_minutes',
+        'signal_execution_mode':  'signal_execution.mode',
+        'auto_execute':           'signal_execution.auto_execute',
+        'entry_tolerance_pct':    'signal_execution.entry_tolerance_pct',
+        'equal_touch_tolerance':  'liquidity_mapper.equal_touch_tolerance',
+        'swing_lookback':         'liquidity_mapper.swing_lookback',
+        'round_tolerance':        'liquidity_mapper.round_tolerance',
+        'min_swing_strength':     'liquidity_mapper.min_swing_strength',
+    }
+
+    updated = {}
+    errors  = {}
+    for key, value in data.items():
+        dot_path = KEY_MAP.get(key, key)  # fall back to raw dot-path if not in map
+        try:
+            config_mgr.set(dot_path, value)
+            updated[key] = value
+        except Exception as e:
+            errors[key] = str(e)
+
+    # Reload config_mgr so GET /api/config reflects changes immediately
+    try:
+        config_mgr._config = config_mgr.load()
+    except Exception:
+        pass
+
+    result = {'status': 'ok', 'updated': updated}
+    if errors:
+        result['errors'] = errors
+    return jsonify(result)
 
 
 if __name__ == '__main__':

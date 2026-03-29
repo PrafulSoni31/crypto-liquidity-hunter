@@ -21,6 +21,7 @@ from core.sweep_detector import SweepDetector
 from core.signal_engine import SignalEngine
 from core.backtester import Backtester
 from core.auto_trader import AutoTrader
+from core.trade_executor import TradeExecutor
 from alerts.telegram import AlertDispatcher
 from data.store import DataStore
 
@@ -93,9 +94,16 @@ def cmd_scan(args):
             commission_pct=paper_cfg.get('commission_per_trade', 0.001)
         )
         latest_price = df.iloc[-1]['close']
+        tf_max_age = {'15m': 4, '1h': 12, '4h': 24, '1d': 72}
+        max_sweep_age = tf_max_age.get(tf, 6)
         signals = []
-        for sweep in sweeps[-5:]:  # last 5 sweeps
-            signal = engine.generate_signal(sweep, zones, latest_price, capital=args.capital or 10000, pair=pair)
+        for sweep in sweeps[-10:]:  # check last 10 but age-filtered
+            signal = engine.generate_signal(
+                sweep, zones, latest_price,
+                capital=args.capital or 10000,
+                pair=pair,
+                max_sweep_age_hours=max_sweep_age
+            )
             if signal:
                 signals.append(signal)
 
@@ -281,132 +289,192 @@ def cmd_scan_all(args):
 
     # Initialize data store for trade tracking
     store = DataStore()
+    scan_start = datetime.utcnow()   # for duration tracking
     # Track latest prices for open trade exit checks
     latest_prices = {}
 
     dispatcher = AlertDispatcher(config['alerts'])
     all_signals = []
 
-    # Auto-trade setup (if enabled)
+    # Auto-trade setup — load active account from config
     trader = None
+    trade_executor = None
     open_positions = {}  # pair -> dict of order ids
-    if args.auto_trade:
-        trading_cfg = config.get('trading', {})
-        if trading_cfg.get('enabled', False):
-            # Get API keys from env
-            api_key = os.getenv(trading_cfg.get('api_key_env', 'BINANCE_TESTNET_API_KEY'))
-            api_secret = os.getenv(trading_cfg.get('api_secret_env', 'BINANCE_TESTNET_SECRET'))
-            trader = AutoTrader(
-                exchange_id=trading_cfg.get('exchange', 'binance'),
-                testnet=trading_cfg.get('testnet', True),
-                config={'apiKey': api_key, 'secret': api_secret}
-            )
-            trader.load_markets()
-            logger.info("Auto-trader initialized on testnet")
-        else:
-            logger.warning("Auto-trade requested but trading.enabled is false in config")
-            args.auto_trade = False
-            trader = None
+    active_account_id = config.get('active_account_id', None)
+    exec_cfg   = config.get('signal_execution', {})
+    exec_mode  = exec_cfg.get('mode', 'pending')          # 'pending' or 'immediate'
+    entry_tol  = float(exec_cfg.get('entry_tolerance_pct', 0.3)) / 100
+    auto_exec  = exec_cfg.get('auto_execute', True)
+
+    if active_account_id:
+        try:
+            trade_executor = TradeExecutor(account_id=active_account_id)
+            acct = store.get_account(active_account_id)
+            acct_name = acct['name'] if acct else f'#{active_account_id}'
+            acct_mode = acct.get('mode', 'paper') if acct else 'paper'
+            logger.info(f"Auto-executor: account '{acct_name}' mode={acct_mode} exec={exec_mode}")
+        except Exception as e:
+            logger.warning(f"Could not load active account {active_account_id}: {e}")
+            trade_executor = None
+
+    # Expire old pending signals at start of each scan run
+    expired_count = store.expire_old_pending_signals()
+    if expired_count > 0:
+        logger.info(f"Expired {expired_count} pending signals")
+
+    # Build shared components (reuse per pair to save memory)
+    sig_cfg   = config['signal_engine']
+    paper_cfg = config.get('paper_trading', {})
+    engine = SignalEngine(
+        risk_per_trade=sig_cfg['risk_per_trade'],
+        retracement_levels=sig_cfg['retracement_levels'],
+        stop_buffer_pct=sig_cfg['stop_buffer_pct'],
+        min_risk_reward=sig_cfg['min_risk_reward'],
+        position_sizing=paper_cfg.get('position_sizing', 'risk_percent'),
+        fixed_notional_usd=paper_cfg.get('fixed_notional_usd', 50.0),
+        margin_leverage=paper_cfg.get('margin_leverage', 1.0),
+        commission_pct=paper_cfg.get('commission_per_trade', 0.001),
+        require_confluence=config.get('signal_engine', {}).get('require_confluence', True)
+    )
+    mapper = LiquidityMapper(
+        equal_touch_tolerance=config['liquidity_mapper']['equal_touch_tolerance'],
+        swing_lookback=config['liquidity_mapper']['swing_lookback'],
+        round_tolerance=config['liquidity_mapper']['round_tolerance'],
+        min_swing_strength=config['liquidity_mapper']['min_swing_strength']
+    )
+    detector = SweepDetector(
+        sweep_multiplier=config['sweep_detector']['sweep_multiplier'],
+        volume_multiplier=config['sweep_detector'].get('volume_multiplier', 2.5),
+        confirmation_bars=config['sweep_detector'].get('confirmation_bars', 5),
+        wick_ratio=config['sweep_detector'].get('wick_ratio', 0.5),
+        min_sweep_pct=config['sweep_detector']['min_sweep_pct'],
+        min_body_ratio=config['sweep_detector'].get('min_body_ratio', 0.4)
+    )
+
+    # Timeframe-aware sweep age limits
+    tf_max_age = {'15m': 4, '1h': 12, '4h': 24, '1d': 72}
 
     for pair in pairs:
         exchange_str, symbol = pair.split(':', 1) if ':' in pair else ('binance', pair)
         for tf in timeframes:
             try:
                 fetcher = MarketDataFetcher(exchange_str)
-                df = fetcher.fetch_ohlcv(symbol, timeframe=tf, limit=config['data_fetch']['ohlcv_limit'])
+                df  = fetcher.fetch_ohlcv(symbol, timeframe=tf, limit=config['data_fetch']['ohlcv_limit'])
                 atr = fetcher.calculate_atr(df, period=config['data_fetch']['atr_period'])
 
-                mapper = LiquidityMapper(
-                    equal_touch_tolerance=config['liquidity_mapper']['equal_touch_tolerance'],
-                    swing_lookback=config['liquidity_mapper']['swing_lookback'],
-                    round_tolerance=config['liquidity_mapper']['round_tolerance'],
-                    min_swing_strength=config['liquidity_mapper']['min_swing_strength']
-                )
-                zones = mapper.map_liquidity(df)
-
-                detector = SweepDetector(
-                    sweep_multiplier=config['sweep_detector']['sweep_multiplier'],
-                    volume_multiplier=config['sweep_detector']['volume_multiplier'],
-                    confirmation_bars=config['sweep_detector']['confirmation_bars'],
-                    wick_ratio=config['sweep_detector']['wick_ratio'],
-                    min_sweep_pct=config['sweep_detector']['min_sweep_pct']
-                )
+                zones  = mapper.map_liquidity(df)
                 sweeps = detector.detect_sweeps(df, atr, zones)
 
-                sig_cfg = config['signal_engine']
-                paper_cfg = config.get('paper_trading', {})
-                engine = SignalEngine(
-                    risk_per_trade=sig_cfg['risk_per_trade'],
-                    retracement_levels=sig_cfg['retracement_levels'],
-                    stop_buffer_pct=sig_cfg['stop_buffer_pct'],
-                    min_risk_reward=sig_cfg['min_risk_reward'],
-                    position_sizing=paper_cfg.get('position_sizing', 'risk_percent'),
-                    fixed_notional_usd=paper_cfg.get('fixed_notional_usd', 50.0),
-                    margin_leverage=paper_cfg.get('margin_leverage', 1.0),
-                    commission_pct=paper_cfg.get('commission_per_trade', 0.001)
-                )
+                # Phase 2: Order Blocks + FVGs + HTF bias
+                obs  = detector.detect_order_blocks(df)
+                fvgs = detector.detect_fvgs(df)
+
+                # HTF bias: fetch 4h data for trend context (only for sub-4h timeframes)
+                htf_bias = 'neutral'
+                if tf in ('15m', '1h'):
+                    try:
+                        df_htf   = fetcher.fetch_ohlcv(symbol, timeframe='4h', limit=100)
+                        htf_bias = detector.get_htf_bias(df_htf)
+                    except Exception:
+                        htf_bias = 'neutral'
+
                 latest_price = df.iloc[-1]['close']
                 latest_prices[symbol] = latest_price
 
-                for sweep in sweeps[-5:]:
-                    signal = engine.generate_signal(sweep, zones, latest_price, capital=args.capital or 10000, pair=pair)
+                max_sweep_age = tf_max_age.get(tf, 6)
+
+                # Only process recent sweeps (last 10, age-filtered inside signal engine)
+                for sweep in sweeps[-10:]:
+                    signal = engine.generate_signal(
+                        sweep, zones, latest_price,
+                        capital=args.capital or 10000,
+                        pair=pair,
+                        max_sweep_age_hours=max_sweep_age,
+                        htf_bias=htf_bias,
+                        order_blocks=obs,
+                        fvgs=fvgs
+                    )
                     if signal:
-                        # Save signal to DB and create open trade (paper tracking)
+                        # Save signal to DB
                         signal_id = store.save_signal(pair, tf, signal)
-                        store.create_open_trade(
-                            pair=pair,
-                            timeframe=tf,
-                            direction=signal.direction,
-                            entry_price=signal.entry_price,
-                            sl=signal.stop_loss,
-                            tp=signal.target,
-                            entry_time=datetime.utcnow(),
-                            notional_usd=signal.notional_usd,
-                            commission_usd=signal.commission_estimated_usd,
-                            signal_id=signal_id,
-                            notes='Auto-paper trade'
-                        )
+
+                        # Timeframe expiry map
+                        tf_expires = {'15m': 2, '1h': 8, '4h': 24, '1d': 72}
+                        expires_h  = tf_expires.get(tf, 4)
+
+                        if exec_mode == 'immediate':
+                            # Legacy: execute at market immediately
+                            max_concurrent = config.get('backtester', {}).get('max_concurrent_trades', 3)
+                            open_trades_count = len(store.get_open_trades())
+                            if trade_executor and open_trades_count < max_concurrent:
+                                try:
+                                    result = trade_executor.execute_signal(
+                                        {'direction': signal.direction, 'entry_price': 0,  # 0=market
+                                         'stop_loss': signal.stop_loss, 'target': signal.target,
+                                         'timeframe': tf, 'confidence': signal.confidence},
+                                        pair, notional_usd=signal.notional_usd, signal_id=signal_id
+                                    )
+                                    if 'error' not in result:
+                                        logger.info(f"Immediate [{result.get('mode','?').upper()}] {pair} {signal.direction} trade_id={result.get('trade_id')}")
+                                except Exception as e:
+                                    logger.error(f"Immediate execute error {pair}: {e}")
+                        else:
+                            # PENDING mode: wait for price to reach fib entry
+                            pending_id = store.create_pending_signal(
+                                pair=pair, timeframe=tf, direction=signal.direction,
+                                entry_price=signal.entry_price, stop_loss=signal.stop_loss,
+                                target=signal.target, confidence=signal.confidence,
+                                notional_usd=signal.notional_usd, signal_id=signal_id,
+                                account_id=active_account_id, expires_hours=expires_h
+                            )
+                            logger.info(f"Pending signal #{pending_id}: {pair} {signal.direction} "
+                                        f"entry={signal.entry_price:.6g} current={latest_price:.6g} "
+                                        f"dist={abs(latest_price-signal.entry_price)/latest_price*100:.2f}% "
+                                        f"expires={expires_h}h")
+
                         signal_record = {
-                            'pair': pair,
+                            'pair':      pair,
                             'timeframe': tf,
-                            'timestamp': sweep.timestamp,
-                            'signal': signal
+                            'timestamp': signal.timestamp,
+                            'signal':    signal
                         }
                         all_signals.append(signal_record)
                         # Send alert immediately
                         if args.alert:
                             dispatcher.send_signal(signal)
-                        # Auto-trade execution
-                        if trader and len(open_positions) < config.get('trading', {}).get('max_concurrent', 3):
-                            try:
-                                # Get Futures symbol ID
-                                market = trader.exchange.market(pair)
-                                symbol_id = market['id']
-                                side = 'buy' if signal.direction == 'long' else 'sell'
-                                entry_size = signal.position_size
 
-                                # Market order for immediate fill
-                                entry_order = trader.exchange.create_market_order(
-                                    symbol_id, side, entry_size, params={'reduceOnly': False}
+                # ── Check pending signals for this pair ──────────────────────
+                if auto_exec and trade_executor:
+                    pending = store.get_pending_signals(status='pending')
+                    pair_pending = [p for p in pending if p['pair'] == pair]
+                    for ps in pair_pending:
+                        ep  = float(ps['entry_price'])
+                        cur = latest_prices.get(sym, 0) or latest_price
+                        if cur <= 0 or ep <= 0:
+                            continue
+                        dist = abs(cur - ep) / ep
+                        if dist <= entry_tol:
+                            max_concurrent = config.get('backtester', {}).get('max_concurrent_trades', 3)
+                            open_trades_count = len(store.get_open_trades())
+                            if open_trades_count >= max_concurrent:
+                                continue
+                            try:
+                                result = trade_executor.execute_signal(
+                                    {'direction': ps['direction'], 'entry_price': 0,
+                                     'stop_loss': ps['stop_loss'], 'target': ps['target'],
+                                     'timeframe': ps['timeframe'], 'confidence': ps['confidence']},
+                                    pair, notional_usd=ps['notional_usd'],
+                                    signal_id=ps.get('signal_id')
                                 )
-                                # Bracket orders
-                                exit_side = 'sell' if signal.direction == 'long' else 'buy'
-                                stop_order = trader.exchange.create_order(
-                                    symbol_id, 'stop_market', exit_side, entry_size, None,
-                                    params={'stopPrice': signal.stop_loss, 'reduceOnly': True, 'workingType': 'MARK_PRICE'}
-                                )
-                                tp_order = trader.exchange.create_order(
-                                    symbol_id, 'take_profit_market', exit_side, entry_size, None,
-                                    params={'stopPrice': signal.target, 'reduceOnly': True, 'workingType': 'MARK_PRICE'}
-                                )
-                                open_positions[pair] = {
-                                    'entry_id': entry_order['id'],
-                                    'stop_id': stop_order['id'],
-                                    'tp_id': tp_order['id']
-                                }
-                                logger.info(f"Auto-traded {pair} {signal.direction} size={entry_size} entry_id={entry_order['id']}")
+                                if 'error' not in result:
+                                    store.trigger_pending_signal(ps['id'], result.get('trade_id'))
+                                    logger.info(f"Triggered pending #{ps['id']}: {pair} {ps['direction']} "
+                                                f"@ {cur:.6g} (entry was {ep:.6g}) "
+                                                f"trade_id={result.get('trade_id')} mode={result.get('mode')}")
+                                else:
+                                    logger.error(f"Pending trigger failed #{ps['id']}: {result['error']}")
                             except Exception as e:
-                                logger.error(f"Auto-trade failed for {pair}: {e}")
+                                logger.error(f"Pending trigger error #{ps['id']}: {e}")
             except Exception as e:
                 logger.error(f"Error scanning {pair} {tf}: {e}")
                 continue
@@ -462,26 +530,104 @@ def cmd_scan_all(args):
         # Convert dataclass to dict if needed
         sig_dict = sig.__dict__ if hasattr(sig, '__dict__') else dict(sig)
         serializable_signals.append({
-            'pair': item['pair'],
-            'timeframe': item['timeframe'],
-            'timestamp': item['timestamp'].isoformat() if hasattr(item['timestamp'], 'isoformat') else item['timestamp'],
-            'direction': sig_dict['direction'],
-            'entry': sig_dict['entry_price'],
-            'sl': sig_dict['stop_loss'],
-            'tp': sig_dict['target'],
-            'rr': sig_dict['risk_reward'],
-            'confidence': sig_dict['confidence'],
-            'notional_usd': sig_dict.get('notional_usd', 0),
-            'margin_required_usd': sig_dict.get('margin_required_usd', 0),
+            'pair':                    item['pair'],
+            'timeframe':               item['timeframe'],
+            'timestamp':               (item['timestamp'].isoformat()
+                                        if hasattr(item['timestamp'], 'isoformat')
+                                        else item['timestamp']),
+            'direction':               sig_dict['direction'],
+            'entry':                   sig_dict['entry_price'],
+            'sl':                      sig_dict['stop_loss'],
+            'tp':                      sig_dict['target'],
+            'rr':                      sig_dict['risk_reward'],
+            'confidence':              sig_dict['confidence'],
+            'notional_usd':            sig_dict.get('notional_usd', 0),
+            'margin_required_usd':     sig_dict.get('margin_required_usd', 0),
             'commission_estimated_usd': sig_dict.get('commission_estimated_usd', 0),
-            'zone_strength': sig_dict.get('zone_strength', 0)
+            'zone_strength':           sig_dict.get('zone_strength', 0),
+            'htf_bias':                sig_dict.get('htf_bias', 'neutral'),
+            'ob_confluence':           sig_dict.get('ob_confluence', False),
+            'fvg_confluence':          sig_dict.get('fvg_confluence', False),
         })
     store.save_latest_signals(serializable_signals)
 
-    # Print summary
+    # ── Scan duration ──────────────────────────────────────────────────────────
+    scan_end     = datetime.utcnow()
+    scan_dur_sec = int((scan_end - scan_start).total_seconds()) if 'scan_start' in dir() else 0
+
+    # ── Collect open trades + unrealized PnL for summary ──────────────────────
+    open_trades_all = store.get_open_trades()
+    open_pnl_usd    = 0.0
+    for ot in open_trades_all:
+        sym = ot['pair'].split(':', 1)[1] if ':' in ot['pair'] else ot['pair']
+        cur = latest_prices.get(sym, 0)
+        if cur > 0 and ot.get('entry_price', 0) > 0:
+            ep  = float(ot['entry_price'])
+            not_= float(ot.get('notional_usd', 0))
+            com = float(ot.get('commission_usd', 0))
+            if ot['direction'] == 'long':
+                open_pnl_usd += (cur - ep) / ep * not_ - com * 2
+            else:
+                open_pnl_usd += (ep - cur) / ep * not_ - com * 2
+
+    # ── Count confirmed sweeps this run ────────────────────────────────────────
+    sweeps_confirmed = 0
+    try:
+        last_log = sorted([f for f in __import__('os').listdir('logs') if f.startswith('cron_')], reverse=True)
+        if last_log:
+            with open(f'logs/{last_log[0]}') as lf:
+                sweeps_confirmed = lf.read().count('confirmed (vol')
+    except Exception:
+        pass
+
+    # ── Pending signals count ──────────────────────────────────────────────────
+    pending_count = len(store.get_pending_signals(status='pending'))
+
+    # ── Active account name ────────────────────────────────────────────────────
+    active_acct_name = '—'
+    if active_account_id:
+        acct_info = store.get_account(active_account_id)
+        if acct_info:
+            active_acct_name = f"{acct_info['name']} ({acct_info['mode']})"
+
+    # ── Build top signals list for summary ─────────────────────────────────────
+    top_sigs = []
+    for item in all_signals[-5:]:
+        sig = item['signal']
+        top_sigs.append({
+            'pair':        item['pair'],
+            'timeframe':   item['timeframe'],
+            'direction':   sig.direction,
+            'entry_price': sig.entry_price,
+            'risk_reward': sig.risk_reward,
+            'confidence':  sig.confidence,
+        })
+
+    # ── Send Telegram scan summary ─────────────────────────────────────────────
+    if args.alert:
+        summary = {
+            'pairs_scanned':  len(pairs),
+            'timeframes':     timeframes,
+            'signals_count':  len(all_signals),
+            'pending_count':  pending_count,
+            'open_trades':    len(open_trades_all),
+            'sweeps_found':   sweeps_confirmed,
+            'open_pnl_usd':   round(open_pnl_usd, 2),
+            'active_account': active_acct_name,
+            'duration_sec':   scan_dur_sec,
+            'top_signals':    top_sigs,
+        }
+        # Send summary: always if signals found, otherwise every 30 min (every 6th scan at 5-min intervals)
+        import time as _time
+        _now_min = int(_time.time() // 60)
+        _send_summary = len(all_signals) > 0 or (_now_min % 30 == 0)
+        if _send_summary:
+            dispatcher.send_scan_summary(summary)
+
+    # ── Print log summary ──────────────────────────────────────────────────────
     print(f"\n=== SCAN ALL: {len(pairs)} pairs, {len(timeframes)} timeframes ===")
     print(f"Total signals generated: {len(all_signals)}")
-    for item in all_signals[-10:]:  # last 10
+    for item in all_signals[-10:]:
         sig = item['signal']
         print(f"  {item['pair']} {item['timeframe']} {sig.direction.upper()} Entry={sig.entry_price:.2f} SL={sig.stop_loss:.2f} TP={sig.target:.2f} R:R={sig.risk_reward:.2f}")
 

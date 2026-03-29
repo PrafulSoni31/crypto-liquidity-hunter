@@ -20,7 +20,7 @@ data_fetch:
   - 15m
 liquidity_mapper:
   equal_touch_tolerance: 0.001
-  min_swing_strength: 3
+  min_swing_strength: 2
   round_tolerance: 0.005
   swing_lookback: 5
 pairs:
@@ -447,6 +447,7 @@ pairs:
 - binance:WLFI/USDT
 - binance:WOO/USDT
 - binance:XAI/USDT
+- binance:XAUT/USDT
 - binance:XEC/USDT
 - binance:XLM/USDT
 - binance:XNO/USDT
@@ -472,11 +473,11 @@ pairs:
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
 paper_trading:
   commission_per_trade: 0.001
-  fixed_notional_usd: 100.0
+  fixed_notional_usd: 20.0
   margin_leverage: 20.0
   position_sizing: fixed_notional
 signal_engine:
-  min_risk_reward: 3.0
+  min_risk_reward: 2.5
   require_confluence: true
   retracement_levels:
   - 0.5
@@ -486,13 +487,13 @@ signal_engine:
   stop_buffer_pct: 0.001
   target_buffer_pct: 0.001
 sweep_detector:
-  confirmation_bars: 5
+  confirmation_bars: 3
   lookback_bars: 10
   min_body_ratio: 0.4
-  min_sweep_pct: 0.2
+  min_sweep_pct: 0.1
   sweep_multiplier: 0.5
-  volume_multiplier: 2.5
-  wick_ratio: 0.5
+  volume_multiplier: 1.5
+  wick_ratio: 0.3
 trading:
   api_key_env: BINANCE_TESTNET_API_KEY
   api_secret_env: BINANCE_TESTNET_SECRET
@@ -503,9 +504,8 @@ trading:
 volume_filter:
   enabled: true
   min_24h_volume_usd: 1000000.0
-binance_connection:
-  api_key: ''
-  api_secret: ''
-  testnet: true
-  mode: paper
-  enabled: false
+active_account_id: 2
+signal_execution:
+  mode: pending
+  entry_tolerance_pct: 0.3
+  auto_execute: true

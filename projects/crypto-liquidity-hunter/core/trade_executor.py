@@ -32,34 +32,59 @@ class TradeExecutor:
     """
     Executes signals via BinanceConnector.
     Persists trades to DataStore.
-    Supports paper and live modes.
+    Supports paper, demo, testnet, and live modes.
+    Can be initialised with a specific account_id for multi-account support.
     """
 
-    def __init__(self, connector: BinanceConnector = None):
+    def __init__(self, connector: BinanceConnector = None, account_id: int = None):
         cfg = _load_config()
-        bc_cfg = cfg.get('binance_connection', {})
         paper_cfg = cfg.get('paper_trading', {})
 
-        self.mode         = bc_cfg.get('mode', 'paper')
+        self.account_id   = account_id
         self.notional_usd = float(paper_cfg.get('fixed_notional_usd', 100.0))
         self.leverage     = float(paper_cfg.get('margin_leverage', 20.0))
         self.commission   = float(paper_cfg.get('commission_per_trade', 0.001))
-
-        if connector is None:
-            self.connector = BinanceConnector(
-                api_key    = bc_cfg.get('api_key', ''),
-                api_secret = bc_cfg.get('api_secret', ''),
-                testnet    = bc_cfg.get('testnet', True),
-                mode       = self.mode,
-            )
-            self.connector.connect()
-        else:
-            self.connector = connector
 
         self.store = DataStore(
             db_path    = '/root/.openclaw/workspace/projects/crypto-liquidity-hunter/data/store.db',
             cache_path = '/root/.openclaw/workspace/projects/crypto-liquidity-hunter/data/latest_signals.json',
         )
+
+        if connector is not None:
+            self.connector = connector
+            self.mode = connector.mode
+        elif account_id is not None:
+            # Load from accounts table
+            acct = self.store.get_account(account_id)
+            if acct:
+                self.mode = acct.get('mode', 'paper')
+                self.connector = BinanceConnector(
+                    api_key     = acct.get('api_key', ''),
+                    api_secret  = acct.get('api_secret', ''),
+                    testnet     = bool(acct.get('testnet', 0)),
+                    mode        = self.mode,
+                    is_demo     = bool(acct.get('is_demo', 0)),
+                    environment = acct.get('environment', 'mainnet'),
+                )
+                self.connector.connect()
+            else:
+                # Account not found — fall back to paper
+                self.mode = 'paper'
+                self.connector = BinanceConnector(mode='paper')
+                self.connector.connect()
+        else:
+            # Legacy: load from pairs.yaml binance_connection
+            bc_cfg = cfg.get('binance_connection', {})
+            self.mode = bc_cfg.get('mode', 'paper')
+            self.connector = BinanceConnector(
+                api_key     = bc_cfg.get('api_key', ''),
+                api_secret  = bc_cfg.get('api_secret', ''),
+                testnet     = bc_cfg.get('testnet', True),
+                mode        = self.mode,
+                is_demo     = bc_cfg.get('is_demo', False),
+                environment = bc_cfg.get('environment', 'mainnet'),
+            )
+            self.connector.connect()
 
     # ─── Execute Signal ────────────────────────────────────────────────────────
 
@@ -77,8 +102,28 @@ class TradeExecutor:
         target      = float(signal_dict.get('target', 0))
         timeframe   = signal_dict.get('timeframe', '1h')
 
+        # entry_price=0 means "market order" — fetch current price for record keeping
         if entry_price <= 0:
-            return {'error': 'Invalid entry price'}
+            try:
+                if self.connector.exchange:
+                    ticker = self.connector.exchange.fetch_ticker(symbol)
+                    entry_price = float(ticker['last'])
+                else:
+                    # Paper fallback — use public price fetch via ccxt
+                    import ccxt as _ccxt
+                    _ex = _ccxt.binance({'enableRateLimit': True})
+                    ticker = _ex.fetch_ticker(symbol)
+                    entry_price = float(ticker['last'])
+            except Exception:
+                # Last resort — known approximate prices
+                _KNOWN_PRICES = {
+                    'BTC/USDT': 65000.0, 'ETH/USDT': 3500.0,
+                    'SOL/USDT': 150.0,   'BNB/USDT': 580.0,
+                }
+                sym_clean = symbol.replace(':USDT', '/USDT').upper()
+                entry_price = _KNOWN_PRICES.get(sym_clean, 1.0)
+                if entry_price == 1.0:
+                    return {'error': f'entry_price=0 and could not fetch current price for {symbol}'}
 
         notional = notional_usd or self.notional_usd
         lev      = leverage     or self.leverage
@@ -99,20 +144,30 @@ class TradeExecutor:
         else:
             order_result = self.connector.place_market_order(symbol, side, qty)
             if 'error' not in order_result:
+                # Use actual fill price from exchange, not user-typed price
+                actual_fill = (
+                    float(order_result.get('average') or 0) or
+                    float(order_result.get('price')   or 0) or
+                    float(order_result.get('info', {}).get('avgPrice', 0) or 0)
+                )
+                if actual_fill > 0:
+                    entry_price = actual_fill
+                    logger.info(f"Live fill price: {entry_price} (was {signal_dict.get('entry_price','?')})")
                 # Place SL/TP after entry
-                sl_tp = self.connector.set_sl_tp(symbol, direction, qty, stop_loss, target)
-                order_result['sl_tp'] = sl_tp
+                if stop_loss > 0 or target > 0:
+                    sl_tp = self.connector.set_sl_tp(symbol, direction, qty, stop_loss, target)
+                    order_result['sl_tp'] = sl_tp
 
         if 'error' in order_result:
             return {'error': order_result['error']}
 
-        # Persist to DB
+        # Persist to DB with actual fill price
         now = datetime.now(timezone.utc)
         trade_id = self.store.create_open_trade(
             pair           = pair,
             timeframe      = timeframe,
             direction      = direction,
-            entry_price    = entry_price,
+            entry_price    = entry_price,  # actual fill price
             sl             = stop_loss,
             tp             = target,
             entry_time     = now,
@@ -122,6 +177,7 @@ class TradeExecutor:
             notes          = f"mode={self.mode} order={order_result.get('id','?')}",
             mode           = self.mode,
             order_id       = str(order_result.get('id', '')),
+            account_id     = self.account_id,
         )
 
         return {
@@ -172,17 +228,47 @@ class TradeExecutor:
             pnl = (ep - exit_price) / ep * notional - commission * 2
 
         status = 'closed'
-        if exit_price >= float(trade.get('tp', 1e18)):
-            status = 'target_hit'
-        elif exit_price <= float(trade.get('sl', 0)):
-            status = 'stop_loss'
+        try:
+            tp_val = float(trade.get('tp') or 1e18)
+            sl_val = float(trade.get('sl') or 0)
+            if exit_price >= tp_val and tp_val < 1e17:
+                status = 'target_hit'
+            elif exit_price <= sl_val and sl_val > 0:
+                status = 'stop_loss'
+        except (TypeError, ValueError):
+            pass  # keep status = 'closed'
 
-        # Close in exchange (if live)
-        if self.mode != 'paper' and self.connector.exchange:
-            sym   = symbol.split(':', 1)[1] if ':' in symbol else symbol
-            qty   = self.connector.calc_qty(sym, notional, exit_price, 1.0)
+        # Close in exchange (if live/demo) — place reduceOnly closing order
+        if self.mode not in ('paper',) and self.connector.exchange:
+            sym        = symbol.split(':', 1)[1] if ':' in symbol else symbol
             close_side = 'sell' if direction == 'long' else 'buy'
-            self.connector.place_market_order(sym, close_side, qty)
+            try:
+                # Use the recorded qty from order_id if available, else calc from notional
+                order_id = trade.get('order_id', '')
+                qty = self.connector.calc_qty(sym, notional, exit_price or ep, 1.0)
+                # Place reduceOnly closing market order
+                close_order = self.connector.exchange.create_order(
+                    sym, 'market', close_side, qty,
+                    params={'reduceOnly': True}
+                )
+                # Use actual fill price
+                actual_exit = (
+                    float(close_order.get('average') or 0) or
+                    float(close_order.get('price')   or 0) or
+                    exit_price
+                )
+                if actual_exit > 0:
+                    exit_price = actual_exit
+                logger.info(f"Close order placed: {close_side} {qty} {sym} @ {exit_price}")
+            except Exception as e:
+                logger.error(f"Exchange close order failed for trade {trade_id}: {e}")
+                # Still close in DB even if exchange order fails
+
+        # Recalculate PnL with actual exit price
+        if direction == 'long':
+            pnl = (exit_price - ep) / ep * notional - commission * 2
+        else:
+            pnl = (ep - exit_price) / ep * notional - commission * 2
 
         self.store.close_trade(
             trade_id=trade_id,
@@ -198,16 +284,19 @@ class TradeExecutor:
 
     @staticmethod
     def save_connection_config(api_key: str, api_secret: str,
-                               testnet: bool, mode: str) -> bool:
-        """Persist Binance connection settings to pairs.yaml."""
+                               testnet: bool, mode: str,
+                               is_demo: bool = False, environment: str = 'mainnet') -> bool:
+        """Persist Binance connection settings to pairs.yaml (legacy single-account)."""
         try:
             cfg = _load_config()
             cfg['binance_connection'] = {
-                'api_key':    api_key,
-                'api_secret': api_secret,
-                'testnet':    testnet,
-                'mode':       mode,
-                'enabled':    True,
+                'api_key':     api_key,
+                'api_secret':  api_secret,
+                'testnet':     testnet,
+                'mode':        mode,
+                'is_demo':     is_demo,
+                'environment': environment,
+                'enabled':     True,
             }
             _save_config(cfg)
             return True

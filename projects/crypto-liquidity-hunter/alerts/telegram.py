@@ -38,26 +38,25 @@ def _has_open_trade(pair: str, direction: str, entry_price: float, tolerance: fl
     return False
 
 
-def _last_trade_resolved(pair: str, direction: str) -> bool:
-    """Return True if the most recent CLOSED trade for pair+direction already hit TP or SL.
-    This means we already fired an alert for this setup — skip until a fresh sweep comes in.
+def _last_trade_resolved(pair: str, direction: str, entry_price: float, tolerance: float = 0.005) -> bool:
+    """Return True if the most recent CLOSED trade for same pair+direction+~entry already
+    hit TP or SL AND no new open trade with a different entry has been created since.
+    This prevents re-alerting on the same price level that was already resolved.
     """
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            row = conn.execute(
-                """SELECT status FROM trades
+            # Most recent closed trade at approximately this entry price
+            rows = conn.execute(
+                """SELECT entry_price, status FROM trades
                    WHERE pair=? AND direction=? AND status!='open'
-                   ORDER BY exit_time DESC LIMIT 1""",
+                   ORDER BY exit_time DESC LIMIT 10""",
                 (pair, direction)
-            ).fetchone()
-        if row and row[0] in ('target_hit', 'stop_loss'):
-            # Check whether a NEW open trade has been created since then
-            with sqlite3.connect(DB_PATH) as conn:
-                new = conn.execute(
-                    "SELECT id FROM trades WHERE pair=? AND direction=? AND status='open' LIMIT 1",
-                    (pair, direction)
-                ).fetchone()
-            return new is None   # True = no new open trade → skip alert
+            ).fetchall()
+        for (ep, status) in rows:
+            if abs(ep - entry_price) / max(entry_price, 1e-9) < tolerance:
+                if status in ('target_hit', 'stop_loss'):
+                    # This exact price level was already resolved — skip
+                    return True
     except Exception as e:
         logger.debug(f"Resolved check error: {e}")
     return False
@@ -105,16 +104,34 @@ class TelegramAlerter:
         conf_pct   = int(signal.confidence * 100)
         conf_bar   = '█' * (conf_pct // 10) + '░' * (10 - conf_pct // 10)
 
+        # Phase 2: confluence badges
+        htf_bias    = getattr(signal, 'htf_bias', 'neutral')
+        ob_conf     = getattr(signal, 'ob_confluence', False)
+        fvg_conf    = getattr(signal, 'fvg_confluence', False)
+
+        htf_emoji = {'bullish': '📈', 'bearish': '📉', 'neutral': '➖'}.get(htf_bias, '➖')
+        ob_badge  = '✅ OB' if ob_conf  else '—'
+        fvg_badge = '✅ FVG' if fvg_conf else '—'
+
+        # Confluence line (only show if at least one active)
+        confluence_line = ''
+        if ob_conf or fvg_conf:
+            badges = ' + '.join(filter(lambda x: x != '—', [ob_badge, fvg_badge]))
+            confluence_line = f"<b>Confluence:</b>  {badges}\n"
+
         return (
             f"<b>🎯 LIQUIDITY SIGNAL  {direction_emoji}</b>\n"
             f"{'─' * 28}\n"
             f"<b>Pair:</b>       {pair_clean}\n"
+            f"<b>Timeframe:</b>  {getattr(signal, 'timeframe', '—')}\n"
             f"<b>Entry:</b>      ${_fmt(signal.entry_price)}\n"
             f"<b>Stop Loss:</b>  ${_fmt(signal.stop_loss)}\n"
             f"<b>Target:</b>     ${_fmt(signal.target)}\n"
             f"<b>R:R:</b>        {signal.risk_reward:.2f}\n"
             f"<b>Notional:</b>   ${signal.notional_usd:.0f} (${signal.margin_required_usd:.0f} margin)\n"
             f"<b>Confidence:</b> {conf_bar} {conf_pct}%\n"
+            f"<b>HTF Bias:</b>   {htf_emoji} {htf_bias.upper()}\n"
+            f"{confluence_line}"
             f"{'─' * 28}\n"
             f"<i>⚠️ Paper trading only. Manage risk.</i>"
         )
@@ -150,9 +167,9 @@ class AlertDispatcher:
         if _has_open_trade(signal.pair, signal.direction, signal.entry_price):
             return False, "open trade already exists for this signal"
 
-        # 3. Skip if last trade for this setup was already resolved (TP or SL)
-        if _last_trade_resolved(signal.pair, signal.direction):
-            return False, "last trade for pair+direction already resolved — waiting for fresh sweep"
+        # 3. Skip if this exact price level was already resolved (TP or SL)
+        if _last_trade_resolved(signal.pair, signal.direction, signal.entry_price):
+            return False, "this entry level already resolved (TP/SL hit) — waiting for fresh sweep"
 
         return True, "ok"
 
@@ -177,3 +194,70 @@ class AlertDispatcher:
         if self.telegram:
             txt = f"<b>📊 BACKTEST</b>\nWin Rate: {metrics.get('win_rate')}%\nSharpe: {metrics.get('sharpe')}\nMDD: {metrics.get('max_drawdown_pct')}%"
             self.telegram.send_message(txt)
+
+    def send_scan_summary(self, summary: Dict) -> bool:
+        """Send a scan summary message after every scan-all run."""
+        if not self.telegram:
+            return False
+        try:
+            from datetime import datetime, timezone, timedelta
+            IST = timezone(timedelta(hours=5, minutes=30))
+            now_ist = datetime.now(IST).strftime('%d %b %Y  %H:%M IST')
+
+            pairs_scanned  = summary.get('pairs_scanned', 0)
+            tfs_scanned    = summary.get('timeframes', [])
+            signals_count  = summary.get('signals_count', 0)
+            pending_count  = summary.get('pending_count', 0)
+            open_trades    = summary.get('open_trades', 0)
+            sweeps_found   = summary.get('sweeps_found', 0)
+            top_signals    = summary.get('top_signals', [])   # list of dicts
+            open_pnl       = summary.get('open_pnl_usd', 0.0)
+            active_account = summary.get('active_account', '—')
+            scan_duration  = summary.get('duration_sec', 0)
+
+            # Signal section
+            if signals_count > 0:
+                sig_header = f"🎯 <b>{signals_count} NEW SIGNAL{'S' if signals_count>1 else ''} — check dashboard!</b>\n"
+                sig_lines  = ''
+                for s in top_signals[:3]:
+                    direction_emoji = '🟢' if s.get('direction') == 'long' else '🔴'
+                    sig_lines += (f"  {direction_emoji} <b>{s.get('pair','').replace('binance:','')}</b> "
+                                  f"{s.get('timeframe','')} | Entry ${_fmt(float(s.get('entry_price',0)))} "
+                                  f"| R:R {s.get('risk_reward','?')} | Conf {int(float(s.get('confidence',0))*100)}%\n")
+            else:
+                sig_header = '😴 <b>No new signals this scan</b> — market waiting for sweep\n'
+                sig_lines  = ''
+
+            # Pending orders line
+            pending_line = f"⏳ Pending orders: <b>{pending_count}</b>\n" if pending_count > 0 else ''
+
+            # Open trades PnL
+            if open_trades > 0:
+                pnl_sign  = '+' if open_pnl >= 0 else ''
+                pnl_color = '📈' if open_pnl >= 0 else '📉'
+                trade_line = f"{pnl_color} Open trades: <b>{open_trades}</b>  Unrealized PnL: <b>{pnl_sign}${open_pnl:.2f}</b>\n"
+            else:
+                trade_line = '📊 No open trades\n'
+
+            # Sweep activity
+            sweep_line = f"🌊 Sweeps confirmed: <b>{sweeps_found}</b>\n" if sweeps_found > 0 else '🌊 No sweeps confirmed this scan\n'
+
+            msg = (
+                f"<b>📡 LIQUIDITY HUNTER — SCAN REPORT</b>\n"
+                f"{'─' * 30}\n"
+                f"🕐 {now_ist}\n"
+                f"🔍 Pairs: <b>{pairs_scanned}</b>  |  TF: <b>{', '.join(tfs_scanned)}</b>  |  ⏱ {scan_duration}s\n"
+                f"👤 Account: <b>{active_account}</b>\n"
+                f"{'─' * 30}\n"
+                f"{sweep_line}"
+                f"{sig_header}"
+                f"{sig_lines}"
+                f"{pending_line}"
+                f"{'─' * 30}\n"
+                f"{trade_line}"
+                f"<i>Dashboard → http://76.13.247.112:5000</i>"
+            )
+            return self.telegram.send_message(msg)
+        except Exception as e:
+            logger.error(f"send_scan_summary error: {e}")
+            return False
