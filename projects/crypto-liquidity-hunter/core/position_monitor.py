@@ -87,17 +87,43 @@ class PositionMonitor:
         if not db_trades:
             return
 
+        # Fetch live positions from Binance (uses v2/positionRisk — works on multi-assets accounts)
+        live_positions = {}
+        if self._api_ok:
+            try:
+                pos_list = self.connector.get_positions()
+                for p in pos_list:
+                    # Index by raw_symbol (e.g. SYRUPUSDT) and ccxt symbol (SYRUP/USDT:USDT)
+                    live_positions[p.get('raw_symbol', '')] = p
+                    live_positions[p.get('symbol', '')]     = p
+            except Exception as e:
+                logger.warning(f"[Monitor] get_positions failed: {e}")
+
         # Fetch current prices from Binance public API (no auth, no IP restriction)
         symbols_binance = []
         for t in db_trades:
             sym = t['pair'].split(':', 1)[1] if ':' in t['pair'] else t['pair']
             symbols_binance.append(sym.replace('/', ''))
-
         price_map = self._fetch_public_prices(symbols_binance)
 
         for trade in db_trades:
             if trade['id'] in self._closed_trades:
                 continue
+
+            # Check if position already closed on Binance (not present in live_positions)
+            if live_positions:
+                sym     = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
+                raw_sym = sym.replace('/', '')
+                ccxt_sym = self._normalise_symbol(sym)
+                live_p  = live_positions.get(raw_sym) or live_positions.get(ccxt_sym)
+                if not live_p:
+                    # Position gone from exchange — close in DB
+                    mark = price_map.get(raw_sym, 0.0)
+                    exit_price = mark or float(trade.get('entry_price', 0))
+                    self._close_trade_now(trade, exit_price, 'closed_on_exchange', sym)
+                    continue
+
+            # Check SL/TP via price
             self._check_trade(trade, price_map)
 
         # Try to place SL/TP bracket orders if API is accessible

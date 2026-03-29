@@ -1206,6 +1206,7 @@ function subscribeWS(sym) {
     if (selectedCoin?.symbol===sym) { updateChartTop(sc||selectedCoin); drawChart(sym); }
     checkAutoClose(sym, price);
     checkTrailingStop(sym, price);
+    checkReentry(sym, price);
   };
   ws.onerror = ()=>{};
 }
@@ -1287,25 +1288,29 @@ async function openPosition(coin) {
   const c = coin;
   if (BALANCE < CFG.positionSize) { toast('Insufficient balance','error'); return; }
   try {
+    // Send only symbol/side/price/size — engine always calculates TP/SL/reentry from cfg
     const r = await fetch('/api/open', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
         symbol: c.symbol, side: 'SHORT',
         price:  c.last,   size: CFG.positionSize,
-        opts: {
-          tpPrice:   c.last * (1 - CFG.takeProfitPct / 100),
-          slPrice:   c.last * (1 + CFG.stopLossPct  / 100),
-          trailPct:  CFG.trailingStopPct || 0,
-        }
+        opts:   {}   // engine computes TP/SL/reentry internally
       })
     });
     const d = await r.json();
     if (d.error) { toast(d.error, 'error'); return; }
     subscribeWS(c.symbol);
-    toast(`SHORT ${c.symbol.replace('USDT','')} @ ${fmtP(c.last)}`,'success');
-    log('ENTRY',`SHORT ${c.symbol.replace('USDT','')}`,
-      `Entry <strong>${fmtP(c.last)}</strong> · TP ${fmtP(c.last*(1-CFG.takeProfitPct/100))} · SL ${fmtP(c.last*(1+CFG.stopLossPct/100))} · ${MODE.toUpperCase()} · <em>Saved to backend</em>`);
-    await syncFromEngine(); // refresh positions from server
+    const tp  = d.tpPrice  || c.last * (1 - CFG.takeProfitPct / 100);
+    const sl  = d.slPrice  || c.last * (1 + CFG.stopLossPct  / 100);
+    const re  = d.reentryPrice;
+    const tag = d.averaged
+      ? `RE-ENTRY #${d.entryNum} ${c.symbol.replace('USDT','')}`
+      : `ENTRY SHORT ${c.symbol.replace('USDT','')}`;
+    toast(`${tag} @ ${fmtP(c.last)}`,'success');
+    log(d.averaged ? 'REENTRY' : 'ENTRY', tag,
+      `Avg: <strong>${fmtP(d.avgEntry||c.last)}</strong> · TP ${fmtP(tp)} · SL ${fmtP(sl)}${re?` · Next reentry ${fmtP(re)}`:''}  · ${MODE.toUpperCase()}`);
+    sendNotif(tag, `@ ${fmtP(c.last)} · TP ${fmtP(tp)} · SL ${fmtP(sl)}`);
+    await syncFromEngine();
   } catch(e) {
     toast('Open failed: '+e.message,'error');
   }
@@ -1329,8 +1334,8 @@ async function closePosition(id, price, reason) {
     log(tag, `Closed ${sym.replace('USDT','')}`,
       `${reason||'Manual'} · PnL <strong>${pnlUSDT>=0?'+':''}$${pnlUSDT.toFixed(2)}</strong>`);
     toast(`${sym.replace('USDT','')} ${pnlUSDT>=0?'+':''}$${pnlUSDT.toFixed(2)}`, pnlUSDT>=0?'success':'error');
-    sendNotif(`Trade closed: ${sym.replace('USDT','')}`, `${reason} · ${pnlUSDT>=0?'+':''}$${pnlUSDT.toFixed(2)}`);
-    await syncFromEngine(); // refresh from server
+    sendNotif(`Closed: ${sym.replace('USDT','')}`, `${reason} · ${pnlUSDT>=0?'+':''}$${pnlUSDT.toFixed(2)}`);
+    await syncFromEngine();
     if (selectedCoin?.symbol===sym) drawChart(sym);
   } catch(e) {
     toast('Close failed: '+e.message,'error');
@@ -1338,11 +1343,30 @@ async function closePosition(id, price, reason) {
 }
 
 function checkAutoClose(sym, price) {
-  const pos = positions.find(p=>p.symbol===sym); if (!pos) return;
-  const tp = pos.avgEntry*(1-CFG.takeProfitPct/100);
-  const sl = pos.avgEntry*(1+CFG.stopLossPct/100);
-  if (price <= tp) { closePosition(pos.id, price,'Take-Profit ✓'); return; }
-  else if (price >= sl) { closePosition(pos.id, price,'Stop-Loss ✗'); return; }
+  const pos = positions.find(p => p.symbol === sym); if (!pos) return;
+  // Use TP/SL from position object (set by engine, always based on avgEntry)
+  const tp = pos.tpPrice  || pos.avgEntry * (1 - CFG.takeProfitPct / 100);
+  const sl = pos.slPrice  || pos.avgEntry * (1 + CFG.stopLossPct  / 100);
+  if (pos.side === 'SHORT') {
+    if (price <= tp) { closePosition(pos.id, price, 'Take-Profit ✓'); return; }
+    if (price >= sl) { closePosition(pos.id, price, 'Stop-Loss ✗');   return; }
+  } else {
+    if (price >= tp) { closePosition(pos.id, price, 'Take-Profit ✓'); return; }
+    if (price <= sl) { closePosition(pos.id, price, 'Stop-Loss ✗');   return; }
+  }
+}
+
+function checkReentry(sym, price) {
+  // Auto re-entry: if price moves against us and hits reentryPrice, add to position
+  if (!AUTO || ddPaused) return;
+  const pos = positions.find(p => p.symbol === sym); if (!pos) return;
+  if (!pos.reentryPrice) return;
+  if ((pos.entries?.length || 1) >= CFG.maxAveraging) return;
+  if (pos.side === 'SHORT' && price >= pos.reentryPrice) {
+    log('REENTRY', `Auto re-entry ${sym.replace('USDT','')}`,
+      `Price ${fmtP(price)} hit reentry level ${fmtP(pos.reentryPrice)} · Entry #${(pos.entries?.length||1)+1}`);
+    openPosition({...pos, last: price, symbol: pos.symbol}).catch(e => log('ERR','Re-entry failed',e.message));
+  }
 }
 
 function checkTrailingStop(sym, price) {
@@ -1914,24 +1938,36 @@ function renderPortfolio() {
         const pnl      = pos._upnl  || 0;
         const roiPct   = pos._roiPct || 0;
         const markPrice = pos.last   || pos.avgEntry;
-        const canAvg   = (pos.entries?.length||1) < CFG.maxAveraging && pos.mode === 'paper';
+        const entryCnt  = pos.entries?.length || 1;
+        const canAvg    = entryCnt < CFG.maxAveraging;
         const sideLabel = pos.side || 'SHORT';
         const sideColor = sideLabel === 'LONG' ? 'var(--green)' : 'var(--red)';
         const levBadge  = pos.leverage > 1 ? `<span style="font-size:9px;color:var(--muted2);margin-left:4px">${pos.leverage}×</span>` : '';
         const liqLine   = pos.liquidPrice > 0
-          ? `<div class="pr-entry" style="color:var(--red);font-size:10px">Liq: ${fmtP(pos.liquidPrice)}</div>` : '';
-        const tpslLine  = (pos.tpPrice || pos.slPrice)
-          ? `<div class="pr-entry" style="font-size:10px">TP: ${pos.tpPrice?fmtP(pos.tpPrice):'—'} · SL: ${pos.slPrice?fmtP(pos.slPrice):'—'}</div>` : '';
+          ? `<div class="pr-entry" style="color:var(--red);font-size:10px">💀 Liq: ${fmtP(pos.liquidPrice)}</div>` : '';
+        // TP and SL — always shown, derived from avgEntry
+        const tp = pos.tpPrice || pos.avgEntry * (1 - CFG.takeProfitPct / 100);
+        const sl = pos.slPrice || pos.avgEntry * (1 + CFG.stopLossPct  / 100);
+        const tpSlLine = `<div class="pr-entry" style="font-size:10px">
+          <span style="color:var(--green)">✓TP ${fmtP(tp)}</span>
+          &nbsp;·&nbsp;
+          <span style="color:var(--red)">✗SL ${fmtP(sl)}</span>
+        </div>`;
+        // Re-entry level
+        const re = pos.reentryPrice;
+        const reLine = (re && canAvg)
+          ? `<div class="pr-entry" style="font-size:10px;color:var(--yellow)">↩ Reentry ${fmtP(re)} (${entryCnt}/${CFG.maxAveraging})</div>`
+          : (entryCnt >= CFG.maxAveraging ? `<div class="pr-entry" style="font-size:10px;color:var(--muted2)">Max entries reached (${entryCnt}/${CFG.maxAveraging})</div>` : '');
         return `<div class="pos-row" onclick="selectCoinBySym('${pos.symbol}')">
           <div>
             <div style="display:flex;align-items:center;gap:4px">
               <span class="pr-sym">${pos.symbol.replace('USDT','')}/USDT</span>
-              <span class="pr-side" style="color:${sideColor}">${sideLabel}×${pos.entries?.length||1}</span>
+              <span class="pr-side" style="color:${sideColor}">${sideLabel}×${entryCnt}</span>
               ${levBadge}
             </div>
-            <div class="pr-entry">Entry: ${fmtP(pos.avgEntry)} · $${pos.totalSize.toFixed(2)}</div>
+            <div class="pr-entry">Avg: ${fmtP(pos.avgEntry)} · $${pos.totalSize.toFixed(2)}</div>
             <div class="pr-entry" style="color:var(--muted2)">Mark: ${fmtP(markPrice)}</div>
-            ${liqLine}${tpslLine}
+            ${liqLine}${tpSlLine}${reLine}
             <div class="pr-btns">
               <button class="pr-btn close" onclick="event.stopPropagation();closePosition('${pos.id}')">✕ Close</button>
               ${canAvg?`<button class="pr-btn avg" onclick="event.stopPropagation();avgPos('${pos.symbol}')">+ Avg</button>`:''}
@@ -1963,8 +1999,13 @@ function renderPortfolio() {
 }
 
 function avgPos(sym) {
-  const sc=scanResults.find(s=>s.symbol===sym); if(!sc)return;
-  const p=selectedCoin; selectedCoin=sc; openPosition(sc).catch(e=>toast(e.message,'error')); selectedCoin=p;
+  // Manual re-entry button — get current price from scan results or position
+  const sc  = scanResults.find(s => s.symbol === sym);
+  const pos = positions.find(p => p.symbol === sym);
+  const price = sc?.last || pos?.last || 0;
+  if (!price) { toast('Cannot re-entry: no current price for ' + sym, 'error'); return; }
+  const coinObj = { symbol: sym, last: price };
+  openPosition(coinObj).catch(e => toast(e.message, 'error'));
 }
 function selectCoinBySym(sym) {
   const i=scanResults.findIndex(s=>s.symbol===sym); if(i>=0) selectCoin(i);

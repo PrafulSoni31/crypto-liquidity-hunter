@@ -25,24 +25,41 @@ try {
 
 function initDB() {
   if (!db) return;
+  // Run schema migrations safely
+  const migrations = [
+    `ALTER TABLE positions ADD COLUMN reentry_price REAL`,
+    `ALTER TABLE positions ADD COLUMN reentry_step  REAL`,
+    `ALTER TABLE positions ADD COLUMN lowest_price  REAL`,
+    `ALTER TABLE positions ADD COLUMN highest_price REAL`,
+  ];
+  for (const m of migrations) {
+    try { db.exec(m); } catch(e) { /* column already exists */ }
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS positions (
-      id          TEXT PRIMARY KEY,
-      symbol      TEXT NOT NULL,
-      side        TEXT NOT NULL DEFAULT 'SHORT',
-      avg_entry   REAL NOT NULL,
-      total_size  REAL NOT NULL,
-      entries_json TEXT NOT NULL DEFAULT '[]',
-      tp_price    REAL,
-      sl_price    REAL,
-      trail_pct   REAL DEFAULT 0,
-      trail_price REAL,
-      open_time   TEXT NOT NULL,
-      mode        TEXT NOT NULL DEFAULT 'paper',
-      broker      TEXT DEFAULT 'binance',
-      order_id    TEXT,
-      status      TEXT NOT NULL DEFAULT 'open'
+      id            TEXT PRIMARY KEY,
+      symbol        TEXT NOT NULL,
+      side          TEXT NOT NULL DEFAULT 'SHORT',
+      avg_entry     REAL NOT NULL,
+      total_size    REAL NOT NULL,
+      entries_json  TEXT NOT NULL DEFAULT '[]',
+      tp_price      REAL,
+      sl_price      REAL,
+      reentry_price REAL,
+      reentry_step  REAL,
+      trail_pct     REAL DEFAULT 0,
+      trail_price   REAL,
+      lowest_price  REAL,
+      highest_price REAL,
+      open_time     TEXT NOT NULL,
+      mode          TEXT NOT NULL DEFAULT 'paper',
+      broker        TEXT DEFAULT 'binance',
+      order_id      TEXT,
+      status        TEXT NOT NULL DEFAULT 'open'
     );
+    -- Add new columns to existing DB without breaking old installs
+    CREATE TABLE IF NOT EXISTS _migrations (migration TEXT PRIMARY KEY);
+    
     CREATE TABLE IF NOT EXISTS trades (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
       symbol      TEXT NOT NULL,
@@ -107,13 +124,25 @@ class TradingEngine extends EventEmitter {
     // Only load paper positions from DB
     const rows = db.prepare("SELECT * FROM positions WHERE status='open' AND mode='paper'").all();
     this.positions = rows.map(r => ({
-      id: r.id, symbol: r.symbol, side: r.side,
-      avgEntry:   r.avg_entry,  totalSize: r.total_size,
-      entries:    JSON.parse(r.entries_json || '[]'),
-      tpPrice:    r.tp_price,   slPrice: r.sl_price,
-      trailPct:   r.trail_pct,  trailPrice: r.trail_price,
-      openTime:   new Date(r.open_time),
-      mode: r.mode, broker: r.broker, orderId: r.order_id,
+      id:           r.id,
+      symbol:       r.symbol,
+      side:         r.side,
+      avgEntry:     r.avg_entry,
+      totalSize:    r.total_size,
+      entries:      JSON.parse(r.entries_json || '[]'),
+      tpPrice:      r.tp_price,
+      slPrice:      r.sl_price,
+      reentryPrice: r.reentry_price,
+      reentryStep:  r.reentry_step,
+      trailPct:     r.trail_pct,
+      trailPrice:   r.trail_price,
+      lowestPrice:  r.lowest_price,
+      highestPrice: r.highest_price,
+      openTime:     new Date(r.open_time),
+      mode:         r.mode,
+      broker:       r.broker,
+      orderId:      r.order_id,
+      unrealisedPnl: 0,
     }));
     const trades = db.prepare("SELECT * FROM trades ORDER BY id DESC LIMIT 200").all();
     this.closedTrades = trades;
@@ -122,12 +151,18 @@ class TradingEngine extends EventEmitter {
   _savePosition(pos) {
     if (!db) return;
     db.prepare(`INSERT OR REPLACE INTO positions
-      (id,symbol,side,avg_entry,total_size,entries_json,tp_price,sl_price,trail_pct,trail_price,open_time,mode,broker,order_id,status)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'open')
-    `).run(pos.id, pos.symbol, pos.side, pos.avgEntry, pos.totalSize,
-           JSON.stringify(pos.entries||[]), pos.tpPrice||null, pos.slPrice||null,
-           pos.trailPct||0, pos.trailPrice||null, pos.openTime.toISOString(),
-           pos.mode||this.mode, pos.broker||this.broker, pos.orderId||null);
+      (id,symbol,side,avg_entry,total_size,entries_json,tp_price,sl_price,reentry_price,reentry_step,trail_pct,trail_price,lowest_price,highest_price,open_time,mode,broker,order_id,status)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'open')
+    `).run(
+      pos.id, pos.symbol, pos.side, pos.avgEntry, pos.totalSize,
+      JSON.stringify(pos.entries||[]),
+      pos.tpPrice||null, pos.slPrice||null,
+      pos.reentryPrice||null, pos.reentryStep||null,
+      pos.trailPct||0, pos.trailPrice||null,
+      pos.lowestPrice||null, pos.highestPrice||null,
+      pos.openTime instanceof Date ? pos.openTime.toISOString() : pos.openTime,
+      pos.mode||this.mode, pos.broker||this.broker, pos.orderId||null
+    );
   }
 
   _closePositionDB(posId, exitPrice, pnlUsd, pnlPct, reason, mode) {
@@ -240,9 +275,53 @@ class TradingEngine extends EventEmitter {
     });
   }
 
+  // ── Build position object from Binance positionRisk row ──────────────────
+  _buildLivePos(p, existingPos = null) {
+    const amt        = parseFloat(p.positionAmt);
+    const entryPrice = parseFloat(p.entryPrice);
+    const markPrice  = parseFloat(p.markPrice);
+    const notional   = Math.abs(amt) * entryPrice;
+    const unPnl      = parseFloat(p.unRealizedProfit || 0);
+    const side       = amt > 0 ? 'LONG' : 'SHORT';
+    this.prices[p.symbol] = markPrice;
+
+    // Restore TP/SL from existing in-memory position if available
+    // Otherwise calculate from cfg
+    const tpPrice   = existingPos?.tpPrice  || entryPrice * (1 - (this.cfg.takeProfitPct / 100));
+    const slPrice   = existingPos?.slPrice  || entryPrice * (1 + (this.cfg.stopLossPct   / 100));
+    const reentryStep  = this.cfg.stopLossPct / Math.max(this.cfg.maxAveraging, 1);
+    const reentryPrice = existingPos?.reentryPrice || entryPrice * (1 + (reentryStep / 100));
+
+    return {
+      id:            `live_${p.symbol}`,
+      symbol:        p.symbol,
+      side,
+      avgEntry:      entryPrice,
+      markPrice,
+      totalSize:     notional,
+      contracts:     Math.abs(amt),
+      entries:       existingPos?.entries || [{ price: entryPrice, size: notional, time: new Date().toISOString() }],
+      tpPrice,
+      slPrice,
+      reentryPrice,
+      reentryStep,
+      trailPct:      existingPos?.trailPct   ?? this.cfg.trailingStopPct ?? 0,
+      trailPrice:    existingPos?.trailPrice  ?? null,
+      lowestPrice:   existingPos?.lowestPrice ?? markPrice,
+      highestPrice:  existingPos?.highestPrice ?? markPrice,
+      openTime:      existingPos?.openTime ?? new Date(),
+      mode:          'live',
+      broker:        'binance',
+      unrealisedPnl: unPnl,
+      roiPct:        notional > 0 ? (unPnl / (notional / parseFloat(p.leverage || 1))) * 100 : 0,
+      leverage:      parseFloat(p.leverage || 1),
+      liquidPrice:   parseFloat(p.liquidationPrice || 0),
+    };
+  }
+
   // ── Live Position Sync ───────────────────────────────────────────────────
-  // In live mode: Binance is the ONLY source of truth.
-  // We NEVER write live positions to DB — fetch fresh every time.
+  // In live mode: Binance is the ONLY source of truth for position data.
+  // TP/SL/re-entry levels are maintained in memory and enforced by monitorLoop.
   async syncLivePositions() {
     if (this.mode !== 'live' || !this.brokerCreds.key) return;
     try {
@@ -250,42 +329,30 @@ class TradingEngine extends EventEmitter {
       if (!Array.isArray(data)) return;
 
       const open = data.filter(p => Math.abs(parseFloat(p.positionAmt)) > 0);
-
-      // Build fresh in-memory live positions from Binance response
       const livePositions = open.map(p => {
-        const amt       = parseFloat(p.positionAmt);
-        const entryPrice = parseFloat(p.entryPrice);
-        const markPrice  = parseFloat(p.markPrice);
-        const notional   = Math.abs(amt) * entryPrice;
-        const unPnl      = parseFloat(p.unRealizedProfit || 0);
-        this.prices[p.symbol] = markPrice;
-        return {
-          id:             `live_${p.symbol}`,   // stable ID — symbol only, no timestamp
-          symbol:         p.symbol,
-          side:           amt > 0 ? 'LONG' : 'SHORT',
-          avgEntry:       entryPrice,
-          markPrice:      markPrice,
-          totalSize:      notional,
-          contracts:      Math.abs(amt),
-          entries:        [{ price: entryPrice, size: notional }],
-          tpPrice:        null,
-          slPrice:        null,
-          openTime:       new Date(),
-          mode:           'live',
-          broker:         'binance',
-          unrealisedPnl:  unPnl,
-          roiPct:         parseFloat(p.unRealizedProfit) / (notional / parseFloat(p.leverage || 1)) * 100,
-          leverage:       parseFloat(p.leverage || 1),
-          liquidPrice:    parseFloat(p.liquidationPrice || 0),
-        };
+        const existing = this.positions.find(pos => pos.id === `live_${p.symbol}`);
+        return this._buildLivePos(p, existing);
       });
 
-      // Replace live positions in memory — never DB
+      // Detect live positions that disappeared (closed on exchange)
+      const prevLive = this.positions.filter(p => p.mode === 'live');
+      const newSymbols = new Set(livePositions.map(p => p.symbol));
+      for (const old of prevLive) {
+        if (!newSymbols.has(old.symbol)) {
+          console.log(`[Engine] Live position closed on exchange: ${old.symbol}`);
+          this.closedTrades.unshift({
+            symbol: old.symbol, side: old.side,
+            entryPrice: old.avgEntry, exitPrice: this.prices[old.symbol] || old.avgEntry,
+            pnl: old.unrealisedPnl || 0, reason: 'Closed on exchange',
+            time: new Date(), mode: 'live',
+          });
+        }
+      }
+
       this.positions = [
-        ...this.positions.filter(p => p.mode !== 'live'),  // keep paper positions
+        ...this.positions.filter(p => p.mode !== 'live'),
         ...livePositions,
       ];
-
       this.emit('stateUpdate');
     } catch(e) {
       console.error('[Engine] syncLivePositions error:', e.message);
@@ -301,34 +368,29 @@ class TradingEngine extends EventEmitter {
       return data
         .filter(p => Math.abs(parseFloat(p.positionAmt)) > 0)
         .map(p => {
-          const amt        = parseFloat(p.positionAmt);
-          const entryPrice = parseFloat(p.entryPrice);
-          const markPrice  = parseFloat(p.markPrice);
-          const notional   = Math.abs(amt) * entryPrice;
-          return {
-            id:            `live_${p.symbol}`,
-            symbol:        p.symbol,
-            side:          amt > 0 ? 'LONG' : 'SHORT',
-            avgEntry:      entryPrice,
-            markPrice:     markPrice,
-            totalSize:     notional,
-            contracts:     Math.abs(amt),
-            entries:       [{ price: entryPrice, size: notional }],
-            tpPrice:       null,
-            slPrice:       null,
-            openTime:      new Date(),
-            mode:          'live',
-            broker:        'binance',
-            unrealisedPnl: parseFloat(p.unRealizedProfit || 0),
-            roiPct:        parseFloat(p.roe || 0) * 100,
-            leverage:      parseFloat(p.leverage || 1),
-            liquidPrice:   parseFloat(p.liquidationPrice || 0),
-          };
+          const existing = this.positions.find(pos => pos.id === `live_${p.symbol}`);
+          return this._buildLivePos(p, existing);
         });
     } catch(e) {
       console.error('[Engine] getLivePositions error:', e.message);
       return [];
     }
+  }
+
+  // ── Recalculate TP/SL/reentry from current avgEntry ─────────────────────
+  recalcLevels(pos) {
+    const tp = pos.avgEntry * (1 - (this.cfg.takeProfitPct  / 100));
+    const sl = pos.avgEntry * (1 + (this.cfg.stopLossPct    / 100));
+    // Re-entry: trigger when price rises X% above avgEntry (SHORT only)
+    // Use stopLossPct/maxAveraging as the re-entry step spacing
+    const reentryStep = this.cfg.stopLossPct / Math.max(this.cfg.maxAveraging, 1);
+    const reentryPrice = pos.avgEntry * (1 + (reentryStep / 100));
+    pos.tpPrice      = tp;
+    pos.slPrice      = sl;
+    pos.reentryPrice = reentryPrice;
+    pos.reentryStep  = reentryStep;
+    this._savePosition(pos);
+    return { tp, sl, reentryPrice };
   }
 
   // ── Monitor Loop ─────────────────────────────────────────────────────────
@@ -338,28 +400,96 @@ class TradingEngine extends EventEmitter {
     await this.fetchPrices(symbols);
 
     for (const pos of [...this.positions]) {
-      if (pos.mode === 'live') continue; // live positions managed by syncLivePositions
       const price = this.prices[pos.symbol];
       if (!price || price <= 0) continue;
 
-      // Calculate TP/SL from cfg if not set
-      const tp = pos.tpPrice || pos.avgEntry * (1 - (this.cfg.takeProfitPct / 100));
-      const sl = pos.slPrice || pos.avgEntry * (1 + (this.cfg.stopLossPct  / 100));
+      // ── Live positions: enforce SL/TP via price watch ──────────────────
+      if (pos.mode === 'live') {
+        // Ensure TP/SL are set (calculated from cfg if missing)
+        if (!pos.tpPrice || !pos.slPrice) this.recalcLevels(pos);
+        const tp = pos.tpPrice;
+        const sl = pos.slPrice;
+        let closeReason = null;
+        if (pos.side === 'SHORT') {
+          if (price <= tp) closeReason = 'Take-Profit ✓';
+          else if (price >= sl) closeReason = 'Stop-Loss ✗';
+        } else {
+          if (price >= tp) closeReason = 'Take-Profit ✓';
+          else if (price <= sl) closeReason = 'Stop-Loss ✗';
+        }
+        if (closeReason) {
+          // Place real closing order on Binance
+          try {
+            const sym   = pos.symbol.replace('/USDT','USDT').replace('/','');
+            const qty   = pos.contracts
+              ? pos.contracts.toFixed(3)
+              : (pos.totalSize / price).toFixed(3);
+            const closeSide = pos.side === 'SHORT' ? 'BUY' : 'SELL';
+            const order = await this.binanceRequest('POST', '/fapi/v1/order', {
+              symbol: sym, side: closeSide, type: 'MARKET',
+              quantity: qty, reduceOnly: 'true'
+            });
+            const exitPrice = parseFloat(order.avgPrice || order.price || price);
+            console.log(`[Engine] Live ${closeReason} ${sym} @ ${exitPrice}`);
+            // Remove from in-memory positions
+            const idx = this.positions.findIndex(p => p.id === pos.id);
+            if (idx !== -1) this.positions.splice(idx, 1);
+            // Record closed trade
+            const pnlPct = pos.side === 'SHORT'
+              ? ((pos.avgEntry - exitPrice) / pos.avgEntry) * 100
+              : ((exitPrice - pos.avgEntry) / pos.avgEntry) * 100;
+            const pnlUsd = (pnlPct / 100) * pos.totalSize;
+            if (pnlUsd >= 0) this.wins++; else this.losses++;
+            this.realised += pnlUsd;
+            this.closedTrades.unshift({
+              symbol: pos.symbol, side: pos.side,
+              entryPrice: pos.avgEntry, exitPrice,
+              pnl: pnlUsd, pnlPct, reason: closeReason,
+              time: new Date(), mode: 'live',
+            });
+            this.emit('positionClosed', pos, exitPrice, closeReason);
+          } catch(e) {
+            console.error(`[Engine] Live close order failed ${pos.symbol}:`, e.message);
+          }
+        } else {
+          // Update live unrealised PnL from price
+          if (pos.side === 'SHORT') {
+            pos.unrealisedPnl = ((pos.avgEntry - price) / pos.avgEntry) * pos.totalSize;
+          } else {
+            pos.unrealisedPnl = ((price - pos.avgEntry) / pos.avgEntry) * pos.totalSize;
+          }
+        }
+        continue;
+      }
 
-      // Update trailing stop
+      // ── Paper positions ────────────────────────────────────────────────
+      // Ensure TP/SL always reflect current avgEntry (recalc if stale)
+      if (!pos.tpPrice || !pos.slPrice) this.recalcLevels(pos);
+      const tp = pos.tpPrice;
+      const sl = pos.slPrice;
+
+      // Update trailing stop (SHORT: track lowest price)
       if (pos.trailPct > 0) {
-        if (price < (pos.lowestPrice || price)) pos.lowestPrice = price;
-        pos.trailPrice = (pos.lowestPrice || price) * (1 + pos.trailPct / 100);
+        if (pos.side === 'SHORT') {
+          if (!pos.lowestPrice || price < pos.lowestPrice) pos.lowestPrice = price;
+          const newTrail = pos.lowestPrice * (1 + pos.trailPct / 100);
+          // Trail only tightens, never loosens
+          if (!pos.trailPrice || newTrail < pos.trailPrice) pos.trailPrice = newTrail;
+        } else {
+          if (!pos.highestPrice || price > pos.highestPrice) pos.highestPrice = price;
+          const newTrail = pos.highestPrice * (1 - pos.trailPct / 100);
+          if (!pos.trailPrice || newTrail > pos.trailPrice) pos.trailPrice = newTrail;
+        }
       }
 
       let closeReason = null;
       if (pos.side === 'SHORT') {
-        if (price <= tp) closeReason = 'Take-Profit ✓';
-        else if (price >= sl) closeReason = 'Stop-Loss ✗';
+        if  (price <= tp)                                  closeReason = 'Take-Profit ✓';
+        else if (price >= sl)                              closeReason = 'Stop-Loss ✗';
         else if (pos.trailPrice && price >= pos.trailPrice) closeReason = 'Trailing Stop 📈';
       } else {
-        if (price >= tp) closeReason = 'Take-Profit ✓';
-        else if (price <= sl) closeReason = 'Stop-Loss ✗';
+        if  (price >= tp)                                  closeReason = 'Take-Profit ✓';
+        else if (price <= sl)                              closeReason = 'Stop-Loss ✗';
         else if (pos.trailPrice && price <= pos.trailPrice) closeReason = 'Trailing Stop 📈';
       }
 
@@ -367,58 +497,100 @@ class TradingEngine extends EventEmitter {
         this.closePosition(pos.id, price, closeReason);
       } else {
         // Update unrealised PnL
-        if (pos.side === 'SHORT') {
-          pos.unrealisedPnl = ((pos.avgEntry - price) / pos.avgEntry) * pos.totalSize;
-        } else {
-          pos.unrealisedPnl = ((price - pos.avgEntry) / pos.avgEntry) * pos.totalSize;
-        }
+        pos.unrealisedPnl = pos.side === 'SHORT'
+          ? ((pos.avgEntry - price) / pos.avgEntry) * pos.totalSize
+          : ((price - pos.avgEntry) / pos.avgEntry) * pos.totalSize;
       }
     }
     this.emit('stateUpdate');
   }
 
-  // ── Open Position ────────────────────────────────────────────────────────
+  // ── Open Position / Re-entry ─────────────────────────────────────────────
   openPosition(symbol, side, price, size, opts = {}) {
     const existing = this.positions.find(p => p.symbol === symbol && p.mode === this.mode);
+
     if (existing) {
-      if (existing.entries.length >= this.cfg.maxAveraging) return { error: 'Max averaging reached' };
-      existing.entries.push({ price, size });
+      // ── RE-ENTRY / AVERAGING ────────────────────────────────────────────
+      if (existing.entries.length >= this.cfg.maxAveraging)
+        return { error: `Max averaging (${this.cfg.maxAveraging}) reached` };
+
+      // Validate re-entry price: for SHORT, only average UP (price must be above avgEntry)
+      // Re-entry is valid if price >= avgEntry * (1 + reentryStep/2) i.e. price moved against us
+      const reentryStep = this.cfg.stopLossPct / Math.max(this.cfg.maxAveraging, 1);
+      const minReentryPrice = existing.avgEntry * (1 + (reentryStep * 0.5 / 100));
+      if (existing.side === 'SHORT' && price < minReentryPrice) {
+        return { error: `Re-entry too early: price ${price.toFixed(6)} must be ≥ ${minReentryPrice.toFixed(6)} (${(reentryStep*0.5).toFixed(1)}% above avg entry)` };
+      }
+
+      // Add re-entry
+      existing.entries.push({ price, size, time: new Date().toISOString() });
       existing.totalSize += size;
-      existing.avgEntry = existing.entries.reduce((s,e) => s + e.price * e.size, 0) / existing.totalSize;
+      // Recalculate VWAP average entry
+      existing.avgEntry = existing.entries.reduce((s, e) => s + e.price * e.size, 0) / existing.totalSize;
+      // Recalculate TP/SL/re-entry from NEW avgEntry
+      this.recalcLevels(existing);
+      if (this.mode === 'paper') this.balance -= size;
       this._savePosition(existing);
+      console.log(`[Engine] Re-entry #${existing.entries.length} ${symbol} @ ${price} | avgEntry=${existing.avgEntry.toFixed(6)} TP=${existing.tpPrice?.toFixed(6)} SL=${existing.slPrice?.toFixed(6)}`);
       this.emit('positionUpdated', existing);
-      return { id: existing.id, averaged: true };
+      return {
+        id:           existing.id,
+        averaged:     true,
+        entryNum:     existing.entries.length,
+        avgEntry:     existing.avgEntry,
+        tpPrice:      existing.tpPrice,
+        slPrice:      existing.slPrice,
+        reentryPrice: existing.reentryPrice,
+      };
     }
 
-    if (this.positions.filter(p=>p.mode===this.mode).length >= this.cfg.maxPositions)
-      return { error: 'Max positions reached' };
+    if (this.positions.filter(p => p.mode === this.mode).length >= this.cfg.maxPositions)
+      return { error: `Max positions (${this.cfg.maxPositions}) reached` };
+
+    // ── NEW POSITION ────────────────────────────────────────────────────────
+    // Always calculate TP/SL from cfg (ignore any passed-in opts to keep consistency)
+    const tpPrice   = price * (1 - (this.cfg.takeProfitPct / 100));
+    const slPrice   = price * (1 + (this.cfg.stopLossPct   / 100));
+    const reentryStep  = this.cfg.stopLossPct / Math.max(this.cfg.maxAveraging, 1);
+    const reentryPrice = price * (1 + (reentryStep / 100));
 
     const pos = {
-      id:          opts.orderId ? `live_${symbol}_${Date.now()}` : `paper_${symbol}_${Date.now()}`,
-      symbol, side,
-      avgEntry:    price,
-      totalSize:   size,
-      entries:     [{ price, size }],
-      tpPrice:     opts.tpPrice || null,
-      slPrice:     opts.slPrice || null,
-      trailPct:    opts.trailPct || this.cfg.trailingStopPct,
-      trailPrice:  null,
-      lowestPrice: price,
-      openTime:    new Date(),
-      mode:        this.mode,
-      broker:      this.broker,
-      orderId:     opts.orderId || null,
+      id:            opts.orderId ? `live_${symbol}_${Date.now()}` : `paper_${symbol}_${Date.now()}`,
+      symbol,
+      side:          side || 'SHORT',
+      avgEntry:      price,
+      totalSize:     size,
+      entries:       [{ price, size, time: new Date().toISOString() }],
+      tpPrice,
+      slPrice,
+      reentryPrice,
+      reentryStep,
+      trailPct:      this.cfg.trailingStopPct || 0,
+      trailPrice:    null,
+      lowestPrice:   price,   // for SHORT trailing stop
+      highestPrice:  price,   // for LONG trailing stop
+      openTime:      new Date(),
+      mode:          this.mode,
+      broker:        this.broker,
+      orderId:       opts.orderId || null,
       unrealisedPnl: 0,
     };
     this.positions.push(pos);
     if (this.mode === 'paper') {
       this.balance -= size;
-      this._savePosition(pos);  // only persist paper positions to DB
+      this._savePosition(pos);
     }
-    // Live positions are NOT saved to DB — Binance is source of truth
+    console.log(`[Engine] Position opened: ${side} ${symbol} @ ${price} | TP=${tpPrice.toFixed(6)} SL=${slPrice.toFixed(6)} reentry=${reentryPrice.toFixed(6)}`);
     this.emit('positionOpened', pos);
     this.emit('stateUpdate');
-    return { id: pos.id, opened: true };
+    return {
+      id:           pos.id,
+      opened:       true,
+      avgEntry:     price,
+      tpPrice,
+      slPrice,
+      reentryPrice,
+    };
   }
 
   // ── Close Position ───────────────────────────────────────────────────────

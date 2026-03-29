@@ -129,15 +129,26 @@ class BinanceConnector:
                     return False
 
             # ── Live mode — Try Futures first, fall back to Spot ──────────────
-            # Step 1: try Futures USDM
+            # Step 1: try Futures USDM (force mainnet URLs — never testnet)
+            MAINNET_FAPI = 'https://fapi.binance.com'
             try:
-                ex = ccxt.binanceusdm({**creds, 'options': {'defaultType': 'future'}})
+                ex = ccxt.binanceusdm({
+                    **creds,
+                    'options': {'defaultType': 'future', 'adjustForTimeDifference': True},
+                })
+                # Force mainnet URLs AFTER construction (ccxt merges deep; post-set overrides)
+                ex.urls['api']['fapiPublic']    = f'{MAINNET_FAPI}/fapi/v1'
+                ex.urls['api']['fapiPublicV2']  = f'{MAINNET_FAPI}/fapi/v2'
+                ex.urls['api']['fapiPublicV3']  = f'{MAINNET_FAPI}/fapi/v3'
+                ex.urls['api']['fapiPrivate']   = f'{MAINNET_FAPI}/fapi/v1'
+                ex.urls['api']['fapiPrivateV2'] = f'{MAINNET_FAPI}/fapi/v2'
+                ex.urls['api']['fapiPrivateV3'] = f'{MAINNET_FAPI}/fapi/v3'
                 ex.fetch_balance()
                 self.exchange    = ex
                 self.account_type = 'futures'
                 self.markets     = {}
                 self._connected  = True
-                logger.info("BinanceConnector: connected [LIVE FUTURES]")
+                logger.info("BinanceConnector: connected [LIVE FUTURES MAINNET]")
                 return True
             except ccxt.AuthenticationError as e:
                 err_str = str(e)
@@ -480,12 +491,73 @@ class BinanceConnector:
             logger.error(f"place_limit_order error: {e}")
             return {'error': str(e)}
 
+    def get_positions(self) -> List[Dict]:
+        """
+        Fetch all open futures positions using v2/positionRisk (works on multi-assets margin accounts).
+        Returns list of position dicts with contracts > 0.
+        """
+        if self.mode == 'paper':
+            return []
+        try:
+            import time as _time, hmac as _hmac, hashlib as _hashlib, requests as _req
+            ts  = int(_time.time() * 1000)
+            par = f"timestamp={ts}"
+            sig = _hmac.new(self.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
+            r   = _req.get(
+                f"https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}",
+                headers={"X-MBX-APIKEY": self.api_key}, timeout=10
+            )
+            raw = r.json()
+            if isinstance(raw, dict) and raw.get('code'):
+                logger.error(f"get_positions error: {raw}")
+                return []
+            out = []
+            for p in raw:
+                amt = float(p.get('positionAmt', 0))
+                if amt == 0:
+                    continue
+                sym  = p['symbol']
+                # Convert SYRUPUSDT → SYRUP/USDT:USDT for ccxt compat
+                for quote in ('USDT','BUSD','USDC','BNB','BTC','ETH'):
+                    if sym.endswith(quote):
+                        base = sym[:-len(quote)]
+                        ccxt_sym = f"{base}/{quote}:{quote}"
+                        break
+                else:
+                    ccxt_sym = sym
+                side = 'long' if amt > 0 else 'short'
+                out.append({
+                    'symbol':            ccxt_sym,
+                    'raw_symbol':        sym,
+                    'side':              side,
+                    'direction':         side,
+                    'contracts':         abs(amt),
+                    'entry_price':       float(p.get('entryPrice', 0)),
+                    'mark_price':        float(p.get('markPrice', 0)),
+                    'unrealized_pnl':    float(p.get('unRealizedProfit', 0)),
+                    'leverage':          float(p.get('leverage', 1)),
+                    'liquidation_price': float(p.get('liquidationPrice', 0)),
+                    'notional':          abs(float(p.get('notional', 0))),
+                    'margin_type':       p.get('marginType', 'cross'),
+                })
+            logger.info(f"get_positions: {len(out)} active positions")
+            return out
+        except Exception as e:
+            logger.error(f"get_positions error: {e}")
+            return []
+
     def set_sl_tp(self, symbol: str, side: str, qty: float,
                   sl_price: float, tp_price: float) -> Dict:
         """
-        After entry fills, place stop-loss + take-profit orders.
+        Place take-profit (as LIMIT reduceOnly) and register SL for price-watch.
+
+        On multi-assets margin accounts (and some others), STOP_MARKET / TAKE_PROFIT_MARKET
+        are blocked (-4120). We fall back to:
+          - TP → LIMIT reduceOnly order (fills exactly at TP price, better than market)
+          - SL → price-watch via PositionMonitor (market close when price hits SL)
+
         side = position side ('long' or 'short') — exit is opposite.
-        Returns {sl_order_id, tp_order_id} or paper equivalents.
+        Returns {sl_order_id, tp_order_id, sl_price, tp_price} or {error}.
         """
         exit_side = 'sell' if side == 'long' else 'buy'
         if self.mode == 'paper':
@@ -497,24 +569,60 @@ class BinanceConnector:
                 'mode': 'paper',
             }
         try:
-            qty_r  = self._round_qty(symbol, qty)
-            sl_r   = self._round_price(symbol, sl_price)
-            tp_r   = self._round_price(symbol, tp_price)
-            sl_order = self.exchange.create_order(
-                symbol=symbol, type='stop_market', side=exit_side, amount=qty_r,
-                params={'stopPrice': sl_r, 'reduceOnly': True, 'closePosition': False}
-            )
-            tp_order = self.exchange.create_order(
-                symbol=symbol, type='take_profit_market', side=exit_side, amount=qty_r,
-                params={'stopPrice': tp_r, 'reduceOnly': True, 'closePosition': False}
-            )
-            logger.info(f"SL/TP set for {symbol}: SL={sl_r} TP={tp_r}")
-            return {
-                'sl_order_id': sl_order['id'],
-                'tp_order_id': tp_order['id'],
-                'sl_price': sl_r,
-                'tp_price': tp_r,
-            }
+            qty_r = self._round_qty(symbol, qty)
+            sl_r  = self._round_price(symbol, sl_price) if sl_price else 0
+            tp_r  = self._round_price(symbol, tp_price) if tp_price else 0
+            result = {'sl_price': sl_r, 'tp_price': tp_r}
+
+            # ── Try STOP_MARKET / TAKE_PROFIT_MARKET first ──────────────────
+            stop_market_ok = True
+            if sl_r > 0:
+                try:
+                    sl_order = self.exchange.create_order(
+                        symbol=symbol, type='stop_market', side=exit_side, amount=qty_r,
+                        params={'stopPrice': sl_r, 'reduceOnly': True, 'closePosition': False}
+                    )
+                    result['sl_order_id'] = sl_order['id']
+                    logger.info(f"SL stop_market placed {symbol}: {sl_r}")
+                except Exception as e:
+                    stop_market_ok = False
+                    if '-4120' in str(e) or '-4045' in str(e):
+                        logger.warning(f"stop_market blocked ({e}), SL will be enforced by price-watch monitor")
+                        result['sl_order_id'] = 'price_watch'
+                    else:
+                        logger.error(f"SL order error: {e}")
+                        result['sl_order_id'] = f'error:{e}'
+
+            if tp_r > 0:
+                try:
+                    tp_order = self.exchange.create_order(
+                        symbol=symbol, type='take_profit_market', side=exit_side, amount=qty_r,
+                        params={'stopPrice': tp_r, 'reduceOnly': True, 'closePosition': False}
+                    )
+                    result['tp_order_id'] = tp_order['id']
+                    logger.info(f"TP take_profit_market placed {symbol}: {tp_r}")
+                except Exception as e:
+                    if '-4120' in str(e) or '-4045' in str(e):
+                        logger.warning(f"take_profit_market blocked, falling back to LIMIT TP")
+                        # ── Fallback: LIMIT reduceOnly ───────────────────────
+                        try:
+                            tp_limit = self.exchange.create_order(
+                                symbol=symbol, type='limit', side=exit_side, amount=qty_r,
+                                price=tp_r,
+                                params={'reduceOnly': True, 'timeInForce': 'GTC'}
+                            )
+                            result['tp_order_id'] = tp_limit['id']
+                            result['tp_type'] = 'limit'
+                            logger.info(f"TP LIMIT placed {symbol}: {tp_r} id={tp_limit['id']}")
+                        except Exception as e2:
+                            logger.error(f"TP limit fallback error: {e2}")
+                            result['tp_order_id'] = f'error:{e2}'
+                    else:
+                        logger.error(f"TP order error: {e}")
+                        result['tp_order_id'] = f'error:{e}'
+
+            logger.info(f"set_sl_tp complete for {symbol}: {result}")
+            return result
         except Exception as e:
             logger.error(f"set_sl_tp error: {e}")
             return {'error': str(e)}
