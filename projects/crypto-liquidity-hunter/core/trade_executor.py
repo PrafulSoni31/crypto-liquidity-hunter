@@ -102,6 +102,13 @@ class TradeExecutor:
         target      = float(signal_dict.get('target', 0))
         timeframe   = signal_dict.get('timeframe', '1h')
 
+        # Strip exchange prefix for connector (e.g. binance:BTC/USDT → BTC/USDT)
+        # MUST be assigned before any use of `symbol` to avoid Python UnboundLocalError
+        symbol = pair.split(':', 1)[1] if ':' in pair else pair
+
+        notional = notional_usd or self.notional_usd
+        lev      = leverage     or self.leverage
+
         # entry_price=0 means "market order" — fetch current price for record keeping
         if entry_price <= 0:
             try:
@@ -124,12 +131,6 @@ class TradeExecutor:
                 entry_price = _KNOWN_PRICES.get(sym_clean, 1.0)
                 if entry_price == 1.0:
                     return {'error': f'entry_price=0 and could not fetch current price for {symbol}'}
-
-        notional = notional_usd or self.notional_usd
-        lev      = leverage     or self.leverage
-
-        # Strip exchange prefix for connector (e.g. binance:BTC/USDT → BTC/USDT)
-        symbol = pair.split(':', 1)[1] if ':' in pair else pair
 
         # Normalise symbol for futures (BTC/USDT → BTC/USDT for ccxt binanceusdm)
         qty = self.connector.calc_qty(symbol, notional, entry_price, lev)

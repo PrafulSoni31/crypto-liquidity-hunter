@@ -851,10 +851,11 @@ function switchTab(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tabnav-item').forEach(t => t.classList.remove('active'));
   $('tab-' + name).classList.add('active');
-  el.classList.add('active');
-  if (name === 'perf')   loadPerf();
-  if (name === 'trades') loadTrades();
-  if (name === 'signals') { loadSigs(); loadPendingSignals(); }
+  if (el) el.classList.add('active');
+  if (name === 'perf')     loadPerf();
+  if (name === 'trades')   loadTrades();
+  if (name === 'signals')  { loadSigs(); loadPendingSignals(); }
+  if (name === 'settings') loadSettings();
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -1453,9 +1454,11 @@ async function refreshAll() {
   const active = document.querySelector('.tabnav-item.active');
   if (!active) return;
   const label = active.textContent.trim();
-  if (label.includes('Signal'))  loadSigs();
-  if (label.includes('Perf'))    loadPerf();
-  if (label.includes('Trade'))   loadTrades();
+  if (label.includes('Signal'))    { loadSigs(); loadPendingSignals(); }
+  if (label.includes('Perf'))      loadPerf();
+  if (label.includes('Trade') || label.includes('Trades')) loadTrades();
+  if (label.includes('Trading'))   { loadTradingTab(); }
+  if (label.includes('Settings'))  loadSettings();
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
@@ -2648,15 +2651,15 @@ async function saveSettings() {
     if (d.status === 'ok') {
       const count = Object.keys(d.updated || {}).length;
       cfgSetStatus(`✅ Saved ${count} parameters — ${new Date().toLocaleTimeString()}`, 'ok');
-      showToast('Settings saved ✅', 'green');
+      toast('Settings saved ✅', 'green');
     } else {
       cfgSetStatus('⚠️ Partial save — check errors', 'err');
-      showToast('Partial save — see console', 'red');
+      toast('Partial save — see console', 'red');
       console.error('Save errors:', d.errors);
     }
   } catch(e) {
     cfgSetStatus('❌ Save failed: ' + e.message, 'err');
-    showToast('Save failed: ' + e.message, 'red');
+    toast('Save failed: ' + e.message, 'red');
   }
 }
 </script>
