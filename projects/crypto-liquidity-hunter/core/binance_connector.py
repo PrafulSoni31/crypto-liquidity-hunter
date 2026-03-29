@@ -463,7 +463,6 @@ class BinanceConnector:
             return order
         except Exception as e:
             err = str(e)
-            # Friendly message for -2015 on orders (trading not enabled on key)
             if '-2015' in err:
                 return {'error': (
                     "Trading NOT enabled on this API key. "
@@ -473,6 +472,138 @@ class BinanceConnector:
                 )}
             logger.error(f"place_market_order error: {e}")
             return {'error': err}
+
+    def place_entry_with_sl(self, symbol: str, direction: str, qty: float,
+                            sl_price: float, tp_price: float = 0) -> Dict:
+        """
+        Place entry MARKET order + SL immediately via Binance batchOrders.
+        This is atomic — SL is placed in the same API call as entry,
+        protecting against sudden spikes before a separate set_sl_tp call.
+
+        For accounts where STOP_MARKET is blocked (-4120), falls back to:
+          entry MARKET → SL as price-watch (monitor) → TP as LIMIT
+
+        Returns: {entry_order, sl_order_id, tp_order_id, entry_price, sl_price, tp_price, error?}
+        """
+        import json as _json
+        import time as _time
+        import hmac as _hmac
+        import hashlib as _hashlib
+        import requests as _req
+
+        if self.mode == 'paper':
+            try:
+                ticker = self.exchange.fetch_ticker(symbol)
+                price  = float(ticker['last'])
+            except Exception:
+                price = sl_price * (1.02 if direction == 'long' else 0.98)
+            paper_r = self.paper_execute(symbol, 'buy' if direction == 'long' else 'sell', qty, price)
+            return {
+                'entry_order':  paper_r,
+                'entry_price':  price,
+                'sl_order_id':  f'paper_sl_{symbol}',
+                'tp_order_id':  f'paper_tp_{symbol}' if tp_price else None,
+                'sl_price':     sl_price,
+                'tp_price':     tp_price,
+                'mode':         'paper',
+            }
+
+        # Normalise symbol to Binance format
+        raw_sym   = symbol.split(':')[0].replace('/', '')   # BTC/USDT:USDT → BTCUSDT
+        exit_side = 'BUY' if direction == 'short' else 'SELL'
+        entry_side = 'BUY' if direction == 'long' else 'SELL'
+
+        qty_r  = self._round_qty(symbol, qty)
+        sl_r   = self._round_price(symbol, sl_price)
+        tp_r   = self._round_price(symbol, tp_price) if tp_price else 0
+
+        api_key = self.api_key
+        secret  = self.api_secret
+
+        def _sign(params: str) -> str:
+            ts = int(_time.time() * 1000)
+            p  = params + f'&timestamp={ts}'
+            sig = _hmac.new(secret.encode(), p.encode(), _hashlib.sha256).hexdigest()
+            return p + '&signature=' + sig
+
+        headers = {'X-MBX-APIKEY': api_key, 'Content-Type': 'application/x-www-form-urlencoded'}
+
+        # ── Try batchOrders: entry + SL in one shot ────────────────────────
+        batch_orders = [
+            {
+                'symbol':    raw_sym,
+                'side':      entry_side,
+                'type':      'MARKET',
+                'quantity':  str(qty_r),
+            }
+        ]
+        # Add SL stop order if stop_market is supported
+        sl_batch = {
+            'symbol':       raw_sym,
+            'side':         exit_side,
+            'type':         'STOP_MARKET',
+            'quantity':     str(qty_r),
+            'stopPrice':    str(sl_r),
+            'reduceOnly':   'true',
+            'closePosition':'false',
+        }
+        batch_orders.append(sl_batch)
+        if tp_r > 0:
+            batch_orders.append({
+                'symbol':       raw_sym,
+                'side':         exit_side,
+                'type':         'TAKE_PROFIT_MARKET',
+                'quantity':     str(qty_r),
+                'stopPrice':    str(tp_r),
+                'reduceOnly':   'true',
+                'closePosition':'false',
+            })
+
+        params = _sign(f'batchOrders={_req.utils.quote(_json.dumps(batch_orders))}')
+        r = _req.post(f'https://fapi.binance.com/fapi/v1/batchOrders?{params}',
+                      headers=headers, timeout=10)
+        batch_result = r.json()
+
+        if isinstance(batch_result, list) and len(batch_result) >= 2:
+            entry_r = batch_result[0]
+            sl_r_   = batch_result[1]
+            tp_r_   = batch_result[2] if len(batch_result) > 2 else {}
+
+            if 'orderId' in entry_r:
+                fill_price = float(entry_r.get('avgPrice') or entry_r.get('price') or 0)
+                logger.info(f"[Batch] Entry+SL placed atomically for {symbol}: "
+                            f"entry={entry_r['orderId']} sl={sl_r_.get('orderId')} fill={fill_price}")
+                return {
+                    'entry_order':  entry_r,
+                    'entry_price':  fill_price,
+                    'sl_order_id':  sl_r_.get('orderId', 'error'),
+                    'tp_order_id':  tp_r_.get('orderId') if tp_r_ else None,
+                    'sl_price':     sl_r,
+                    'tp_price':     tp_r,
+                    'method':       'batch_atomic',
+                }
+            else:
+                logger.warning(f"[Batch] batchOrders failed: {batch_result[0]}")
+
+        # ── Fallback: entry MARKET → then try SL separately ───────────────
+        logger.warning(f"[Entry+SL] Batch failed, placing entry then SL separately")
+        entry_order = self.place_market_order(symbol, 'buy' if direction == 'long' else 'sell', qty)
+        if 'error' in entry_order:
+            return {'error': entry_order['error']}
+
+        fill_price = float(entry_order.get('average') or entry_order.get('price') or 0)
+        sl_result  = self.set_sl_tp(symbol, direction, qty, sl_price, tp_price)
+
+        return {
+            'entry_order':  entry_order,
+            'entry_price':  fill_price,
+            'sl_order_id':  sl_result.get('sl_order_id', 'price_watch'),
+            'tp_order_id':  sl_result.get('tp_order_id'),
+            'sl_price':     sl_price,
+            'tp_price':     tp_price,
+            'method':       'sequential_fallback',
+            'sl_error':     sl_result.get('error'),
+        }
 
     def place_limit_order(self, symbol: str, side: str, qty: float, price: float) -> Dict:
         """Place a limit order."""

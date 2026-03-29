@@ -250,7 +250,14 @@ class TradingEngine extends EventEmitter {
     const p = { ...params, timestamp: Date.now(), recvWindow: 5000 };
     const qs = Object.entries(p).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     const sig = crypto.createHmac('sha256', secret).update(qs).digest('hex');
-    const url = `${base}${fpath}?${qs}&signature=${sig}`;
+
+    // batchOrders must go in POST body (not URL) due to length limits
+    const isBatch  = method === 'POST' && fpath.includes('batchOrders');
+    const fullQs   = `${qs}&signature=${sig}`;
+    const url      = isBatch
+      ? `${base}${fpath}`                     // params go in body
+      : `${base}${fpath}?${fullQs}`;          // params in URL (GET/POST)
+    const body     = isBatch ? fullQs : null;
 
     return new Promise((resolve, reject) => {
       const urlObj = new URL(url);
@@ -261,6 +268,7 @@ class TradingEngine extends EventEmitter {
         headers:  { 'X-MBX-APIKEY': key, 'User-Agent': 'MeanRevTrader/2.0',
                     'Content-Type': 'application/x-www-form-urlencoded' },
       };
+      if (body) opts.headers['Content-Length'] = Buffer.byteLength(body);
       const req = https.request(opts, r => {
         let data = '';
         r.on('data', c => data += c);
@@ -271,6 +279,7 @@ class TradingEngine extends EventEmitter {
       });
       req.on('error', reject);
       req.setTimeout(10000, () => { req.destroy(); reject(new Error('Timeout')); });
+      if (body) req.write(body);
       req.end();
     });
   }

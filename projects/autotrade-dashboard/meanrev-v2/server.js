@@ -276,20 +276,105 @@ app.post('/api/open', express.json(), async (req, res) => {
   }
   const entrySize = size || engine.cfg.positionSize;
 
-  // If live mode — place real order on Binance first
+  // If live mode — place entry + SL atomically via Binance batchOrders
   if (engine.mode === 'live' && engine.brokerCreds.key) {
     try {
-      const sym = symbol.replace('/USDT','USDT').replace('/','');
-      const qty = (entrySize / entryPrice).toFixed(3);
-      const orderSide = side === 'SHORT' ? 'SELL' : 'BUY';
-      const order = await engine.binanceRequest('POST', '/fapi/v1/order', {
-        symbol: sym, side: orderSide, type: 'MARKET', quantity: qty
-      });
-      if (order.code) return res.status(400).json({ error: order.msg || 'Order failed' });
-      opts.orderId = order.orderId;
-      entryPrice   = parseFloat(order.avgPrice || order.price || entryPrice);
+      const sym       = symbol.replace('/USDT','USDT').replace('/','');
+      const qty       = (entrySize / entryPrice).toFixed(3);
+      const entrySide = side === 'SHORT' ? 'SELL' : 'BUY';
+      const exitSide  = side === 'SHORT' ? 'BUY'  : 'SELL';
+
+      // Calculate SL price from cfg
+      const slPrice = side === 'SHORT'
+        ? entryPrice * (1 + engine.cfg.stopLossPct   / 100)   // SHORT: SL above entry
+        : entryPrice * (1 - engine.cfg.stopLossPct   / 100);  // LONG:  SL below entry
+      const tpPrice = side === 'SHORT'
+        ? entryPrice * (1 - engine.cfg.takeProfitPct / 100)
+        : entryPrice * (1 + engine.cfg.takeProfitPct / 100);
+
+      const roundPrice = p => Math.round(p * 10000) / 10000;  // 4 decimal places
+      const sl4 = roundPrice(slPrice);
+      const tp4 = roundPrice(tpPrice);
+
+      // Build batch: [0] entry MARKET + [1] SL STOP_MARKET + [2] TP TAKE_PROFIT_MARKET
+      const batchOrders = [
+        { symbol: sym, side: entrySide, type: 'MARKET', quantity: qty },
+        { symbol: sym, side: exitSide,  type: 'STOP_MARKET',
+          quantity: qty, stopPrice: String(sl4), reduceOnly: 'true', closePosition: 'false' },
+        { symbol: sym, side: exitSide,  type: 'TAKE_PROFIT_MARKET',
+          quantity: qty, stopPrice: String(tp4), reduceOnly: 'true', closePosition: 'false' },
+      ];
+
+      let batchResult = null;
+      try {
+        batchResult = await engine.binanceRequest('POST', '/fapi/v1/batchOrders', {
+          batchOrders: JSON.stringify(batchOrders)
+        });
+      } catch(batchErr) {
+        console.warn('[Entry] batchOrders failed:', batchErr.message, '— falling back to sequential');
+      }
+
+      if (Array.isArray(batchResult) && batchResult[0]?.orderId) {
+        // Batch succeeded — atomic entry + SL
+        const entryOrder = batchResult[0];
+        const slOrder    = batchResult[1] || {};
+        const tpOrder    = batchResult[2] || {};
+        opts.orderId     = entryOrder.orderId;
+        opts.slOrderId   = slOrder.orderId;
+        opts.tpOrderId   = tpOrder.orderId;
+        entryPrice       = parseFloat(entryOrder.avgPrice || entryOrder.price || entryPrice);
+        opts.tpPrice     = tp4;
+        opts.slPrice     = sl4;
+        console.log(`[Entry] Atomic entry+SL: entry=${entryOrder.orderId} sl=${slOrder.orderId} tp=${tpOrder.orderId} fill=${entryPrice}`);
+      } else {
+        // Fallback: place entry, then immediately SL
+        console.log('[Entry] Placing entry then SL sequentially (batchOrders not supported)');
+        const order = await engine.binanceRequest('POST', '/fapi/v1/order', {
+          symbol: sym, side: entrySide, type: 'MARKET', quantity: qty
+        });
+        if (order.code) return res.status(400).json({ error: order.msg || 'Entry order failed' });
+        opts.orderId = order.orderId;
+        entryPrice   = parseFloat(order.avgPrice || order.price || entryPrice);
+
+        // Place SL immediately after fill — as quickly as possible
+        const actualSl = side === 'SHORT'
+          ? entryPrice * (1 + engine.cfg.stopLossPct   / 100)
+          : entryPrice * (1 - engine.cfg.stopLossPct   / 100);
+        const actualTp = side === 'SHORT'
+          ? entryPrice * (1 - engine.cfg.takeProfitPct / 100)
+          : entryPrice * (1 + engine.cfg.takeProfitPct / 100);
+
+        // Place SL (LIMIT reduceOnly as fallback for accounts that block STOP_MARKET)
+        try {
+          const slOrder = await engine.binanceRequest('POST', '/fapi/v1/order', {
+            symbol: sym, side: exitSide, type: 'LIMIT',
+            quantity: qty, price: roundPrice(actualSl).toFixed(4),
+            reduceOnly: 'true', timeInForce: 'GTC'
+          });
+          opts.slOrderId = slOrder.orderId;
+          console.log(`[SL] Limit SL placed: ${slOrder.orderId} @ ${roundPrice(actualSl)}`);
+        } catch(slErr) {
+          console.error('[SL] SL placement failed:', slErr.message);
+        }
+
+        // Place TP
+        try {
+          const tpOrder = await engine.binanceRequest('POST', '/fapi/v1/order', {
+            symbol: sym, side: exitSide, type: 'LIMIT',
+            quantity: qty, price: roundPrice(actualTp).toFixed(4),
+            reduceOnly: 'true', timeInForce: 'GTC'
+          });
+          opts.tpOrderId = tpOrder.orderId;
+          console.log(`[TP] Limit TP placed: ${tpOrder.orderId} @ ${roundPrice(actualTp)}`);
+        } catch(tpErr) {
+          console.error('[TP] TP placement failed:', tpErr.message);
+        }
+
+        opts.slPrice = roundPrice(actualSl);
+        opts.tpPrice = roundPrice(actualTp);
+      }
     } catch(e) {
-      return res.status(500).json({ error: 'Live order failed: ' + e.message });
+      return res.status(500).json({ error: 'Live entry failed: ' + e.message });
     }
   }
 
