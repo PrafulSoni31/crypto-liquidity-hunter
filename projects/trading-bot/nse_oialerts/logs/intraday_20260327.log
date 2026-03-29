@@ -1,0 +1,116 @@
+======================================
+INTRADAY SCAN — 2026-03-27 04:00:01 UTC
+======================================
+[1/2] Running OI scanner...
+============================================================
+🎃 SHIVA HIGH-CONVICTION OI SCANNER
+============================================================
+Mode: INTRADAY  |  Top: 5
+Time: 2026-03-27 09:30 IST
+============================================================
+
+🔍 Scanning NSE for INTRADAY opportunities...
+   Quality gates: OI≥5.0% | Price≥0.8% confirmed | Vol≥1.5× | Conviction≥72 | R:R≥1.8
+   Nifty trend: bearish
+✅ Fetched 211 stocks from NSE OI Spurts
+📊 Analyzing 211 stocks (fetching real quotes)...
+   ✅ Passed: 1 | ❌ Rejected: 210
+
+🟢 BUY  (0):
+
+🔴 SELL (1):
+   SAMMAANCAP   conviction=80 OI=+13.8% price=-1.2% vol=113.8× RR=2.90
+
+✅ Final: 1 high-conviction setups
+   🟢 BUY: 0  🔴 SELL: 1
+💾 Saved to projects/trading-bot/nse_oialerts/cache/INTRADAY_20260327.json
+
+============================================================
+📤 TELEGRAM PREVIEW:
+============================================================
+⚡ *SHIVA HIGH-CONVICTION OI — INTRADAY*
+📅 27 Mar 2026  🕐 09:30 AM IST
+Market: 🔴 BEARISH BIAS
+──────────────────────────────
+✅ *1 setup(s) passed all quality gates*
+
+🔴 *SELL — Short Buildup* (Price↓ + OI↑)
+`━━━━━━━━━━━━━━━━━━━━━`
+
+*1. SAMMAANCAP*  ⭐ 80/100
+📉 Action: *SELL / SHORT (PE side: buy PE / sell CE)*
+💰 Entry: ₹145.14
+🎯 Target: ₹142.19  🛑 SL: ₹146.16
+⚖️ R:R = 1:2.9
+📊 Price -1.18% | OI +13.84% | Vol 113.8×
+  📦 Delivery: 21%
+  🔲 Options: N/A (chain unavailable)
+💬 _Short buildup confirmed. Price -1.18% | OI +13.84% | 113.8× vol | Delivery 21% | Nifty bearish. BEARISH setup._
+
+`━━━━━━━━━━━━━━━━━━━━━`
+📖 *CE/PE OI Guide:*
+• CE OI ↑ = Call writing = *Resistance* (bearish)
+• PE OI ↑ = Put writing  = *Support* (bullish)
+• CE OI ↓ = Calls unwinding = *Bullish*
+• PE OI ↓ = Puts unwinding  = *Bearish*
+• PCR > 1.2 = Bullish | PCR < 0.8 = Bearish
+
+⚠️ *Risk Rules:*
+• Max 2% capital risk per trade
+• Book 50% at 1:1 R:R, trail rest
+• Exit all if SL hits — no exceptions
+• Max 2-3 trades simultaneously
+
+```
+✅ BUY:  Price↑ + OI↑ = Long Buildup
+✅ SELL: Price↓ + OI↑ = Short Buildup
+❌ SKIP: Short Covering / Long Unwinding
+```
+_🎃 Shiva — OI + Options confirmed, no noise._
+[2/2] Sending Telegram alert...
+
+==================================================
+🎃 SHIVA OI ALERT SENDER — INTRADAY
+==================================================
+
+📨 Message preview:
+
+⚡ *SHIVA OI MOMENTUM — INTRADAY*
+📅 Friday, 27 Mar 2026  🕐 09:30 AM IST
+──────────────────────────────
+✅ *1 high-conviction setup(s) found*
+🟢 BUY: 0   🔴 SELL: 1
+
+🔴 *1. SAMMAANCAP*  ⭐ 80/100
+`━━━━━━━━━━━━━━━━━━━━━`
+📌 *Action:*    SELL (buy PE / sell CE)
+💰 *Entry:*     ₹145.14
+🎯 *Target:*    ₹142.19
+🛑 *Stop Loss:* ₹146.16
+⚖️ *R:R:*       1:2.9
+📊 Price: -1.18%  |  OI: +13.84%  |  Vol: 113.8×
+  📦 Delivery: 21%
+  🔲 Options: N/A
+💬 _Short buildup confirmed. Price -1.18% | OI +13.84% | 113.8× vol | Delivery 21% | Nifty bearish. BEARISH setup._
+
+`━━━━━━━━━━━━━━━━━━━━━`
+📖 *CE/PE OI Guide:*
+• CE OI ↑ = Call writing = *Resistance* (bearish)
+• PE OI ↑ = Put writing  = *Support* (bullish)
+• CE OI ↓ = Calls exiting = *Bullish*
+• PE OI ↓ = Puts exiting  = *Bearish*
+• PCR > 1.2 = Bullish  |  PCR < 0.8 = Bearish
+
+📚 *OI Signal Rules:*
+```
+Price↑ + OI↑ = Long Buildup  ✅ BUY
+Price↓ + OI↑ = Short Buildup ✅ SELL
+Price↑ + OI↓ = Short Covering ❌ Avoid
+Price↓ + OI↓ = Long Unwinding ❌ Avoid
+```
+⚠️ _Risk max 2% per trade. Always check Nifty trend._
+🎃 _Shiva — OI + Options confirmed, no noise._
+
+💾 Alert saved: /root/.openclaw/workspace/projects/trading-bot/nse_oialerts/alerts_sent/intraday_20260327_093003.txt
+✅ Telegram alert delivered to Charlie
+DONE — 2026-03-27 04:00:04 UTC

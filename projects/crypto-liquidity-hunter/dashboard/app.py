@@ -763,24 +763,303 @@ def binance_close():
 
 @app.route('/api/binance/positions')
 def binance_positions():
-    """Return open Binance futures positions (or open paper trades in DB)."""
+    """
+    Return open positions.
+    Live/demo/testnet: fetch direct from Binance + merge with DB trade metadata.
+    Paper: return DB open trades with simulated PnL.
+    """
     try:
+        import urllib.request as _req
         config = load_config()
-        bc_cfg = config.get('binance_connection', {})
-        mode   = bc_cfg.get('mode', 'paper')
-        if mode == 'paper':
-            from data.store import DataStore
-            store  = DataStore()
-            trades = store.get_open_trades()
-            # Mark all as paper
-            for t in trades:
-                t['mode'] = 'paper'
-            return jsonify(trades)
-        else:
-            connector = _get_connector(connect=True)
-            positions = connector.get_positions()
-            return jsonify(positions)
+        store  = DataStore()
+
+        # Try to get live Binance futures positions (real money / demo / testnet)
+        live_positions = {}
+        live_connected = False
+        active_id = config.get('active_account_id')
+        live_connector = None
+        if active_id:
+            try:
+                acct = store.get_account(int(active_id))
+                if acct and acct.get('mode', 'paper') != 'paper':
+                    live_connector = _make_connector_from_account(acct, connect=True)
+                    if live_connector and live_connector.connected:
+                        live_connected = True
+                        positions = live_connector.get_positions()
+                        for p in positions:
+                            sym = p.get('symbol', '')
+                            clean = sym.split(':')[0] if ':' in sym else sym
+                            live_positions[sym]   = p
+                            live_positions[clean] = p
+            except Exception as e:
+                logger.warning(f"Live positions fetch failed: {e}")
+
+        # Always fetch current public prices for paper PnL + any unmatched DB trades
+        price_map = {}
+        try:
+            with _req.urlopen('https://api.binance.com/api/v3/ticker/price', timeout=5) as resp:
+                for item in json.loads(resp.read()):
+                    price_map[item['symbol']] = float(item['price'])
+        except Exception:
+            pass
+
+        # Load DB open trades
+        db_trades = store.get_open_trades()
+
+        result = []
+        for t in db_trades:
+            pair   = t.get('pair', '')
+            sym    = pair.split(':', 1)[1] if ':' in pair else pair
+            ccxt_s = (sym.split('/')[0] + '/' + sym.split('/')[1] + ':' + sym.split('/')[1]) if '/' in sym else sym
+            binance_sym = sym.replace('/', '')
+            direction   = t.get('direction', 'long')
+            ep          = float(t.get('entry_price', 0) or 0)
+            notional    = float(t.get('notional_usd', 0) or 0)
+            commission  = float(t.get('commission_usd', 0) or 0)
+            trade_mode  = t.get('mode', 'paper')
+
+            # Try live position first (gives exact mark price + real PnL)
+            live_p = live_positions.get(ccxt_s) or live_positions.get(sym)
+            if live_p:
+                mark   = float(live_p.get('mark_price', 0))
+                upnl   = float(live_p.get('unrealized_pnl', 0))
+                pct    = upnl / max(abs(float(live_p.get('notional', 1))), 1) * 100
+                contracts = float(live_p.get('contracts', 0))
+                liq    = float(live_p.get('liquidation_price', 0))
+                lev    = float(live_p.get('leverage', 1))
+                pos_notional = float(live_p.get('notional', notional))
+                display_mode = trade_mode
+            else:
+                # Compute from public Binance price
+                mark = price_map.get(binance_sym, 0.0)
+                if mark > 0 and ep > 0 and notional > 0:
+                    if direction == 'long':
+                        upnl = (mark - ep) / ep * notional - commission * 2
+                    else:
+                        upnl = (ep - mark) / ep * notional - commission * 2
+                    pct = round((mark - ep) / ep * 100 * (1 if direction == 'long' else -1), 3)
+                else:
+                    upnl = 0.0; pct = 0.0
+                contracts    = round(notional / ep, 6) if ep > 0 else 0
+                liq          = 0.0; lev = 1.0
+                pos_notional = notional
+                display_mode = trade_mode
+
+            result.append({
+                **t,   # all DB trade fields
+                'symbol':            ccxt_s,
+                'pair':              pair,
+                'direction':         direction,
+                'side':              direction,
+                'mark_price':        round(mark, 8),
+                'unrealized_pnl':    round(upnl, 4),
+                'pnl_pct':           round(pct, 3),
+                'contracts':         contracts,
+                'liquidation_price': round(liq, 6),
+                'leverage':          lev,
+                'notional':          pos_notional,
+                'mode':              display_mode,
+                'trade_id':          t.get('id'),
+            })
+
+        return jsonify(result)
+
     except Exception as e:
+        logger.error(f"binance_positions error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# (old binance_positions stub removed — replaced by the new implementation above)
+
+
+@app.route('/api/binance/positions/live_pnl')
+def binance_live_pnl():
+    """
+    Fast PnL-only refresh for open positions.
+    Returns {ccxt_symbol → {mark_price, unrealized_pnl, pnl_pct}}.
+    Uses Binance public price API so no auth needed.
+    """
+    try:
+        import urllib.request as _req
+        store    = DataStore()
+        trades   = store.get_open_trades()
+        if not trades:
+            return jsonify({})
+
+        # Build binance→ccxt symbol map
+        sym_map = {}   # 'TWTUSDT' → 'TWT/USDT'
+        for t in trades:
+            pair = t.get('pair', '')
+            sym  = pair.split(':', 1)[1] if ':' in pair else pair
+            binance_sym = sym.replace('/', '')
+            sym_map[binance_sym] = sym
+
+        # Batch fetch all prices
+        price_map = {}
+        with _req.urlopen('https://api.binance.com/api/v3/ticker/price', timeout=5) as resp:
+            for item in json.loads(resp.read()):
+                price_map[item['symbol']] = float(item['price'])
+
+        result = {}
+        for t in trades:
+            pair      = t.get('pair', '')
+            ccxt_sym  = pair.split(':', 1)[1] if ':' in pair else pair
+            binance_sym = ccxt_sym.replace('/', '')
+            ep        = float(t.get('entry_price', 0) or 0)
+            notional  = float(t.get('notional_usd', 0) or 0)
+            commission= float(t.get('commission_usd', 0) or 0)
+            direction = t.get('direction', 'long')
+            mark      = price_map.get(binance_sym, 0.0)
+
+            if mark > 0 and ep > 0 and notional > 0:
+                if direction == 'long':
+                    upnl = (mark - ep) / ep * notional - commission * 2
+                else:
+                    upnl = (ep - mark) / ep * notional - commission * 2
+                pct = round((mark - ep) / ep * 100 * (1 if direction == 'long' else -1), 3)
+            else:
+                upnl = 0.0; pct = 0.0
+
+            result[ccxt_sym] = {
+                'mark_price':     round(mark, 8),
+                'unrealized_pnl': round(upnl, 4),
+                'pnl_pct':        pct,
+            }
+        return jsonify(result)
+    except Exception as e:
+        logger.warning(f"live_pnl error: {e}")
+        return jsonify({})
+
+
+@app.route('/api/binance/book_sltp', methods=['POST'])
+def book_sltp():
+    """
+    Place SL + TP bracket orders for an existing live Binance position.
+    Body: {symbol, direction, qty, sl_price, tp_price, trade_id (optional)}
+    Works for live/demo/testnet positions.
+    """
+    data = request.get_json() or {}
+    symbol    = data.get('symbol', '').strip()
+    direction = data.get('direction', 'long')
+    qty       = float(data.get('qty', 0))
+    sl_price  = float(data.get('sl_price', 0))
+    tp_price  = float(data.get('tp_price', 0))
+    trade_id  = data.get('trade_id')
+
+    if not symbol:
+        return jsonify({'error': 'symbol required'}), 400
+    if qty <= 0:
+        return jsonify({'error': 'qty must be > 0'}), 400
+    if sl_price <= 0 and tp_price <= 0:
+        return jsonify({'error': 'at least sl_price or tp_price required'}), 400
+
+    try:
+        connector = _get_connector(connect=True)
+        if not connector.connected:
+            return jsonify({'error': 'Not connected to Binance'}), 400
+        if connector.mode == 'paper':
+            return jsonify({'error': 'Cannot place real bracket orders in paper mode'}), 400
+
+        result = connector.set_sl_tp(symbol, direction, qty, sl_price, tp_price)
+        if 'error' in result:
+            return jsonify({'error': result['error']}), 400
+
+        # Update DB trade with SL/TP if trade_id given
+        if trade_id:
+            import sqlite3
+            from pathlib import Path
+            db_path = Path('/root/.openclaw/workspace/projects/crypto-liquidity-hunter/data/store.db')
+            with sqlite3.connect(db_path) as conn:
+                conn.execute(
+                    "UPDATE trades SET sl=?, tp=? WHERE id=? AND status='open'",
+                    (sl_price or None, tp_price or None, trade_id)
+                )
+                conn.commit()
+
+        return jsonify({
+            'status':       'ok',
+            'sl_order_id':  result.get('sl_order_id'),
+            'tp_order_id':  result.get('tp_order_id'),
+            'sl_price':     result.get('sl_price'),
+            'tp_price':     result.get('tp_price'),
+        })
+    except Exception as e:
+        logger.error(f"book_sltp error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/binance/close_position', methods=['POST'])
+def close_position():
+    """
+    Close a live Binance position immediately at market.
+    Body: {symbol, direction, qty, trade_id (optional)}
+    """
+    data      = request.get_json() or {}
+    symbol    = data.get('symbol', '').strip()
+    direction = data.get('direction', 'long')
+    qty       = float(data.get('qty', 0))
+    trade_id  = data.get('trade_id')
+
+    if not symbol or qty <= 0:
+        return jsonify({'error': 'symbol and qty required'}), 400
+
+    try:
+        connector = _get_connector(connect=True)
+        if not connector.connected:
+            return jsonify({'error': 'Not connected to Binance'}), 400
+
+        close_side = 'sell' if direction == 'long' else 'buy'
+
+        if connector.mode == 'paper':
+            # Paper close: just update DB
+            exit_price = 0
+            try:
+                import ccxt as _ccxt
+                _ex = _ccxt.binance({'enableRateLimit': False})
+                ticker = _ex.fetch_ticker(symbol)
+                exit_price = float(ticker['last'])
+            except Exception:
+                pass
+            if trade_id:
+                exec_inst = __import__('core.trade_executor', fromlist=['TradeExecutor'])
+                te = exec_inst.TradeExecutor()
+                te.close_trade(trade_id, symbol, exit_price, reason='manual')
+            return jsonify({'status': 'ok', 'mode': 'paper', 'exit_price': exit_price})
+
+        # Live: place reduceOnly market order
+        qty_r  = connector._round_qty(symbol, qty)
+        order  = connector.exchange.create_order(
+            symbol, 'market', close_side, qty_r,
+            params={'reduceOnly': True}
+        )
+        exit_price = float(order.get('average') or order.get('price') or 0)
+
+        # Cancel any open SL/TP orders for this symbol
+        try:
+            open_orders = connector.exchange.fetch_open_orders(symbol)
+            for o in open_orders:
+                if o.get('reduceOnly'):
+                    connector.exchange.cancel_order(o['id'], symbol)
+        except Exception as e:
+            logger.warning(f"Cancel bracket orders warning: {e}")
+
+        # Close DB trade
+        if trade_id:
+            from core.trade_executor import TradeExecutor
+            te = TradeExecutor(connector=connector)
+            te.store = DataStore()
+            te.close_trade(trade_id, symbol, exit_price, reason='manual_close')
+
+        logger.info(f"Position closed: {close_side} {qty_r} {symbol} @ {exit_price}")
+        return jsonify({
+            'status':      'ok',
+            'order_id':    order.get('id'),
+            'exit_price':  exit_price,
+            'side':        close_side,
+            'qty':         qty_r,
+        })
+    except Exception as e:
+        logger.error(f"close_position error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1004,11 +1283,21 @@ def connect_account(account_id):
     balance_info = connector.get_balance('USDT')
     balance      = round(balance_info.get('free', 0), 2)
     store.update_account_balance(account_id, balance)
+
+    # Start position monitor for live/demo/testnet accounts
+    if acct.get('mode', 'paper') != 'paper':
+        try:
+            from core.position_monitor import start_monitor
+            start_monitor(connector, store, account_id=account_id, interval=10)
+            logger.info(f"[App] Position monitor started for account {account_id}")
+        except Exception as e:
+            logger.warning(f"[App] Could not start position monitor: {e}")
+
     return jsonify({
         'status':       'connected',
         'balance':      balance,
         'account_type': connector.account_type,
-        'message':      f'✅ Connected | Balance: ${balance} USDT',
+        'message':      f'✅ Connected | Balance: ${balance} USDT | Position monitor active',
     })
 
 

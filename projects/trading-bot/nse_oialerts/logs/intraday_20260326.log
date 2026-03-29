@@ -1,0 +1,116 @@
+======================================
+INTRADAY SCAN — 2026-03-26 04:00:01 UTC
+======================================
+[1/2] Running OI scanner...
+============================================================
+🎃 SHIVA HIGH-CONVICTION OI SCANNER
+============================================================
+Mode: INTRADAY  |  Top: 5
+Time: 2026-03-26 09:30 IST
+============================================================
+
+🔍 Scanning NSE for INTRADAY opportunities...
+   Quality gates: OI≥5.0% | Price≥0.8% confirmed | Vol≥1.5× | Conviction≥72 | R:R≥1.8
+   Nifty trend: bullish
+✅ Fetched 211 stocks from NSE OI Spurts
+📊 Analyzing 211 stocks (fetching real quotes)...
+   ✅ Passed: 1 | ❌ Rejected: 210
+
+🟢 BUY  (1):
+   LODHA        conviction=87 OI=+21.8% price=+1.0% vol=14.9× RR=3.00
+
+🔴 SELL (0):
+
+✅ Final: 1 high-conviction setups
+   🟢 BUY: 1  🔴 SELL: 0
+💾 Saved to projects/trading-bot/nse_oialerts/cache/INTRADAY_20260326.json
+
+============================================================
+📤 TELEGRAM PREVIEW:
+============================================================
+⚡ *SHIVA HIGH-CONVICTION OI — INTRADAY*
+📅 26 Mar 2026  🕐 09:30 AM IST
+Market: 🟢 BULLISH BIAS
+──────────────────────────────
+✅ *1 setup(s) passed all quality gates*
+
+🟢 *BUY — Long Buildup* (Price↑ + OI↑)
+`━━━━━━━━━━━━━━━━━━━━━`
+
+*1. LODHA*  ⭐ 87/100
+📈 Action: *BUY (CE side: buy CE / sell PE)*
+💰 Entry: ₹733.9
+🎯 Target: ₹749.31  🛑 SL: ₹728.76
+⚖️ R:R = 1:3.0
+📊 Price +1.03% | OI +21.84% | Vol 14.9×
+  📦 Delivery: 58%
+  🔲 Options: N/A (chain unavailable)
+💬 _Long buildup confirmed. Price +1.03% | OI +21.84% | 14.9× vol | Delivery 58% | Nifty bullish. BULLISH setup._
+
+`━━━━━━━━━━━━━━━━━━━━━`
+📖 *CE/PE OI Guide:*
+• CE OI ↑ = Call writing = *Resistance* (bearish)
+• PE OI ↑ = Put writing  = *Support* (bullish)
+• CE OI ↓ = Calls unwinding = *Bullish*
+• PE OI ↓ = Puts unwinding  = *Bearish*
+• PCR > 1.2 = Bullish | PCR < 0.8 = Bearish
+
+⚠️ *Risk Rules:*
+• Max 2% capital risk per trade
+• Book 50% at 1:1 R:R, trail rest
+• Exit all if SL hits — no exceptions
+• Max 2-3 trades simultaneously
+
+```
+✅ BUY:  Price↑ + OI↑ = Long Buildup
+✅ SELL: Price↓ + OI↑ = Short Buildup
+❌ SKIP: Short Covering / Long Unwinding
+```
+_🎃 Shiva — OI + Options confirmed, no noise._
+[2/2] Sending Telegram alert...
+
+==================================================
+🎃 SHIVA OI ALERT SENDER — INTRADAY
+==================================================
+
+📨 Message preview:
+
+⚡ *SHIVA OI MOMENTUM — INTRADAY*
+📅 Thursday, 26 Mar 2026  🕐 09:30 AM IST
+──────────────────────────────
+✅ *1 high-conviction setup(s) found*
+🟢 BUY: 1   🔴 SELL: 0
+
+🟢 *1. LODHA*  ⭐ 87/100
+`━━━━━━━━━━━━━━━━━━━━━`
+📌 *Action:*    BUY (buy CE / sell PE)
+💰 *Entry:*     ₹733.9
+🎯 *Target:*    ₹749.31
+🛑 *Stop Loss:* ₹728.76
+⚖️ *R:R:*       1:3.0
+📊 Price: +1.03%  |  OI: +21.84%  |  Vol: 14.9×
+  📦 Delivery: 58%
+  🔲 Options: N/A
+💬 _Long buildup confirmed. Price +1.03% | OI +21.84% | 14.9× vol | Delivery 58% | Nifty bullish. BULLISH setup._
+
+`━━━━━━━━━━━━━━━━━━━━━`
+📖 *CE/PE OI Guide:*
+• CE OI ↑ = Call writing = *Resistance* (bearish)
+• PE OI ↑ = Put writing  = *Support* (bullish)
+• CE OI ↓ = Calls exiting = *Bullish*
+• PE OI ↓ = Puts exiting  = *Bearish*
+• PCR > 1.2 = Bullish  |  PCR < 0.8 = Bearish
+
+📚 *OI Signal Rules:*
+```
+Price↑ + OI↑ = Long Buildup  ✅ BUY
+Price↓ + OI↑ = Short Buildup ✅ SELL
+Price↑ + OI↓ = Short Covering ❌ Avoid
+Price↓ + OI↓ = Long Unwinding ❌ Avoid
+```
+⚠️ _Risk max 2% per trade. Always check Nifty trend._
+🎃 _Shiva — OI + Options confirmed, no noise._
+
+💾 Alert saved: /root/.openclaw/workspace/projects/trading-bot/nse_oialerts/alerts_sent/intraday_20260326_093017.txt
+✅ Telegram alert delivered to Charlie
+DONE — 2026-03-26 04:00:33 UTC

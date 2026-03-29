@@ -856,6 +856,8 @@ function switchTab(name, el) {
   if (name === 'trades')   loadTrades();
   if (name === 'signals')  { loadSigs(); loadPendingSignals(); }
   if (name === 'settings') loadSettings();
+  // Stop PnL refresh if leaving trading tab
+  if (name !== 'trading')  stopLivePnlRefresh();
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
@@ -1650,17 +1652,19 @@ document.addEventListener('DOMContentLoaded', () => {
       <table style="width:100%;border-collapse:collapse;font-size:12px" id="posTable">
         <thead>
           <tr style="color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg2)">
-            <th style="padding:8px 10px;text-align:left;font-weight:600">Account</th>
             <th style="padding:8px 10px;text-align:left;font-weight:600">Symbol</th>
             <th style="padding:8px 10px;text-align:left;font-weight:600">Side</th>
             <th style="padding:8px 10px;text-align:right;font-weight:600">Entry</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">Mark</th>
             <th style="padding:8px 10px;text-align:right;font-weight:600">SL</th>
             <th style="padding:8px 10px;text-align:right;font-weight:600">TP</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">Contracts</th>
             <th style="padding:8px 10px;text-align:right;font-weight:600">Notional</th>
-            <th style="padding:8px 10px;text-align:right;font-weight:600">Live PnL</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">Unr.PnL</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">PnL%</th>
+            <th style="padding:8px 10px;text-align:right;font-weight:600">Liq.</th>
             <th style="padding:8px 10px;text-align:left;font-weight:600">Mode</th>
-            <th style="padding:8px 10px;text-align:left;font-weight:600">Time (IST)</th>
-            <th style="padding:8px 10px;text-align:center;font-weight:600">Action</th>
+            <th style="padding:8px 10px;text-align:center;font-weight:600">Actions</th>
           </tr>
         </thead>
         <tbody id="posTableBody">
@@ -2389,77 +2393,169 @@ async function fetchMarkPrices(trades) {
   }
 }
 
-async function loadPositions() {
-  const filterVal = document.getElementById('posAccFilter')?.value || 'all';
-  const tbody = document.getElementById('posTableBody');
+// ── Live positions: auto-refresh PnL every 5s when trading tab is active ──────
+let _posLivePnlTimer = null;
+function startLivePnlRefresh() {
+  stopLivePnlRefresh();
+  _posLivePnlTimer = setInterval(() => refreshLivePnl(), 5000);
+}
+function stopLivePnlRefresh() {
+  if (_posLivePnlTimer) { clearInterval(_posLivePnlTimer); _posLivePnlTimer = null; }
+}
+
+async function refreshLivePnl() {
   try {
-    let trades = [];
-    if (filterVal === 'all') {
-      // Fetch all open trades from legacy endpoint (includes all account_ids)
-      const r = await fetch('/api/trades?status=open');
-      trades = await r.json();
-    } else {
-      const r = await fetch(`/api/accounts/${filterVal}/trades?status=open`);
-      trades = await r.json();
-    }
-    if (!trades || trades.length === 0 || trades.error) {
-      tbody.innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--muted)">No open positions</td></tr>';
+    const r = await fetch('/api/binance/positions/live_pnl');
+    const d = await r.json();
+    if (d.error) return;
+    // Update PnL cells in place — avoid full re-render flicker
+    Object.entries(d).forEach(([sym, p]) => {
+      const cell = document.querySelector(`[data-pnlsym="${sym}"]`);
+      if (!cell) return;
+      const pnl  = parseFloat(p.unrealized_pnl || 0);
+      const pct  = parseFloat(p.pnl_pct || 0);
+      const mark = parseFloat(p.mark_price || 0);
+      const color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+      const sign  = pnl >= 0 ? '+' : '';
+      cell.innerHTML = `<span style="color:${color};font-weight:700">${sign}$${pnl.toFixed(2)}</span>
+        <div style="color:${color};font-size:10px">${sign}${pct.toFixed(2)}%</div>
+        <div style="color:var(--muted);font-size:10px">Mark: $${mark.toFixed(4)}</div>`;
+    });
+  } catch(e) {}
+}
+
+async function loadPositions() {
+  const tbody = document.getElementById('posTableBody');
+  const COLS  = 13; // match thead column count
+  try {
+    // Use enriched endpoint: live Binance positions + DB metadata
+    const r = await fetch('/api/binance/positions');
+    const positions = await r.json();
+
+    if (positions.error) {
+      tbody.innerHTML = `<tr><td colspan="${COLS}" style="padding:20px;text-align:center;color:var(--red)">❌ ${positions.error}</td></tr>`;
       return;
     }
-    // Fetch current mark prices for live PnL
-    await fetchMarkPrices(trades);
-    // Build account name lookup
-    const accMap = {};
-    (_accountsCache || []).forEach(a => accMap[a.id] = a.name);
+    if (!positions || positions.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${COLS}" style="padding:20px;text-align:center;color:var(--muted)">No open positions</td></tr>`;
+      stopLivePnlRefresh();
+      return;
+    }
 
-    tbody.innerHTML = trades.map(t => {
-      const entryTs  = t.entry_time ? new Date(t.entry_time).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour12:false}).replace(',',' ') : '—';
-      const side     = t.direction || t.side || '?';
+    tbody.innerHTML = positions.map(p => {
+      const sym       = (p.symbol || p.pair || '').replace('binance:','').split(':')[0];
+      const side      = (p.side || p.direction || '').toLowerCase();
       const sideColor = (side === 'long' || side === 'buy') ? 'var(--green)' : 'var(--red)';
-      const modeMap  = {paper:'📝 Paper', demo:'🟡 Demo', testnet:'🔵 Test', live:'🚀 Live'};
-      const modeBadge = modeMap[t.mode] || (t.mode || '📝 Paper');
-      const symbol   = (t.pair||t.symbol||'?').replace('binance:','');
-      const accName  = t.account_id ? (accMap[t.account_id] || `#${t.account_id}`) : '—';
-      // Live PnL from server cache
-      const lp = _livePnlCache[String(t.id)];
-      let pnlHtml = '<span style="color:var(--muted)">—</span>';
-      if (lp) {
-        const pnl      = lp.pnl_usd;
-        const pnlPct   = lp.pnl_pct;
-        const pnlColor = pnl >= 0 ? 'var(--green)' : 'var(--red)';
-        const pnlSign  = pnl >= 0 ? '+' : '';
-        pnlHtml = `<span style="color:${pnlColor};font-weight:600">${pnlSign}$${pnl.toFixed(2)}</span><br>
-                   <span style="color:${pnlColor};font-size:10px">${pnlSign}${pnlPct.toFixed(2)}%</span>`;
-      }
+      const mode      = p.mode || 'paper';
+      const modeBadge = {paper:'📝 Paper', demo:'🟡 Demo', testnet:'🔵 Test', live:'🚀 Live', mainnet:'🚀 Live'}[mode] || mode;
+      const ep        = parseFloat(p.entry_price || 0);
+      const mark      = parseFloat(p.mark_price  || 0);
+      const upnl      = parseFloat(p.unrealized_pnl || 0);
+      const pct       = parseFloat(p.pnl_pct || 0);
+      const liq       = parseFloat(p.liquidation_price || 0);
+      const sl        = parseFloat(p.sl || 0);
+      const tp        = parseFloat(p.tp || 0);
+      const contracts = parseFloat(p.contracts || 0);
+      const notional  = parseFloat(p.notional || p.notional_usd || 0);
+      const pnlColor  = upnl >= 0 ? 'var(--green)' : 'var(--red)';
+      const pnlSign   = upnl >= 0 ? '+' : '';
+      const tradeId   = p.trade_id || p.id || null;
+      const liqStr    = liq > 0 ? `<span style="color:var(--red)">$${liq.toFixed(4)}</span>` : '—';
+      const entryTs   = p.entry_time
+        ? new Date(p.entry_time).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour12:false}).replace(',',' ')
+        : '—';
+      // ccxt normalised symbol for live_pnl updates
+      const ccxtSym = p.symbol || sym;
+
       return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:7px 8px;font-size:11px;color:var(--muted)">${accName}</td>
-        <td style="padding:7px 8px;font-weight:600">${symbol}</td>
-        <td style="padding:7px 8px;color:${sideColor};font-weight:700">${side.toUpperCase()}</td>
-        <td style="padding:7px 8px;text-align:right">$${parseFloat(t.entry_price||0).toFixed(4)}</td>
-        <td style="padding:7px 8px;text-align:right;color:var(--red)">${t.sl ? '$'+parseFloat(t.sl).toFixed(4) : '—'}</td>
-        <td style="padding:7px 8px;text-align:right;color:var(--green)">${t.tp ? '$'+parseFloat(t.tp).toFixed(4) : '—'}</td>
-        <td style="padding:7px 8px;text-align:right">$${parseFloat(t.notional_usd||t.notional||0).toFixed(2)}</td>
-        <td style="padding:7px 8px;text-align:right">${pnlHtml}</td>
+        <td style="padding:7px 8px;font-weight:700;color:var(--blue2)">${sym}</td>
+        <td style="padding:7px 8px;color:${sideColor};font-weight:800">${side.toUpperCase()}</td>
+        <td style="padding:7px 8px;text-align:right;font-weight:600">$${ep.toFixed(4)}</td>
+        <td style="padding:7px 8px;text-align:right" id="mark_${ccxtSym.replace('/','_')}">$${mark.toFixed(4)}</td>
+        <td style="padding:7px 8px;text-align:right;color:var(--red)">${sl > 0 ? '$'+sl.toFixed(4) : '<span style="color:var(--yellow)">⚠ None</span>'}</td>
+        <td style="padding:7px 8px;text-align:right;color:var(--green)">${tp > 0 ? '$'+tp.toFixed(4) : '<span style="color:var(--muted)">—</span>'}</td>
+        <td style="padding:7px 8px;text-align:right">${contracts.toFixed(4)}</td>
+        <td style="padding:7px 8px;text-align:right">$${notional.toFixed(2)}</td>
+        <td style="padding:7px 8px;text-align:right" data-pnlsym="${ccxtSym}">
+          <span style="color:${pnlColor};font-weight:700">${pnlSign}$${upnl.toFixed(2)}</span>
+          <div style="color:${pnlColor};font-size:10px">${pnlSign}${pct.toFixed(2)}%</div>
+          ${mark > 0 ? `<div style="color:var(--muted);font-size:10px">Mark: $${mark.toFixed(4)}</div>` : ''}
+        </td>
+        <td style="padding:7px 8px;text-align:right">${liqStr}</td>
         <td style="padding:7px 8px">${modeBadge}</td>
-        <td style="padding:7px 8px;color:var(--muted);font-size:11px">${entryTs}</td>
-        <td style="padding:7px 8px;text-align:center">
-          <button onclick="closeTrade(${t.id},'${(t.pair||t.symbol||'').replace('binance:','')}',${t.account_id||'null'})"
-            style="background:var(--red);color:#fff;border:none;border-radius:3px;padding:3px 8px;font-size:11px;cursor:pointer">❌ Close</button>
+        <td style="padding:7px 8px;text-align:center;display:flex;gap:4px;flex-wrap:wrap">
+          ${sl <= 0 || tp <= 0 ? `
+          <button onclick="bookSLTP('${ccxtSym}','${side}',${contracts},${ep},${tradeId})"
+            title="Book SL/TP on Binance"
+            style="background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3);border-radius:3px;padding:3px 7px;font-size:10px;cursor:pointer;white-space:nowrap">🎯 Book SL/TP</button>` : ''}
+          <button onclick="closePositionNow('${ccxtSym}','${side}',${contracts},${tradeId})"
+            title="Close position at market"
+            style="background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:3px;padding:3px 7px;font-size:10px;cursor:pointer">❌ Close</button>
         </td>
       </tr>`;
     }).join('');
+
+    // Start live PnL refresh
+    startLivePnlRefresh();
+
   } catch(e) {
     console.error('loadPositions:', e);
-    tbody.innerHTML = `<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--red)">Error: ${e}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${COLS}" style="padding:20px;text-align:center;color:var(--red)">Error: ${e}</td></tr>`;
   }
 }
 
+// ── Book SL/TP modal ───────────────────────────────────────────────────────────
+async function bookSLTP(symbol, direction, qty, entryPrice, tradeId) {
+  const slInput = prompt(
+    `📍 Book SL/TP for ${symbol} (${direction.toUpperCase()}) qty=${qty.toFixed(4)}\n\nEntry: $${entryPrice}\n\nEnter: SL,TP (comma-separated)\nExample: 0.165,0.182`,
+    ''
+  );
+  if (!slInput) return;
+  const parts = slInput.split(',').map(s => parseFloat(s.trim()));
+  if (parts.length < 2 || parts.some(isNaN)) {
+    alert('❌ Enter two values: SL,TP  e.g.  0.165,0.182'); return;
+  }
+  const [sl, tp] = parts;
+  try {
+    const r = await fetch('/api/binance/book_sltp', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ symbol, direction, qty, sl_price: sl, tp_price: tp, trade_id: tradeId })
+    });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      toast(`✅ SL/TP booked — SL: $${d.sl_price}  TP: $${d.tp_price}`, 'green');
+      loadPositions();
+    } else {
+      alert('❌ Failed: ' + (d.error || 'unknown'));
+    }
+  } catch(e) { alert('Error: ' + e); }
+}
+
+// ── Close position ─────────────────────────────────────────────────────────────
+async function closePositionNow(symbol, direction, qty, tradeId) {
+  if (!confirm(`⚠️ Close ${symbol} ${direction.toUpperCase()} (qty: ${qty}) at MARKET price?\nThis will cancel SL/TP orders too.`)) return;
+  try {
+    const r = await fetch('/api/binance/close_position', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ symbol, direction, qty, trade_id: tradeId })
+    });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      toast(`✅ Closed ${symbol} @ $${(d.exit_price||0).toFixed(4)}`, 'green');
+      loadPositions();
+    } else {
+      alert('❌ Close failed: ' + (d.error || 'unknown'));
+    }
+  } catch(e) { alert('Error: ' + e); }
+}
+
+// Legacy — kept for backward compat with old close buttons
 async function closeTrade(tradeId, symbol, accountId) {
   if (!confirm(`Close trade #${tradeId} for ${symbol}?`)) return;
   try {
-    const url = accountId
-      ? `/api/accounts/${accountId}/close`
-      : '/api/binance/close';
+    const url = accountId ? `/api/accounts/${accountId}/close` : '/api/binance/close';
     const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({trade_id: tradeId, symbol: 'binance:' + symbol})});
     const d = await r.json();

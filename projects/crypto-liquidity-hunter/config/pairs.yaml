@@ -3,7 +3,7 @@ alerts:
     bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
     chat_id: '686482312'
     enabled: true
-    min_confidence: 0.7
+    min_confidence: 0.75
 backtester:
   commission_pct: 0.001
   max_concurrent_trades: 3
@@ -506,6 +506,6 @@ volume_filter:
   min_24h_volume_usd: 1000000
 active_account_id: 2
 signal_execution:
-  mode: pending
+  mode: auto
   entry_tolerance_pct: 0.3
   auto_execute: true

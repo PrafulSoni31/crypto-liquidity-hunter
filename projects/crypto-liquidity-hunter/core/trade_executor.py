@@ -140,6 +140,7 @@ class TradeExecutor:
         side = 'buy' if direction == 'long' else 'sell'
 
         order_result = {}
+        sltp_result  = {}
         if self.mode == 'paper':
             order_result = self.connector.paper_execute(symbol, side, qty, entry_price)
         else:
@@ -154,10 +155,15 @@ class TradeExecutor:
                 if actual_fill > 0:
                     entry_price = actual_fill
                     logger.info(f"Live fill price: {entry_price} (was {signal_dict.get('entry_price','?')})")
-                # Place SL/TP after entry
+                # Place SL/TP bracket orders immediately after entry
                 if stop_loss > 0 or target > 0:
-                    sl_tp = self.connector.set_sl_tp(symbol, direction, qty, stop_loss, target)
-                    order_result['sl_tp'] = sl_tp
+                    sltp_result = self.connector.set_sl_tp(symbol, direction, qty, stop_loss, target)
+                    order_result['sl_tp'] = sltp_result
+                    if 'error' in sltp_result:
+                        logger.warning(f"SL/TP placement failed: {sltp_result['error']}")
+                    else:
+                        logger.info(f"SL/TP placed: SL={sltp_result.get('sl_price')} "
+                                    f"TP={sltp_result.get('tp_price')}")
 
         if 'error' in order_result:
             return {'error': order_result['error']}
@@ -181,15 +187,28 @@ class TradeExecutor:
             account_id     = self.account_id,
         )
 
+        # Start position monitor for live accounts so SL/TP hits auto-close DB
+        if self.mode != 'paper' and self.account_id and trade_id:
+            try:
+                from core.position_monitor import start_monitor, get_monitor
+                m = start_monitor(self.connector, self.store,
+                                  account_id=self.account_id, interval=10)
+                if sltp_result and 'error' not in sltp_result:
+                    m.mark_sltp_placed(trade_id)
+            except Exception as e:
+                logger.warning(f"Could not start position monitor: {e}")
+
         return {
-            'trade_id':    trade_id,
-            'mode':        self.mode,
-            'qty':         qty,
-            'entry_price': entry_price,
-            'sl':          stop_loss,
-            'tp':          target,
-            'order_id':    order_result.get('id'),
-            'status':      'open',
+            'trade_id':       trade_id,
+            'mode':           self.mode,
+            'qty':            qty,
+            'entry_price':    entry_price,
+            'sl':             stop_loss,
+            'tp':             target,
+            'order_id':       order_result.get('id'),
+            'sl_order_id':    sltp_result.get('sl_order_id') if sltp_result else None,
+            'tp_order_id':    sltp_result.get('tp_order_id') if sltp_result else None,
+            'status':         'open',
         }
 
     # ─── Close Trade ──────────────────────────────────────────────────────────

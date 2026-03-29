@@ -1,0 +1,136 @@
+======================================
+INTRADAY SCAN — 2026-03-25 04:00:01 UTC
+======================================
+[1/2] Running OI scanner...
+============================================================
+🎃 SHIVA HIGH-CONVICTION OI SCANNER
+============================================================
+Mode: INTRADAY  |  Top: 5
+Time: 2026-03-25 09:30 IST
+============================================================
+
+🔍 Scanning NSE for INTRADAY opportunities...
+   Quality gates: OI≥5.0% | Price≥0.8% confirmed | Vol≥1.5× | Conviction≥72 | R:R≥1.8
+   Nifty trend: bullish
+✅ Fetched 211 stocks from NSE OI Spurts
+📊 Analyzing 211 stocks (fetching real quotes)...
+   ✅ Passed: 3 | ❌ Rejected: 208
+
+🟢 BUY  (3):
+   NYKAA        conviction=82 OI=+6.0% price=+2.4% vol=5.1× RR=2.23
+   CHOLAFIN     conviction=78 OI=+5.1% price=+3.2% vol=2.5× RR=2.15
+   PGEL         conviction=75 OI=+6.8% price=+6.1% vol=3.9× RR=2.30
+
+🔴 SELL (0):
+
+✅ Final: 3 high-conviction setups
+   🟢 BUY: 3  🔴 SELL: 0
+💾 Saved to projects/trading-bot/nse_oialerts/cache/INTRADAY_20260325.json
+
+============================================================
+📤 TELEGRAM PREVIEW:
+============================================================
+⚡ *SHIVA HIGH-CONVICTION OI — INTRADAY*
+📅 25 Mar 2026  🕐 09:30 AM IST
+Market: 🟢 BULLISH BIAS
+──────────────────────────────
+✅ *3 setup(s) passed all quality gates*
+
+🟢 *BUY — Long Buildup* (Price↑ + OI↑)
+`━━━━━━━━━━━━━━━━━━━━━`
+
+*1. NYKAA*  ⭐ 82/100
+📈 Action: *BUY*
+💰 Entry: ₹245.9
+🎯 Target: ₹249.74  🛑 SL: ₹244.18
+⚖️ R:R = 1:2.2
+📊 Price +2.44% | OI +6.01% | Vol 5.1×  📦 Delivery: 60%
+💬 _Long buildup confirmed. Price +2.44% | OI +6.01% | 5.1× vol | Delivery 59% | Nifty bullish. BULLISH setup._
+
+*2. CHOLAFIN*  ⭐ 78/100
+📈 Action: *BUY*
+💰 Entry: ₹1464.1
+🎯 Target: ₹1486.18  🛑 SL: ₹1453.85
+⚖️ R:R = 1:2.1
+📊 Price +3.19% | OI +5.14% | Vol 2.5×  📦 Delivery: 55%
+💬 _Long buildup confirmed. Price +3.19% | OI +5.14% | 2.5× vol | Delivery 55% | Nifty bullish. BULLISH setup._
+
+*3. PGEL*  ⭐ 75/100
+📈 Action: *BUY*
+💰 Entry: ₹532.4
+🎯 Target: ₹540.96  🛑 SL: ₹528.67
+⚖️ R:R = 1:2.3
+📊 Price +6.12% | OI +6.79% | Vol 3.9×  📦 Delivery: 22%
+💬 _Long buildup confirmed. Price +6.12% | OI +6.79% | 3.9× vol | Delivery 22% | Nifty bullish. BULLISH setup._
+
+`━━━━━━━━━━━━━━━━━━━━━`
+⚠️ *Risk Rules:*
+• Max 2% capital risk per trade
+• Book 50% at 1:1 R:R, trail rest
+• Exit all if SL hits — no exceptions
+• Max 2-3 trades simultaneously
+
+```
+✅ BUY:  Price↑ + OI↑ = Long Buildup
+✅ SELL: Price↓ + OI↑ = Short Buildup
+❌ SKIP: Short Covering / Long Unwinding
+```
+_🎃 Shiva — only high-conviction, no noise._
+[2/2] Sending Telegram alert...
+
+==================================================
+🎃 SHIVA OI ALERT SENDER — INTRADAY
+==================================================
+
+📨 Message preview:
+
+⚡ *SHIVA OI MOMENTUM — INTRADAY*
+📅 Wednesday, 25 Mar 2026  🕐 09:30 AM IST
+──────────────────────────────
+✅ *3 high-conviction setup(s) found*
+🟢 BUY: 3   🔴 SELL: 0
+
+🟢 *1. NYKAA*  — Conviction 82/100
+`━━━━━━━━━━━━━━━━━━━━━`
+📌 *Action:*    BUY
+💰 *Entry:*     ₹245.9
+🎯 *Target:*    ₹249.74
+🛑 *Stop Loss:* ₹244.18
+⚖️ *R:R:*       1:2.2
+📊 Price: +2.44%  |  OI: +6.01%  |  Vol: 5.1x
+💬 _Long buildup confirmed. Price +2.44% | OI +6.01% | 5.1× vol | Delivery 59% | Nifty bullish. BULLISH setup._
+
+🟢 *2. CHOLAFIN*  — Conviction 78/100
+`━━━━━━━━━━━━━━━━━━━━━`
+📌 *Action:*    BUY
+💰 *Entry:*     ₹1464.1
+🎯 *Target:*    ₹1486.18
+🛑 *Stop Loss:* ₹1453.85
+⚖️ *R:R:*       1:2.1
+📊 Price: +3.19%  |  OI: +5.14%  |  Vol: 2.5x
+💬 _Long buildup confirmed. Price +3.19% | OI +5.14% | 2.5× vol | Delivery 55% | Nifty bullish. BULLISH setup._
+
+🟢 *3. PGEL*  — Conviction 75/100
+`━━━━━━━━━━━━━━━━━━━━━`
+📌 *Action:*    BUY
+💰 *Entry:*     ₹532.4
+🎯 *Target:*    ₹540.96
+🛑 *Stop Loss:* ₹528.67
+⚖️ *R:R:*       1:2.3
+📊 Price: +6.12%  |  OI: +6.79%  |  Vol: 3.9x
+💬 _Long buildup confirmed. Price +6.12% | OI +6.79% | 3.9× vol | Delivery 22% | Nifty bullish. BULLISH setup._
+
+`━━━━━━━━━━━━━━━━━━━━━`
+📚 *OI Signal Cheat Sheet:*
+```
+Price↑ + OI↑ = Long Buildup  ✅ BUY
+Price↓ + OI↑ = Short Buildup ✅ SELL
+Price↑ + OI↓ = Short Covering ❌ Avoid
+Price↓ + OI↓ = Long Unwinding ❌ Avoid
+```
+⚠️ _Risk max 2% per trade. Always check Nifty trend._
+🎃 _Shiva watching the markets for you._
+
+💾 Alert saved: /root/.openclaw/workspace/projects/trading-bot/nse_oialerts/alerts_sent/intraday_20260325_093003.txt
+✅ Telegram alert delivered to Charlie
+DONE — 2026-03-25 04:00:18 UTC
