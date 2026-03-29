@@ -737,7 +737,7 @@ let activeBroker = 'binance';
 let connectedBroker = null;
 
 const BINANCE_REST  = 'https://api.binance.com';
-const BINANCE_WS    = 'wss://stream.binance.com:9443/ws';
+const BINANCE_WS    = 'wss://fstream.binance.com/ws';  // Futures stream (mark price, accurate)
 
 let chartCanvas, chartCtx;
 
@@ -1058,48 +1058,102 @@ function pauseAuto(reason) {
 // ═══════════════════════════════════════
 //  SCAN
 // ═══════════════════════════════════════
+//  SCAN — all Binance USDT-M Futures perps
+// ═══════════════════════════════════════
+const FAPI_BASE = 'https://fapi.binance.com';
+const STABLES   = new Set(['BUSDUSDT','USDCUSDT','TUSDUSDT','USDTUSDT','DAIUSDT',
+                            'FDUSDUSDT','USDPUSDT','EURUSDT','GBPUSDT','AUDUSDT']);
+
+// Cache futures symbols list (changes rarely)
+let _futureSymbols = null;
+async function getFutureSymbols() {
+  if (_futureSymbols) return _futureSymbols;
+  const r = await fetch(`${FAPI_BASE}/fapi/v1/exchangeInfo`);
+  const d = await r.json();
+  _futureSymbols = d.symbols
+    .filter(s => s.quoteAsset === 'USDT' && s.status === 'TRADING'
+              && s.contractType === 'PERPETUAL' && !STABLES.has(s.symbol))
+    .map(s => s.symbol);
+  return _futureSymbols;
+}
+
 async function runScan() {
   const btn = document.getElementById('scan-btn');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span>';
-  log('SCAN','Market scan',`Pump ≥${CFG.pumpThreshold}% · Vol ≥${fmtVol(CFG.minVolume)}`);
+  log('SCAN','Binance Futures scan',`Pump ≥${CFG.pumpThreshold}% · Vol ≥${fmtVol(CFG.minVolume)} · ALL USDT-M perps`);
   try {
-    const r = await fetch(`${BINANCE_REST}/api/v3/ticker/24hr`);
-    if (!r.ok) throw new Error('HTTP '+r.status);
+    // Fetch all Binance Futures 24hr tickers in a single call
+    const r = await fetch(`${FAPI_BASE}/fapi/v1/ticker/24hr`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const tickers = await r.json();
-    const stables = new Set(['BUSDUSDT','USDCUSDT','TUSDUSDT','USDTUSDT','DAIUSDT','FDUSDUSDT','USDPUSDT']);
-    const found = tickers.filter(t =>
-      t.symbol.endsWith('USDT') && !stables.has(t.symbol) &&
-      parseFloat(t.priceChangePercent) >= CFG.pumpThreshold &&
-      parseFloat(t.quoteVolume) >= CFG.minVolume &&
-      parseFloat(t.lastPrice) > 0
-    ).sort((a,b) => parseFloat(b.priceChangePercent)-parseFloat(a.priceChangePercent)).slice(0,40);
+
+    // Get valid perpetual symbols (filter out index/delivery contracts)
+    let validSymbols;
+    try {
+      validSymbols = new Set(await getFutureSymbols());
+    } catch(e) {
+      // Fallback: use all USDT tickers from response
+      validSymbols = null;
+    }
+
+    const found = tickers.filter(t => {
+      if (!t.symbol.endsWith('USDT'))        return false;
+      if (STABLES.has(t.symbol))             return false;
+      if (validSymbols && !validSymbols.has(t.symbol)) return false;
+      if (parseFloat(t.lastPrice) <= 0)      return false;
+      if (parseFloat(t.priceChangePercent) < CFG.pumpThreshold) return false;
+      if (parseFloat(t.quoteVolume) < CFG.minVolume) return false;
+      return true;
+    }).sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
+    // NO slice — scan ALL qualifying pairs
 
     scanResults = found.map(t => {
-      const pump = parseFloat(t.priceChangePercent);
-      const high = parseFloat(t.highPrice), last = parseFloat(t.lastPrice);
-      const fromHigh = ((last-high)/high)*100;
-      const volRatio = parseFloat(t.volume) / (parseFloat(t.volume)||1);
-      const hasSignal = fromHigh <= -CFG.reversalThreshold;
-      const strength = !hasSignal ? null : Math.abs(fromHigh)>=CFG.reversalThreshold*2 ? 'STRONG':'WEAK';
-      // Confidence score (0-100)
-      const pumpScore = Math.min(40, pump/2);
-      const reversalScore = hasSignal ? Math.min(40, Math.abs(fromHigh)*4) : 0;
-      const volScore = 20;
-      const confidence = pumpScore + reversalScore + volScore;
+      const pump     = parseFloat(t.priceChangePercent);
+      const high     = parseFloat(t.highPrice);
+      const last     = parseFloat(t.lastPrice);
+      const fromHigh = high > 0 ? ((last - high) / high) * 100 : 0;
+      const hasSignal   = fromHigh <= -CFG.reversalThreshold;
+      const strength    = !hasSignal ? null
+        : Math.abs(fromHigh) >= CFG.reversalThreshold * 2 ? 'STRONG' : 'WEAK';
+      const pumpScore     = Math.min(40, pump / 2);
+      const reversalScore = hasSignal ? Math.min(40, Math.abs(fromHigh) * 4) : 0;
+      const volScore      = Math.min(20, Math.log10(parseFloat(t.quoteVolume) / 1e5) * 5);
+      const confidence    = Math.round(pumpScore + reversalScore + Math.max(0, volScore));
       return {
-        symbol:t.symbol, pump, high, low:parseFloat(t.lowPrice), last,
-        vol:parseFloat(t.quoteVolume), fromHigh, hasSignal, signalStrength:strength,
-        openPrice:parseFloat(t.openPrice), confidence, rsi:null,
+        symbol:      t.symbol,
+        pump,
+        high,
+        low:         parseFloat(t.lowPrice),
+        last,
+        vol:         parseFloat(t.quoteVolume),
+        fromHigh,
+        hasSignal,
+        signalStrength: strength,
+        openPrice:   parseFloat(t.openPrice),
+        count:       parseInt(t.count || 0),     // number of trades
+        confidence,
+        rsi:         null,
       };
     });
 
-    const sigs = scanResults.filter(c=>c.hasSignal).length;
-    document.getElementById('sig-count').textContent = `${scanResults.length} pumped | ${sigs} sigs`;
+    const total = scanResults.length;
+    const sigs  = scanResults.filter(c => c.hasSignal).length;
+    document.getElementById('sig-count').textContent =
+      `${total} pumped | ${sigs} signals | of ${tickers.filter(t=>t.symbol.endsWith('USDT')).length} pairs`;
     renderScanner();
-    scanResults.slice(0,10).forEach(c=>subscribeWS(c.symbol));
-    log('SCAN','Complete',`<strong>${scanResults.length}</strong> pumped · <strong>${sigs}</strong> signals`);
-  } catch(e) { toast('Scan failed: '+e.message,'error'); log('ERROR','Scan failed',e.message); }
-  btn.disabled=false; btn.textContent='⟳ Scan';
+    // Subscribe WS for top 20 by pump + all signal coins (max 30 total to avoid rate limit)
+    const toSub = [...new Set([
+      ...scanResults.filter(c => c.hasSignal).map(c => c.symbol),
+      ...scanResults.slice(0, 20).map(c => c.symbol),
+    ])].slice(0, 30);
+    toSub.forEach(sym => subscribeWS(sym));
+    log('SCAN','Complete',
+      `<strong>${total}</strong> pumped · <strong>${sigs}</strong> signals · scanned <strong>${tickers.length}</strong> futures pairs`);
+  } catch(e) {
+    toast('Scan failed: ' + e.message, 'error');
+    log('ERROR', 'Scan failed', e.message);
+  }
+  btn.disabled = false; btn.textContent = '⟳ Scan';
 }
 
 function renderScanner() {
@@ -1149,7 +1203,9 @@ async function selectCoin(i) {
 
 async function loadKlines(sym) {
   try {
-    const r = await fetch(`${BINANCE_REST}/api/v3/klines?symbol=${sym}&interval=5m&limit=120`);
+    // Use Futures klines for futures symbols (more accurate OHLC than spot)
+    const klinesUrl = `${FAPI_BASE}/fapi/v1/klines?symbol=${sym}&interval=5m&limit=120`;
+    const r = await fetch(klinesUrl);
     const d = await r.json();
     klineData[sym] = d.map(k=>({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4]}));
     // Calculate RSI from klines

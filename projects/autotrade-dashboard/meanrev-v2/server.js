@@ -547,7 +547,6 @@ app.post('/api/params/:param', express.json(), (req, res) => {
 });
 
 // POST /api/scan_trigger — request immediate scan (Telegram bot → dashboard)
-// The browser client polls this and runs a scan when flag is set
 let _scanTriggerAt = 0;
 app.post('/api/scan_trigger', (req, res) => {
   _scanTriggerAt = Date.now();
@@ -557,6 +556,84 @@ app.post('/api/scan_trigger', (req, res) => {
 app.get('/api/scan_trigger', (req, res) => {
   const since = parseInt(req.query.since || '0');
   res.json({ triggered: _scanTriggerAt > since, triggeredAt: _scanTriggerAt });
+});
+
+// GET /api/scan — server-side Binance Futures scan (used by Telegram bot, no browser needed)
+// Scans ALL USDT-M perpetuals on Binance Futures
+app.get('/api/scan', async (req, res) => {
+  try {
+    const cfg = engine.cfg;
+    const pumpThreshold = parseFloat(req.query.pump || cfg.pumpThreshold || 20);
+    const minVolume     = parseFloat(req.query.vol  || cfg.minVolume     || 5e5);
+    const revThreshold  = parseFloat(req.query.rev  || cfg.reversalThreshold || 5);
+
+    const STABLES = new Set(['BUSDUSDT','USDCUSDT','TUSDUSDT','USDTUSDT','DAIUSDT','FDUSDUSDT','USDPUSDT']);
+
+    // Fetch all Binance Futures 24hr tickers
+    const tickerData = await new Promise((resolve, reject) => {
+      const req2 = https.request({
+        hostname: 'fapi.binance.com',
+        path:     '/fapi/v1/ticker/24hr',
+        method:   'GET',
+        headers:  { 'User-Agent': 'MeanRevTrader/2.0' },
+      }, r => {
+        let data = '';
+        r.on('data', c => data += c);
+        r.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { reject(e); } });
+      });
+      req2.on('error', reject);
+      req2.setTimeout(10000, () => { req2.destroy(); reject(new Error('Timeout')); });
+      req2.end();
+    });
+
+    if (!Array.isArray(tickerData)) {
+      return res.status(502).json({ error: 'Binance returned unexpected data', raw: tickerData });
+    }
+
+    const totalPairs = tickerData.filter(t => t.symbol.endsWith('USDT') && !STABLES.has(t.symbol)).length;
+
+    const found = tickerData.filter(t => {
+      if (!t.symbol.endsWith('USDT'))                         return false;
+      if (STABLES.has(t.symbol))                              return false;
+      if (parseFloat(t.lastPrice) <= 0)                      return false;
+      if (parseFloat(t.priceChangePercent) < pumpThreshold)  return false;
+      if (parseFloat(t.quoteVolume) < minVolume)             return false;
+      return true;
+    }).sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
+    // ALL qualifying pairs — no slice
+
+    const results = found.map(t => {
+      const pump     = parseFloat(t.priceChangePercent);
+      const high     = parseFloat(t.highPrice);
+      const last     = parseFloat(t.lastPrice);
+      const fromHigh = high > 0 ? ((last - high) / high) * 100 : 0;
+      const hasSignal   = fromHigh <= -revThreshold;
+      const strength    = !hasSignal ? null : Math.abs(fromHigh) >= revThreshold * 2 ? 'STRONG' : 'WEAK';
+      const confidence  = Math.round(
+        Math.min(40, pump / 2) +
+        (hasSignal ? Math.min(40, Math.abs(fromHigh) * 4) : 0) +
+        Math.min(20, Math.log10(Math.max(parseFloat(t.quoteVolume), 1e5) / 1e5) * 5)
+      );
+      return { symbol: t.symbol, pump, high, low: parseFloat(t.lowPrice), last,
+               vol: parseFloat(t.quoteVolume), fromHigh, hasSignal,
+               signalStrength: strength, confidence };
+    });
+
+    const signals = results.filter(r => r.hasSignal);
+
+    res.json({
+      scannedAt:    new Date().toISOString(),
+      totalPairs,
+      pumped:       results.length,
+      signals:      signals.length,
+      pumpThreshold, minVolume, revThreshold,
+      results,         // all pumped pairs
+      signalList: signals,  // only reversal signals
+    });
+  } catch(e) {
+    console.error('[Scan] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // GET /api/live-pnl — quick PnL check for all open positions
