@@ -720,7 +720,9 @@ let LAST_DAY     = new Date().toDateString();
 let scanResults  = [];
 let selectedCoin = null;
 let klineData    = {};
-let wsMap        = {};
+let wsMap        = {};   // sym → ws (legacy, kept for chart subscriptions)
+let _muxWS       = null; // single multiplexed combined stream
+let _muxSyms     = new Set(); // symbols currently in the mux stream
 let positions    = [];
 let closedTrades = [];
 let activityLog  = [];
@@ -1136,19 +1138,28 @@ async function runScan() {
       };
     });
 
-    const total = scanResults.length;
-    const sigs  = scanResults.filter(c => c.hasSignal).length;
+    const total     = scanResults.length;
+    const sigs      = scanResults.filter(c => c.hasSignal).length;
+    const totalPairs = tickers.filter(t => t.symbol.endsWith('USDT') && !STABLES.has(t.symbol)).length;
     document.getElementById('sig-count').textContent =
-      `${total} pumped | ${sigs} signals | of ${tickers.filter(t=>t.symbol.endsWith('USDT')).length} pairs`;
+      `${total} pumped | ${sigs} signals | of ${totalPairs} pairs`;
     renderScanner();
-    // Subscribe WS for top 20 by pump + all signal coins (max 30 total to avoid rate limit)
-    const toSub = [...new Set([
-      ...scanResults.filter(c => c.hasSignal).map(c => c.symbol),
-      ...scanResults.slice(0, 20).map(c => c.symbol),
-    ])].slice(0, 30);
-    toSub.forEach(sym => subscribeWS(sym));
+
+    // ── Start single multiplexed WS for all pumped + open position symbols ──
+    // bookTicker for SL/TP enforcement and signal tracking
+    const posSyms  = positions.map(p => p.symbol);
+    const muxSyms  = [...new Set([
+      ...posSyms,                                           // always watch open positions
+      ...scanResults.filter(c => c.hasSignal).map(c => c.symbol),  // signal coins
+      ...scanResults.slice(0, 50).map(c => c.symbol),      // top 50 pumped (price tracking)
+    ])].slice(0, 200);  // Binance allows max 200 streams per combined WS
+    startMuxWS(muxSyms);
+
+    // Subscribe kline WS only for selected coin (chart data)
+    if (selectedCoin) subscribeWS(selectedCoin.symbol);
+
     log('SCAN','Complete',
-      `<strong>${total}</strong> pumped · <strong>${sigs}</strong> signals · scanned <strong>${tickers.length}</strong> futures pairs`);
+      `<strong>${total}</strong> pumped · <strong>${sigs}</strong> signals · <strong>${totalPairs}</strong> futures pairs scanned · <strong>${muxSyms.length}</strong> streams active`);
   } catch(e) {
     toast('Scan failed: ' + e.message, 'error');
     log('ERROR', 'Scan failed', e.message);
@@ -1220,10 +1231,87 @@ async function loadKlines(sym) {
   } catch(e) { toast('Chart load failed','error'); }
 }
 
+// ── Single multiplexed WebSocket for price monitoring ─────────────────────
+// One connection handles all active symbols via Binance combined streams.
+// Much more efficient than one WS per symbol.
+let _muxReconnTimer = null;
+
+function startMuxWS(symbols) {
+  if (!symbols || symbols.length === 0) return;
+  // Close existing mux WS
+  if (_muxWS && _muxWS.readyState <= 1) {
+    _muxWS.close();
+    _muxWS = null;
+  }
+  clearTimeout(_muxReconnTimer);
+
+  // Binance combined stream: up to 200 streams per connection
+  const streams = symbols.flatMap(s => [
+    `${s.toLowerCase()}@bookTicker`,  // real-time bid/ask for price + SL/TP checks
+  ]).join('/');
+
+  const url = `wss://fstream.binance.com/stream?streams=${streams}`;
+  const ws  = new WebSocket(url);
+  _muxWS    = ws;
+  _muxSyms  = new Set(symbols);
+
+  ws.onmessage = evt => {
+    try {
+      const outer = JSON.parse(evt.data);
+      const msg   = outer.data || outer;
+      const stream = outer.stream || '';
+
+      if (msg.b !== undefined && msg.a !== undefined) {
+        // bookTicker: best bid/ask
+        const sym   = (msg.s || stream.split('@')[0].toUpperCase());
+        const price = (parseFloat(msg.b) + parseFloat(msg.a)) / 2;
+        if (!price || price <= 0) return;
+
+        // Update scan result
+        const sc = scanResults.find(s => s.symbol === sym);
+        if (sc) {
+          sc.last     = price;
+          sc.fromHigh = sc.high > 0 ? ((price - sc.high) / sc.high) * 100 : 0;
+          sc.hasSignal = sc.fromHigh <= -CFG.reversalThreshold;
+          sc.signalStrength = !sc.hasSignal ? null
+            : Math.abs(sc.fromHigh) >= CFG.reversalThreshold * 2 ? 'STRONG' : 'WEAK';
+        }
+        // Update chart if this is selected coin
+        if (selectedCoin?.symbol === sym) {
+          if (klineData[sym] && klineData[sym].length > 0) {
+            const last = klineData[sym][klineData[sym].length - 1];
+            last.c = price;
+            last.h = Math.max(last.h, price);
+            last.l = Math.min(last.l, price);
+          }
+          updateChartTop(sc || selectedCoin);
+          drawChart(sym);
+        }
+        // Enforce SL/TP/reentry
+        checkAutoClose(sym, price);
+        checkTrailingStop(sym, price);
+        checkReentry(sym, price);
+      }
+    } catch(e) {}
+  };
+
+  ws.onclose = () => {
+    _muxWS = null;
+    // Auto-reconnect after 5s if we still have symbols to watch
+    if (_muxSyms.size > 0) {
+      _muxReconnTimer = setTimeout(() => startMuxWS([..._muxSyms]), 5000);
+    }
+  };
+  ws.onerror = () => {};
+
+  console.log(`[WS] Mux stream opened: ${symbols.length} symbols`);
+}
+
+// ── Per-symbol WS for chart klines only (kept for chart data) ─────────────
 function subscribeWS(sym) {
   if (wsMap[sym]) return;
-  // Use combined stream: kline for candles + bookTicker for real-time best price
-  const streamUrl = `${BINANCE_WS}/${sym.toLowerCase()}@kline_5m/${sym.toLowerCase()}@bookTicker`;
+  // Kline-only stream for chart candle data
+  const streamUrl = `${BINANCE_WS}/${sym.toLowerCase()}@kline_5m`;
   const ws = new WebSocket(streamUrl);
   wsMap[sym] = ws;
   ws.onmessage = evt => {
@@ -1239,32 +1327,16 @@ function subscribeWS(sym) {
         if (last.t===k.t) { last.c=price; last.h=Math.max(last.h,price); last.l=Math.min(last.l,price); }
         else if (k.x) { klineData[sym].push({t:k.t,o:+k.o,h:+k.h,l:+k.l,c:price}); if(klineData[sym].length>200)klineData[sym].shift(); }
       }
-    } else if (msg.b && msg.a) {
-      // bookTicker: real-time best bid/ask → use mid price
-      price = (parseFloat(msg.b) + parseFloat(msg.a)) / 2;
-      // Update current candle close with tick price
-      if (klineData[sym] && klineData[sym].length > 0) {
-        const last = klineData[sym][klineData[sym].length-1];
-        last.c = price;
-        last.h = Math.max(last.h, price);
-        last.l = Math.min(last.l, price);
-      }
     }
-
-    if (price === null) return;
-    const sc = scanResults.find(s=>s.symbol===sym);
-    if (sc) {
-      sc.last = price;
-      sc.fromHigh = ((price-sc.high)/sc.high)*100;
-      sc.hasSignal = sc.fromHigh <= -CFG.reversalThreshold;
-      sc.signalStrength = !sc.hasSignal?null:Math.abs(sc.fromHigh)>=CFG.reversalThreshold*2?'STRONG':'WEAK';
+    // Kline-only WS: just update chart data, no price checks (mux WS handles that)
+    if (price !== null && selectedCoin?.symbol === sym) {
+      const sc = scanResults.find(s => s.symbol === sym);
+      if (sc) sc.last = price;
+      updateChartTop(sc || selectedCoin);
+      drawChart(sym);
     }
-    if (selectedCoin?.symbol===sym) { updateChartTop(sc||selectedCoin); drawChart(sym); }
-    checkAutoClose(sym, price);
-    checkTrailingStop(sym, price);
-    checkReentry(sym, price);
   };
-  ws.onerror = ()=>{};
+  ws.onerror = () => {};
 }
 
 function updateChartTop(c) {
@@ -1355,7 +1427,12 @@ async function openPosition(coin) {
     });
     const d = await r.json();
     if (d.error) { toast(d.error, 'error'); return; }
-    subscribeWS(c.symbol);
+    subscribeWS(c.symbol);  // klines for chart
+    // Ensure this symbol is in mux watchlist for SL/TP price enforcement
+    if (!_muxSyms.has(c.symbol)) {
+      _muxSyms.add(c.symbol);
+      startMuxWS([..._muxSyms]);  // restart mux with updated symbol list
+    }
     const tp  = d.tpPrice  || c.last * (1 - CFG.takeProfitPct / 100);
     const sl  = d.slPrice  || c.last * (1 + CFG.stopLossPct  / 100);
     const re  = d.reentryPrice;
