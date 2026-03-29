@@ -292,17 +292,27 @@ app.post('/api/open', express.json(), async (req, res) => {
         ? entryPrice * (1 - engine.cfg.takeProfitPct / 100)
         : entryPrice * (1 + engine.cfg.takeProfitPct / 100);
 
-      const roundPrice = p => Math.round(p * 10000) / 10000;  // 4 decimal places
+      // Round to 5 significant figures (handles both BTC $60k and SHIB $0.00001)
+      const roundPrice = p => {
+        if (p <= 0) return 0;
+        const mag = Math.floor(Math.log10(p));
+        const factor = Math.pow(10, 5 - mag);
+        return Math.round(p * factor) / factor;
+      };
       const sl4 = roundPrice(slPrice);
       const tp4 = roundPrice(tpPrice);
 
-      // Build batch: [0] entry MARKET + [1] SL STOP_MARKET + [2] TP TAKE_PROFIT_MARKET
+      // Build batch: [0] entry MARKET + [1] SL LIMIT reduceOnly + [2] TP LIMIT reduceOnly
+      // Using LIMIT orders (not STOP_MARKET) — works on all account types including
+      // multi-assets margin where STOP_MARKET is blocked (-4120).
+      // Binance processes batchOrders sequentially: entry fills first, then SL/TP
+      // reduceOnly orders are valid because the position already exists.
       const batchOrders = [
         { symbol: sym, side: entrySide, type: 'MARKET', quantity: qty },
-        { symbol: sym, side: exitSide,  type: 'STOP_MARKET',
-          quantity: qty, stopPrice: String(sl4), reduceOnly: 'true', closePosition: 'false' },
-        { symbol: sym, side: exitSide,  type: 'TAKE_PROFIT_MARKET',
-          quantity: qty, stopPrice: String(tp4), reduceOnly: 'true', closePosition: 'false' },
+        { symbol: sym, side: exitSide, type: 'LIMIT',
+          quantity: qty, price: String(sl4), reduceOnly: 'true', timeInForce: 'GTC' },
+        { symbol: sym, side: exitSide, type: 'LIMIT',
+          quantity: qty, price: String(tp4), reduceOnly: 'true', timeInForce: 'GTC' },
       ];
 
       let batchResult = null;

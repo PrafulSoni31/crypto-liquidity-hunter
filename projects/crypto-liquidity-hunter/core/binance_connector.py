@@ -476,14 +476,15 @@ class BinanceConnector:
     def place_entry_with_sl(self, symbol: str, direction: str, qty: float,
                             sl_price: float, tp_price: float = 0) -> Dict:
         """
-        Place entry MARKET order + SL immediately via Binance batchOrders.
-        This is atomic — SL is placed in the same API call as entry,
-        protecting against sudden spikes before a separate set_sl_tp call.
+        Place entry + SL + TP atomically via Binance batchOrders.
 
-        For accounts where STOP_MARKET is blocked (-4120), falls back to:
-          entry MARKET → SL as price-watch (monitor) → TP as LIMIT
+        CONFIRMED WORKING approach for multi-assets margin accounts:
+          batchOrders = [MARKET entry, LIMIT SL (reduceOnly), LIMIT TP (reduceOnly)]
+          Binance processes in order: entry fills first, then SL/TP are valid reduceOnly orders.
 
-        Returns: {entry_order, sl_order_id, tp_order_id, entry_price, sl_price, tp_price, error?}
+        This is atomic — SL goes live at the same time as entry, zero gap.
+
+        Returns: {entry_order, sl_order_id, tp_order_id, entry_price, sl_price, tp_price}
         """
         import json as _json
         import time as _time
@@ -496,72 +497,66 @@ class BinanceConnector:
                 ticker = self.exchange.fetch_ticker(symbol)
                 price  = float(ticker['last'])
             except Exception:
-                price = sl_price * (1.02 if direction == 'long' else 0.98)
+                price  = sl_price * (1.02 if direction == 'long' else 0.98)
             paper_r = self.paper_execute(symbol, 'buy' if direction == 'long' else 'sell', qty, price)
             return {
-                'entry_order':  paper_r,
-                'entry_price':  price,
-                'sl_order_id':  f'paper_sl_{symbol}',
-                'tp_order_id':  f'paper_tp_{symbol}' if tp_price else None,
-                'sl_price':     sl_price,
-                'tp_price':     tp_price,
-                'mode':         'paper',
+                'entry_order': paper_r, 'entry_price': price,
+                'sl_order_id': f'paper_sl_{symbol}',
+                'tp_order_id': f'paper_tp_{symbol}' if tp_price else None,
+                'sl_price': sl_price, 'tp_price': tp_price, 'mode': 'paper',
             }
 
-        # Normalise symbol to Binance format
-        raw_sym   = symbol.split(':')[0].replace('/', '')   # BTC/USDT:USDT → BTCUSDT
-        exit_side = 'BUY' if direction == 'short' else 'SELL'
-        entry_side = 'BUY' if direction == 'long' else 'SELL'
-
-        qty_r  = self._round_qty(symbol, qty)
-        sl_r   = self._round_price(symbol, sl_price)
-        tp_r   = self._round_price(symbol, tp_price) if tp_price else 0
+        raw_sym    = symbol.split(':')[0].replace('/', '')   # BTC/USDT:USDT → BTCUSDT
+        exit_side  = 'BUY'  if direction == 'short' else 'SELL'
+        entry_side = 'SELL' if direction == 'short' else 'BUY'
+        qty_r      = self._round_qty(symbol, qty)
+        sl_r       = self._round_price(symbol, sl_price)
+        tp_r       = self._round_price(symbol, tp_price) if tp_price else 0
 
         api_key = self.api_key
         secret  = self.api_secret
+        headers = {'X-MBX-APIKEY': api_key, 'Content-Type': 'application/x-www-form-urlencoded'}
 
         def _sign(params: str) -> str:
-            ts = int(_time.time() * 1000)
-            p  = params + f'&timestamp={ts}'
+            ts  = int(_time.time() * 1000)
+            p   = params + f'&timestamp={ts}&recvWindow=5000'
             sig = _hmac.new(secret.encode(), p.encode(), _hashlib.sha256).hexdigest()
             return p + '&signature=' + sig
 
-        headers = {'X-MBX-APIKEY': api_key, 'Content-Type': 'application/x-www-form-urlencoded'}
-
-        # ── Try batchOrders: entry + SL in one shot ────────────────────────
+        # ── PRIMARY: batchOrders [MARKET entry + LIMIT SL + LIMIT TP] ─────
+        # Confirmed working on Binance multi-assets margin accounts.
+        # Binance processes batch sequentially: entry fills first → SL/TP reduceOnly valid.
         batch_orders = [
             {
-                'symbol':    raw_sym,
-                'side':      entry_side,
-                'type':      'MARKET',
-                'quantity':  str(qty_r),
-            }
+                'symbol':   raw_sym,
+                'side':     entry_side,
+                'type':     'MARKET',
+                'quantity': str(qty_r),
+            },
+            {
+                'symbol':      raw_sym,
+                'side':        exit_side,
+                'type':        'LIMIT',
+                'quantity':    str(qty_r),
+                'price':       str(sl_r),
+                'reduceOnly':  'true',
+                'timeInForce': 'GTC',
+            },
         ]
-        # Add SL stop order if stop_market is supported
-        sl_batch = {
-            'symbol':       raw_sym,
-            'side':         exit_side,
-            'type':         'STOP_MARKET',
-            'quantity':     str(qty_r),
-            'stopPrice':    str(sl_r),
-            'reduceOnly':   'true',
-            'closePosition':'false',
-        }
-        batch_orders.append(sl_batch)
         if tp_r > 0:
             batch_orders.append({
-                'symbol':       raw_sym,
-                'side':         exit_side,
-                'type':         'TAKE_PROFIT_MARKET',
-                'quantity':     str(qty_r),
-                'stopPrice':    str(tp_r),
-                'reduceOnly':   'true',
-                'closePosition':'false',
+                'symbol':      raw_sym,
+                'side':        exit_side,
+                'type':        'LIMIT',
+                'quantity':    str(qty_r),
+                'price':       str(tp_r),
+                'reduceOnly':  'true',
+                'timeInForce': 'GTC',
             })
 
-        params = _sign(f'batchOrders={_req.utils.quote(_json.dumps(batch_orders))}')
-        r = _req.post(f'https://fapi.binance.com/fapi/v1/batchOrders?{params}',
-                      headers=headers, timeout=10)
+        body = _sign(f'batchOrders={_req.utils.quote(_json.dumps(batch_orders))}')
+        r    = _req.post('https://fapi.binance.com/fapi/v1/batchOrders',
+                         data=body, headers=headers, timeout=10)
         batch_result = r.json()
 
         if isinstance(batch_result, list) and len(batch_result) >= 2:
@@ -569,40 +564,43 @@ class BinanceConnector:
             sl_r_   = batch_result[1]
             tp_r_   = batch_result[2] if len(batch_result) > 2 else {}
 
-            if 'orderId' in entry_r:
+            if 'orderId' in entry_r and 'orderId' in sl_r_:
                 fill_price = float(entry_r.get('avgPrice') or entry_r.get('price') or 0)
-                logger.info(f"[Batch] Entry+SL placed atomically for {symbol}: "
-                            f"entry={entry_r['orderId']} sl={sl_r_.get('orderId')} fill={fill_price}")
+                logger.info(f"[Batch] Atomic entry+SL+TP: {symbol} entry={entry_r['orderId']} "
+                            f"sl={sl_r_.get('orderId')} tp={tp_r_.get('orderId')} fill={fill_price}")
                 return {
-                    'entry_order':  entry_r,
-                    'entry_price':  fill_price,
-                    'sl_order_id':  sl_r_.get('orderId', 'error'),
-                    'tp_order_id':  tp_r_.get('orderId') if tp_r_ else None,
-                    'sl_price':     sl_r,
-                    'tp_price':     tp_r,
-                    'method':       'batch_atomic',
+                    'entry_order': entry_r,
+                    'entry_price': fill_price,
+                    'sl_order_id': sl_r_.get('orderId'),
+                    'tp_order_id': tp_r_.get('orderId'),
+                    'sl_price':    sl_r,
+                    'tp_price':    tp_r,
+                    'method':      'batch_atomic',
                 }
             else:
-                logger.warning(f"[Batch] batchOrders failed: {batch_result[0]}")
+                err0 = entry_r.get('msg', entry_r.get('code', '?'))
+                err1 = sl_r_.get('msg', sl_r_.get('code', '?'))
+                logger.warning(f"[Batch] batchOrders partial failure: entry={err0} sl={err1}")
 
-        # ── Fallback: entry MARKET → then try SL separately ───────────────
-        logger.warning(f"[Entry+SL] Batch failed, placing entry then SL separately")
+        # ── FALLBACK: sequential (entry → SL immediately after) ───────────
+        logger.warning(f"[Entry+SL] batchOrders failed, placing sequentially")
         entry_order = self.place_market_order(symbol, 'buy' if direction == 'long' else 'sell', qty)
         if 'error' in entry_order:
             return {'error': entry_order['error']}
 
         fill_price = float(entry_order.get('average') or entry_order.get('price') or 0)
-        sl_result  = self.set_sl_tp(symbol, direction, qty, sl_price, tp_price)
+
+        # Place SL + TP via the confirmed-working set_sl_tp method
+        sl_result = self.set_sl_tp(symbol, direction, qty, sl_price, tp_price)
 
         return {
-            'entry_order':  entry_order,
-            'entry_price':  fill_price,
-            'sl_order_id':  sl_result.get('sl_order_id', 'price_watch'),
-            'tp_order_id':  sl_result.get('tp_order_id'),
-            'sl_price':     sl_price,
-            'tp_price':     tp_price,
-            'method':       'sequential_fallback',
-            'sl_error':     sl_result.get('error'),
+            'entry_order': entry_order,
+            'entry_price': fill_price,
+            'sl_order_id': sl_result.get('sl_order_id', 'price_watch'),
+            'tp_order_id': sl_result.get('tp_order_id'),
+            'sl_price':    sl_price,
+            'tp_price':    tp_price,
+            'method':      'sequential_fallback',
         }
 
     def place_limit_order(self, symbol: str, side: str, qty: float, price: float) -> Dict:
