@@ -422,8 +422,12 @@ canvas#chart{position:absolute;inset:0;width:100%!important;height:100%!importan
     <div class="ph">
       <div class="ph-icon" style="background:rgba(255,79,79,.1)">📡</div>
       <div class="ph-title">PUMP SCANNER</div>
-      <div class="ph-right">
+      <div class="ph-right" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span class="ph-count" id="sig-count">0 signals</span>
+        <!-- Filter tabs -->
+        <span id="sf-all"  onclick="setScanFilter('all')"     style="cursor:pointer;font-size:10px;color:var(--accent);font-weight:700">All</span>
+        <span id="sf-sig"  onclick="setScanFilter('signals')" style="cursor:pointer;font-size:10px;color:var(--muted)">Signals</span>
+        <span id="sf-open" onclick="setScanFilter('open')"    style="cursor:pointer;font-size:10px;color:var(--muted)">Open</span>
         <button class="scan-run-btn" id="scan-btn" onclick="runScan()">⟳ Scan</button>
       </div>
     </div>
@@ -1143,6 +1147,7 @@ async function runScan() {
     const totalPairs = tickers.filter(t => t.symbol.endsWith('USDT') && !STABLES.has(t.symbol)).length;
     document.getElementById('sig-count').textContent =
       `${total} pumped | ${sigs} signals | of ${totalPairs} pairs`;
+    _scanPage = 0;  // reset to first page on new scan
     renderScanner();
 
     // ── Start single multiplexed WS for all pumped + open position symbols ──
@@ -1167,12 +1172,32 @@ async function runScan() {
   btn.disabled = false; btn.textContent = '⟳ Scan';
 }
 
+// ── Scanner view state (pagination to prevent browser OOM) ─────────────────
+const SCAN_PAGE_SIZE = 60;  // cards per page — safe limit for all browsers
+let _scanPage = 0;
+let _scanFilter = 'all';   // 'all' | 'signals' | 'open'
+
 function renderScanner() {
   const list = document.getElementById('scanner-list');
-  if (!scanResults.length) { list.innerHTML=`<div class="empty"><div class="empty-icon">🤷</div><div>No pumped coins above ${CFG.pumpThreshold}%</div></div>`; return; }
-  list.innerHTML = scanResults.map((c,i) => {
-    const sel = selectedCoin?.symbol===c.symbol;
-    const hasp = positions.some(p=>p.symbol===c.symbol);
+  if (!scanResults.length) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">🤷</div><div>No pumped coins above ${CFG.pumpThreshold}%</div></div>`;
+    return;
+  }
+
+  // Apply filter
+  let filtered = scanResults;
+  if (_scanFilter === 'signals') filtered = scanResults.filter(c => c.hasSignal);
+  if (_scanFilter === 'open')    filtered = scanResults.filter(c => positions.some(p => p.symbol === c.symbol));
+
+  const totalPages = Math.ceil(filtered.length / SCAN_PAGE_SIZE);
+  if (_scanPage >= totalPages) _scanPage = Math.max(0, totalPages - 1);
+
+  const pageItems = filtered.slice(_scanPage * SCAN_PAGE_SIZE, (_scanPage + 1) * SCAN_PAGE_SIZE);
+
+  const cards = pageItems.map(c => {
+    const i    = scanResults.indexOf(c);
+    const sel  = selectedCoin?.symbol === c.symbol;
+    const hasp = positions.some(p => p.symbol === c.symbol);
     return `<div class="scan-card${c.hasSignal?' sig':''}${sel?' sel':''}" onclick="selectCoin(${i})">
       <div class="sc-top">
         <span class="sc-sym">${c.symbol.replace('USDT','')}<span style="color:#9090b8;font-size:9px">/USDT</span></span>
@@ -1188,6 +1213,24 @@ function renderScanner() {
       ${c.hasSignal ? `<div class="sc-conf"><div class="sc-conf-bar"><div class="sc-conf-fill" style="width:${c.confidence}%"></div></div><span class="sc-conf-lbl">${c.confidence.toFixed(0)}% conf</span></div>` : ''}
     </div>`;
   }).join('');
+
+  // Pagination controls
+  const pager = totalPages > 1 ? `
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 4px;border-top:1px solid var(--border);margin-top:4px;font-size:11px">
+      <button onclick="_scanPage=Math.max(0,_scanPage-1);renderScanner()" ${_scanPage===0?'disabled':''} style="background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer">◀</button>
+      <span style="color:var(--muted)">${_scanPage+1}/${totalPages} · ${filtered.length} coins</span>
+      <button onclick="_scanPage=Math.min(${totalPages-1},_scanPage+1);renderScanner()" ${_scanPage===totalPages-1?'disabled':''} style="background:var(--s3);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer">▶</button>
+    </div>` : '';
+
+  list.innerHTML = cards + pager;
+}
+
+function setScanFilter(f) {
+  _scanFilter = f; _scanPage = 0; renderScanner();
+  ['sf-all','sf-sig','sf-open'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.fontWeight = id === 'sf-'+f || (f==='signals'&&id==='sf-sig') ? '700' : '400';
+  });
 }
 
 // ═══════════════════════════════════════
