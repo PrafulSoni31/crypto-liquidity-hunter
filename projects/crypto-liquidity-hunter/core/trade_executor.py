@@ -39,8 +39,13 @@ class TradeExecutor:
     def __init__(self, connector: BinanceConnector = None, account_id: int = None):
         cfg = _load_config()
         paper_cfg = cfg.get('paper_trading', {})
+        live_cfg  = cfg.get('live_trading',  {})
 
-        self.account_id   = account_id
+        self.account_id  = account_id
+        self._paper_cfg  = paper_cfg
+        self._live_cfg   = live_cfg
+
+        # Defaults from paper_trading (overridden per-mode in execute_signal)
         self.notional_usd = float(paper_cfg.get('fixed_notional_usd', 100.0))
         self.leverage     = float(paper_cfg.get('margin_leverage', 20.0))
         self.commission   = float(paper_cfg.get('commission_per_trade', 0.001))
@@ -103,11 +108,46 @@ class TradeExecutor:
         timeframe   = signal_dict.get('timeframe', '1h')
 
         # Strip exchange prefix for connector (e.g. binance:BTC/USDT → BTC/USDT)
-        # MUST be assigned before any use of `symbol` to avoid Python UnboundLocalError
         symbol = pair.split(':', 1)[1] if ':' in pair else pair
 
-        notional = notional_usd or self.notional_usd
-        lev      = leverage     or self.leverage
+        # ── Load mode-specific trading config (live vs paper) ─────────────────
+        # Always re-read config fresh so dashboard settings take effect immediately
+        _cfg      = _load_config()
+        mode_key  = 'live_trading' if self.mode != 'paper' else 'paper_trading'
+        trade_cfg = _cfg.get(mode_key, _cfg.get('paper_trading', {}))
+
+        base_notional = float(trade_cfg.get('fixed_notional_usd', self.notional_usd))
+        base_leverage = float(trade_cfg.get('margin_leverage',     self.leverage))
+        commission    = float(trade_cfg.get('commission_per_trade', self.commission))
+        sizing_mode   = trade_cfg.get('position_sizing', 'fixed_notional')
+        risk_pct      = float(trade_cfg.get('risk_percent', 1.0))
+        max_notional  = float(trade_cfg.get('max_notional_usd', 500.0))
+
+        # ── Determine notional and leverage ───────────────────────────────────
+        lev = leverage or base_leverage
+
+        if notional_usd:
+            # Explicit override from caller (e.g. manual trade execution)
+            notional = float(notional_usd)
+        elif sizing_mode == 'risk_percent' and self.mode != 'paper':
+            # Risk-percent: size based on % of live account balance
+            try:
+                bal_info = self.connector.get_balance('USDT')
+                balance  = float(bal_info.get('free', 0) or 0)
+                notional = balance * (risk_pct / 100.0) * lev
+                logger.info(f"[Executor] Risk sizing: {risk_pct}% of ${balance:.2f} × {lev}× lev = ${notional:.2f}")
+            except Exception as e:
+                logger.warning(f"[Executor] Balance fetch failed ({e}), using fixed notional")
+                notional = base_notional
+        else:
+            notional = base_notional
+
+        # Enforce max notional safety cap
+        if notional > max_notional:
+            logger.warning(f"[Executor] Notional ${notional:.2f} exceeds cap ${max_notional:.2f}, capping")
+            notional = max_notional
+
+        self.commission = commission  # update for PnL calcs below
 
         # entry_price=0 means "market order" — fetch current price for record keeping
         if entry_price <= 0:

@@ -2039,6 +2039,63 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>
 
+    <!-- ── Live Trading Lot Size ── -->
+    <div class="cfg-section" style="border-color:rgba(245,158,11,.3)">
+      <div class="cfg-section-head" style="background:rgba(245,158,11,.05)">
+        <span class="cfg-section-icon">🚀</span>
+        <span class="cfg-section-title" style="color:var(--yellow,#f59e0b)">Live Trading — Lot Size</span>
+        <span class="badge badge-blue" style="margin-left:auto;font-size:9px">/set_live_notional</span>
+        <span id="live-lot-preview" style="margin-left:8px;font-size:10px;color:var(--green,#10b981)"></span>
+      </div>
+      <div class="cfg-section-body">
+        <div class="cfg-row" style="background:rgba(245,158,11,.05);border-radius:6px;padding:8px 10px;margin:-4px 0 4px">
+          <span style="font-size:11px;color:var(--yellow,#f59e0b)">⚠️ These settings apply to REAL money trades on Binance. Changes are immediate.</span>
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label">Position Sizing Mode
+            <small>How lot size is calculated for live trades</small>
+          </label>
+          <select class="cfg-input" id="cfg_live_position_sizing" onchange="toggleLiveSizingMode()">
+            <option value="fixed_notional">Fixed Notional (USD)</option>
+            <option value="risk_percent">Risk % of Balance</option>
+          </select>
+        </div>
+        <div id="live-fixed-row" class="cfg-row">
+          <label class="cfg-label">Fixed Notional (USD)
+            <small>Trade size per live trade — exact USD amount</small>
+          </label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_notional_usd"
+            step="10" min="5" oninput="previewLiveLot()">
+        </div>
+        <div id="live-risk-row" class="cfg-row" style="display:none">
+          <label class="cfg-label">Risk % of Balance
+            <small>e.g. 1.0 = 1% of free balance × leverage</small>
+          </label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_risk_percent"
+            step="0.1" min="0.1" max="10" oninput="previewLiveLot()">
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label">Margin Leverage <small>1–125× (must match your Binance account setting)</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_leverage"
+            step="1" min="1" max="125" oninput="previewLiveLot()">
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label">Max Notional Cap (USD) <small>Hard limit per trade — safety net</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_max_notional" step="50" min="10">
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label">Commission / Trade <small>Binance maker/taker rate (0.001 = 0.1%)</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_commission" step="0.0001" min="0" max="0.01">
+        </div>
+        <!-- Live lot preview box -->
+        <div id="live-lot-box" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:11px;display:none">
+          <div style="font-weight:700;margin-bottom:6px;color:var(--text)">📊 Lot Size Preview</div>
+          <div id="live-lot-details" style="color:var(--muted);line-height:1.8"></div>
+          <div id="live-lot-warn" style="color:var(--red,#ef4444);margin-top:4px;font-size:10px"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Signal Execution ── -->
     <div class="cfg-section">
       <div class="cfg-section-head">
@@ -2792,6 +2849,19 @@ async function loadSettings() {
     sv('cfg_commission_per_trade',d.commission_per_trade);
     sv('cfg_position_sizing',     d.position_sizing);
 
+    // Live Trading — load from /api/binance/get_settings
+    try {
+      const lr = await fetch('/api/binance/get_settings');
+      const ld = await lr.json();
+      sv('cfg_live_notional_usd',    ld.live_notional_usd);
+      sv('cfg_live_leverage',        ld.live_leverage);
+      sv('cfg_live_commission',      ld.live_commission);
+      sv('cfg_live_position_sizing', ld.live_position_sizing);
+      sv('cfg_live_risk_percent',    ld.live_risk_percent);
+      sv('cfg_live_max_notional',    ld.live_max_notional);
+      toggleLiveSizingMode();
+    } catch(e) { console.warn('Live settings load failed:', e); }
+
     // Signal Execution
     sv('cfg_signal_execution_mode', d.signal_execution_mode);
     sv('cfg_auto_execute',          d.auto_execute);
@@ -2850,6 +2920,8 @@ async function saveSettings() {
       margin_leverage:        gf('cfg_margin_leverage'),
       commission_per_trade:   gf('cfg_commission_per_trade'),
       position_sizing:        gv('cfg_position_sizing'),
+      // Live Trading (saved separately via /api/binance/save_settings)
+      _liveSave: true,
       // Signal Execution
       signal_execution_mode:  gv('cfg_signal_execution_mode'),
       auto_execute:           gb('cfg_auto_execute'),
@@ -2866,25 +2938,121 @@ async function saveSettings() {
       if (typeof payload[k] === 'number' && isNaN(payload[k])) delete payload[k];
     });
 
-    const r = await fetch('/api/config', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
+    // Save live trading settings separately
+    const livePayload = {
+      live_notional_usd:    gf('cfg_live_notional_usd'),
+      live_leverage:        gf('cfg_live_leverage'),
+      live_commission:      gf('cfg_live_commission'),
+      live_position_sizing: gv('cfg_live_position_sizing'),
+      live_risk_percent:    gf('cfg_live_risk_percent'),
+      live_max_notional:    gf('cfg_live_max_notional'),
+    };
+    Object.keys(livePayload).forEach(k => {
+      if (typeof livePayload[k] === 'number' && isNaN(livePayload[k])) delete livePayload[k];
     });
-    const d = await r.json();
-    if (d.status === 'ok') {
+    delete payload._liveSave;
+    Object.keys(payload).forEach(k => {
+      if (typeof payload[k] === 'number' && isNaN(payload[k])) delete payload[k];
+    });
+
+    // Save both in parallel
+    const [r, lr] = await Promise.all([
+      fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}),
+      fetch('/api/binance/save_settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(livePayload)}),
+    ]);
+    const d  = await r.json();
+    const ld = await lr.json();
+    if (d.status === 'ok' && ld.status === 'ok') {
       const count = Object.keys(d.updated || {}).length;
-      cfgSetStatus(`✅ Saved ${count} parameters — ${new Date().toLocaleTimeString()}`, 'ok');
+      cfgSetStatus(`✅ Saved ${count} params + live trading config — ${new Date().toLocaleTimeString()}`, 'ok');
       toast('Settings saved ✅', 'green');
     } else {
       cfgSetStatus('⚠️ Partial save — check errors', 'err');
       toast('Partial save — see console', 'red');
-      console.error('Save errors:', d.errors);
+      console.error('Errors:', d.errors, ld);
     }
   } catch(e) {
     cfgSetStatus('❌ Save failed: ' + e.message, 'err');
     toast('Save failed: ' + e.message, 'red');
   }
+}
+
+// ── Live Trading Lot Size Preview ─────────────────────────────────────────────
+function toggleLiveSizingMode() {
+  const mode = document.getElementById('cfg_live_position_sizing')?.value;
+  const fixedRow = document.getElementById('live-fixed-row');
+  const riskRow  = document.getElementById('live-risk-row');
+  if (fixedRow) fixedRow.style.display = mode === 'fixed_notional' ? '' : 'none';
+  if (riskRow)  riskRow.style.display  = mode === 'risk_percent'   ? '' : 'none';
+  previewLiveLot();
+}
+
+let _liveLotTimer = null;
+async function previewLiveLot() {
+  clearTimeout(_liveLotTimer);
+  _liveLotTimer = setTimeout(async () => {
+    const box      = document.getElementById('live-lot-box');
+    const details  = document.getElementById('live-lot-details');
+    const warnEl   = document.getElementById('live-lot-warn');
+    if (!box) return;
+
+    const sizingMode = document.getElementById('cfg_live_position_sizing')?.value || 'fixed_notional';
+    const notional   = parseFloat(document.getElementById('cfg_live_notional_usd')?.value) || 20;
+    const leverage   = parseFloat(document.getElementById('cfg_live_leverage')?.value) || 20;
+    const riskPct    = parseFloat(document.getElementById('cfg_live_risk_percent')?.value) || 1.0;
+    const maxN       = parseFloat(document.getElementById('cfg_live_max_notional')?.value) || 500;
+    const commission = parseFloat(document.getElementById('cfg_live_commission')?.value) || 0.001;
+
+    // Use currently selected pair for preview
+    const pair = document.getElementById('pairSel')?.value || 'binance:BTC/USDT';
+    const sym  = pair.replace('binance:','');
+
+    box.style.display = 'block';
+    details.innerHTML = '<span style="color:var(--muted)">Calculating…</span>';
+    warnEl.textContent = '';
+
+    try {
+      // Get current price
+      const pr = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${sym.replace('/','')}`);
+      const pd = await pr.json();
+      const price = parseFloat(pd.price || 0);
+      if (!price) { details.innerHTML = 'Could not fetch price'; return; }
+
+      // Get lot info from server
+      const url = `/api/binance/lot_info/${encodeURIComponent(sym)}?price=${price}&notional=${notional}&leverage=${leverage}&sizing_mode=${sizingMode}&risk_pct=${riskPct}`;
+      const lr  = await fetch(url);
+      const ld  = await lr.json();
+      if (ld.error) { details.innerHTML = 'Error: ' + ld.error; return; }
+
+      const qty         = ld.estimated_qty || 0;
+      const margin      = ld.margin_required || (notional / leverage);
+      const commission$ = ld.commission_usd || (notional * commission);
+      const balance     = ld.live_balance;
+
+      details.innerHTML = `
+        <div>Symbol: <strong>${sym}</strong> · Price: <strong>$${price.toFixed(4)}</strong></div>
+        <div>Notional: <strong style="color:var(--yellow)">$${(ld.notional_usd||notional).toFixed(2)}</strong>
+          · Leverage: <strong>${leverage}×</strong>
+          · Margin required: <strong style="color:var(--blue2)">$${margin.toFixed(2)}</strong></div>
+        <div>Qty: <strong style="color:var(--green)">${qty}</strong> contracts
+          · Commission: <strong>$${commission$.toFixed(4)}</strong></div>
+        ${balance !== null && balance !== undefined ?
+          `<div>Free balance: <strong style="color:${balance > margin ? 'var(--green)':'var(--red)'}">$${balance.toFixed(2)}</strong>
+            · After trade: <strong>$${Math.max(0, balance - margin).toFixed(2)}</strong></div>` : ''}
+        ${sizingMode === 'risk_percent' ?
+          `<div>Risk sizing: ${riskPct}% of $${(balance||0).toFixed(0)} × ${leverage}× = <strong>$${(ld.notional_usd||notional).toFixed(2)}</strong></div>` : ''}
+        <div style="color:var(--muted)">Step: ${ld.step_size} · Min qty: ${ld.min_qty} · Precision: ${ld.precision_qty}dp</div>
+      `;
+
+      if (ld.warnings && ld.warnings.length) {
+        warnEl.innerHTML = '⚠️ ' + ld.warnings.join('<br>⚠️ ');
+      }
+      document.getElementById('live-lot-preview').textContent =
+        qty > 0 ? `→ ${qty} contracts @ $${margin.toFixed(2)} margin` : '';
+    } catch(e) {
+      details.innerHTML = 'Preview error: ' + e.message;
+    }
+  }, 600);
 }
 </script>
 

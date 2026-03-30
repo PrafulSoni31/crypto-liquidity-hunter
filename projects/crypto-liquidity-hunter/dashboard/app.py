@@ -1202,35 +1202,114 @@ def binance_cancel():
 
 @app.route('/api/binance/lot_info/<path:symbol>')
 def binance_lot_info(symbol):
-    """Return lot-size/precision info for a symbol. Fast in paper mode."""
+    """
+    Return lot-size/precision info + fully calculated lot size for a symbol.
+    Supports both paper and live mode.
+    Also accounts for live balance when position_sizing=risk_percent.
+    """
     try:
-        cfg  = load_config()
-        mode = cfg.get('binance_connection', {}).get('mode', 'paper')
-        connector = _get_connector(connect=(mode != 'paper'))
+        cfg       = load_config()
+        store     = DataStore()
+        active_id = cfg.get('active_account_id')
+
+        # Determine effective mode and connector
+        mode = 'paper'
+        connector = None
+        live_balance = None
+        if active_id:
+            acct = store.get_account(int(active_id))
+            if acct and acct.get('mode', 'paper') != 'paper':
+                mode = acct.get('mode', 'live')
+                connector = _make_connector_from_account(acct, connect=True)
+                if connector and connector.connected:
+                    try:
+                        bal_info = connector.get_balance('USDT')
+                        live_balance = float(bal_info.get('free', 0) or 0)
+                    except Exception:
+                        pass
+
+        if connector is None:
+            from core.binance_connector import BinanceConnector
+            connector = BinanceConnector(mode='paper')
+            connector.connect()
+
+        # Get lot size rules from exchange
         info = connector.get_lot_info(symbol)
-        # Also compute estimated qty
+
+        # Parameters from request or config
         price_hint = float(request.args.get('price', 0))
-        notional   = float(request.args.get('notional', 100))
-        leverage   = float(request.args.get('leverage', 20))
+        cfg_section = 'live_trading' if mode != 'paper' else 'paper_trading'
+        trade_cfg  = cfg.get(cfg_section, cfg.get('paper_trading', {}))
+
+        sizing_mode  = request.args.get('sizing_mode') or trade_cfg.get('position_sizing', 'fixed_notional')
+        base_notional = float(request.args.get('notional')  or trade_cfg.get('fixed_notional_usd', 100))
+        leverage     = float(request.args.get('leverage')   or trade_cfg.get('margin_leverage', 20))
+        risk_pct     = float(request.args.get('risk_pct')   or trade_cfg.get('risk_percent', 1.0))
+        commission   = float(trade_cfg.get('commission_per_trade', 0.001))
+        max_notional = float(trade_cfg.get('max_notional_usd', 500))
+
+        # Calculate effective notional
+        if sizing_mode == 'risk_percent' and live_balance and live_balance > 0:
+            notional = min(live_balance * (risk_pct / 100.0) * leverage, max_notional)
+        else:
+            notional = min(base_notional, max_notional)
+
+        # Calculate qty using exchange rules
         if price_hint > 0:
-            info['estimated_qty'] = connector.calc_qty(symbol, notional, price_hint, leverage)
-            info['margin_required'] = round(notional / leverage, 2)
+            qty = connector.calc_qty(symbol, notional, price_hint, leverage)
+            margin_required = round(notional / leverage, 4)
+            commission_usd  = round(notional * commission, 4)
+            notional_actual = round(qty * price_hint, 4)
+
+            info['estimated_qty']    = qty
+            info['notional_usd']     = round(notional, 2)
+            info['notional_actual']  = notional_actual
+            info['margin_required']  = margin_required
+            info['commission_usd']   = commission_usd
+            info['leverage']         = leverage
+            info['sizing_mode']      = sizing_mode
+            info['live_balance']     = round(live_balance, 2) if live_balance else None
+            info['price_used']       = price_hint
+            info['max_notional']     = max_notional
+
+            # Validation warnings
+            warnings = []
+            if qty <= 0:
+                warnings.append('Qty rounds to 0 — increase notional or reduce leverage')
+            if notional_actual < 5:
+                warnings.append(f'Notional too small (${notional_actual:.2f} < $5 min)')
+            if margin_required > (live_balance or float('inf')):
+                warnings.append(f'Insufficient margin: need ${margin_required:.2f}, have ${live_balance:.2f}')
+            info['warnings'] = warnings
+            info['valid'] = len(warnings) == 0
+
         return jsonify(info)
     except Exception as e:
+        logger.error(f"lot_info error: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/binance/get_settings', methods=['GET'])
 def binance_get_settings():
-    """Return current position-sizing settings from pairs.yaml."""
+    """Return position-sizing settings for both paper and live modes."""
     try:
         config    = load_config()
         paper_cfg = config.get('paper_trading', {})
+        live_cfg  = config.get('live_trading', {})
         return jsonify({
-            'notional_usd':  float(paper_cfg.get('fixed_notional_usd', 100.0)),
-            'leverage':      float(paper_cfg.get('margin_leverage', 20.0)),
-            'max_concurrent':int(config.get('backtester', {}).get('max_concurrent_trades', 3)),
-            'risk_pct':      round(float(config.get('signal_engine', {}).get('risk_per_trade', 0.01)) * 100, 2),
+            # Paper
+            'notional_usd':       float(paper_cfg.get('fixed_notional_usd', 20.0)),
+            'leverage':           float(paper_cfg.get('margin_leverage', 20.0)),
+            'commission':         float(paper_cfg.get('commission_per_trade', 0.001)),
+            'position_sizing':    paper_cfg.get('position_sizing', 'fixed_notional'),
+            # Live
+            'live_notional_usd':  float(live_cfg.get('fixed_notional_usd', 20.0)),
+            'live_leverage':      float(live_cfg.get('margin_leverage', 20.0)),
+            'live_commission':    float(live_cfg.get('commission_per_trade', 0.001)),
+            'live_position_sizing': live_cfg.get('position_sizing', 'fixed_notional'),
+            'live_risk_percent':  float(live_cfg.get('risk_percent', 1.0)),
+            'live_max_notional':  float(live_cfg.get('max_notional_usd', 500.0)),
+            'max_concurrent':     int(config.get('backtester', {}).get('max_concurrent_trades', 3)),
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1238,24 +1317,36 @@ def binance_get_settings():
 
 @app.route('/api/binance/save_settings', methods=['POST'])
 def binance_save_settings():
-    """Save position-sizing settings to pairs.yaml."""
+    """Save position-sizing settings for paper AND live modes to pairs.yaml."""
     data = request.get_json() or {}
     try:
-        config = load_config()
+        import yaml as _yaml
+        config    = load_config()
         paper_cfg = config.get('paper_trading', {})
-        if 'notional_usd' in data:
-            paper_cfg['fixed_notional_usd'] = float(data['notional_usd'])
-        if 'leverage' in data:
-            paper_cfg['margin_leverage'] = float(data['leverage'])
+        live_cfg  = config.get('live_trading', {})
+
+        # Paper settings
+        if 'notional_usd'    in data: paper_cfg['fixed_notional_usd']   = float(data['notional_usd'])
+        if 'leverage'        in data: paper_cfg['margin_leverage']       = float(data['leverage'])
+        if 'commission'      in data: paper_cfg['commission_per_trade']  = float(data['commission'])
+        if 'position_sizing' in data: paper_cfg['position_sizing']       = data['position_sizing']
+
+        # Live settings
+        if 'live_notional_usd'     in data: live_cfg['fixed_notional_usd']   = float(data['live_notional_usd'])
+        if 'live_leverage'         in data: live_cfg['margin_leverage']       = float(data['live_leverage'])
+        if 'live_commission'       in data: live_cfg['commission_per_trade']  = float(data['live_commission'])
+        if 'live_position_sizing'  in data: live_cfg['position_sizing']       = data['live_position_sizing']
+        if 'live_risk_percent'     in data: live_cfg['risk_percent']           = float(data['live_risk_percent'])
+        if 'live_max_notional'     in data: live_cfg['max_notional_usd']      = float(data['live_max_notional'])
+
         if 'max_concurrent' in data:
-            config['backtester']['max_concurrent_trades'] = int(data['max_concurrent'])
-        if 'risk_pct' in data:
-            config['signal_engine']['risk_per_trade'] = float(data['risk_pct']) / 100
+            config.setdefault('backtester', {})['max_concurrent_trades'] = int(data['max_concurrent'])
+
         config['paper_trading'] = paper_cfg
-        import yaml
+        config['live_trading']  = live_cfg
         with open(CONFIG_PATH, 'w') as f:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-        return jsonify({'status': 'ok', 'message': 'Settings saved'})
+            _yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+        return jsonify({'status': 'ok', 'message': 'Settings saved for paper + live'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

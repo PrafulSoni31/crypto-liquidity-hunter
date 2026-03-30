@@ -476,6 +476,14 @@ paper_trading:
   fixed_notional_usd: 20
   margin_leverage: 20
   position_sizing: fixed_notional
+
+live_trading:
+  commission_per_trade: 0.001
+  fixed_notional_usd: 20
+  margin_leverage: 20
+  position_sizing: fixed_notional
+  risk_percent: 1.0        # % of account balance per trade (used when position_sizing=risk_percent)
+  max_notional_usd: 500    # hard cap per trade (safety)
 signal_engine:
   min_risk_reward: 3
   require_confluence: true
