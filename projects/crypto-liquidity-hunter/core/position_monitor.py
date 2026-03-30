@@ -89,17 +89,20 @@ class PositionMonitor:
 
         # Fetch live positions from Binance (uses v2/positionRisk — works on multi-assets accounts)
         live_positions = {}
+        binance_fetch_ok = False
         if self._api_ok:
             try:
                 pos_list = self.connector.get_positions()
+                binance_fetch_ok = True   # fetch succeeded (even if empty = 0 positions)
                 for p in pos_list:
-                    # Index by raw_symbol (e.g. SYRUPUSDT) and ccxt symbol (SYRUP/USDT:USDT)
                     live_positions[p.get('raw_symbol', '')] = p
                     live_positions[p.get('symbol', '')]     = p
+                logger.debug(f"[Monitor] Live positions from Binance: {len(pos_list)}")
             except Exception as e:
                 logger.warning(f"[Monitor] get_positions failed: {e}")
+                binance_fetch_ok = False
 
-        # Fetch current prices from Binance public API (no auth, no IP restriction)
+        # Fetch current prices from Binance public API (no auth needed)
         symbols_binance = []
         for t in db_trades:
             sym = t['pair'].split(':', 1)[1] if ':' in t['pair'] else t['pair']
@@ -110,20 +113,43 @@ class PositionMonitor:
             if trade['id'] in self._closed_trades:
                 continue
 
-            # Check if position already closed on Binance (not present in live_positions)
-            if live_positions:
-                sym     = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
-                raw_sym = sym.replace('/', '')
-                ccxt_sym = self._normalise_symbol(sym)
-                live_p  = live_positions.get(raw_sym) or live_positions.get(ccxt_sym)
+            sym      = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
+            raw_sym  = sym.replace('/', '')
+            ccxt_sym = self._normalise_symbol(sym)
+
+            # ── Check against live Binance positions ─────────────────────────
+            # Use Binance as source of truth ONLY if the fetch actually succeeded.
+            # An empty result (0 positions) is valid and means ALL positions closed.
+            if binance_fetch_ok:
+                live_p = live_positions.get(raw_sym) or live_positions.get(ccxt_sym)
                 if not live_p:
-                    # Position gone from exchange — close in DB
+                    # Position not on Binance → it was closed (SL/TP hit, manual, liquidation)
+                    # Find best exit price: current mark price or last known
                     mark = price_map.get(raw_sym, 0.0)
                     exit_price = mark or float(trade.get('entry_price', 0))
-                    self._close_trade_now(trade, exit_price, 'closed_on_exchange', sym)
+                    # Determine close reason from SL/TP levels
+                    direction = trade.get('direction', 'short')
+                    sl = float(trade.get('sl') or 0)
+                    tp = float(trade.get('tp') or 0)
+                    reason = 'closed_on_exchange'
+                    if sl > 0 and exit_price > 0:
+                        if (direction == 'long'  and exit_price <= sl * 1.005) or \
+                           (direction == 'short' and exit_price >= sl * 0.995):
+                            reason = 'stop_loss'
+                    if tp > 0 and exit_price > 0:
+                        if (direction == 'long'  and exit_price >= tp * 0.995) or \
+                           (direction == 'short' and exit_price <= tp * 1.005):
+                            reason = 'target_hit'
+                    logger.info(f"[Monitor] Position {trade['id']} {sym} not on Binance → closing DB: "
+                                f"exit={exit_price:.6g} reason={reason}")
+                    self._close_trade_now(trade, exit_price, reason, sym)
                     continue
+                # Position still open on Binance — update unrealised PnL
+                mark = float(live_p.get('mark_price', 0))
+                if mark > 0:
+                    price_map[raw_sym] = mark  # use live mark price for SL/TP check too
 
-            # Check SL/TP via price
+            # ── Price-based SL/TP check (always runs as safety net) ──────────
             self._check_trade(trade, price_map)
 
         # Try to place SL/TP bracket orders if API is accessible
@@ -173,16 +199,54 @@ class PositionMonitor:
             exit_price = mark
             self._close_trade_now(trade, exit_price, status, sym)
 
+    def _get_actual_exit_price(self, sym: str, entry_price: float) -> float:
+        """
+        Try to get the actual exit price from Binance recent trade history.
+        Falls back to current mark price from public API.
+        """
+        # Try Binance user trade history for this symbol
+        try:
+            import hmac as _hmac, hashlib as _hashlib, time as _time, requests as _req
+            raw_sym = sym.replace('/', '')
+            ts  = int(_time.time() * 1000)
+            par = f"symbol={raw_sym}&limit=5&timestamp={ts}&recvWindow=5000"
+            sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
+            r = _req.get(
+                f"https://fapi.binance.com/fapi/v1/userTrades?{par}&signature={sig}",
+                headers={"X-MBX-APIKEY": self.connector.api_key}, timeout=8
+            )
+            trades = r.json()
+            if isinstance(trades, list) and trades:
+                # Most recent trade
+                latest = sorted(trades, key=lambda x: x.get('time', 0), reverse=True)[0]
+                price = float(latest.get('price', 0))
+                if price > 0:
+                    logger.info(f"[Monitor] Actual exit price from trade history: {sym} @ {price}")
+                    return price
+        except Exception as e:
+            logger.debug(f"[Monitor] Trade history fetch failed: {e}")
+
+        # Fallback to current public price
+        raw_sym = sym.replace('/', '')
+        prices  = self._fetch_public_prices([raw_sym])
+        return prices.get(raw_sym, entry_price)
+
     def _close_trade_now(self, trade: Dict, exit_price: float, status: str, sym: str):
         """
-        Attempt to close position on Binance and update DB.
-        Falls back to DB-only update if API is IP-restricted.
+        Update DB with actual exit price from Binance trade history.
+        Position is already closed on exchange — no need to place orders.
         """
         trade_id  = trade['id']
         direction = trade.get('direction', 'long')
         notional  = float(trade.get('notional_usd', 0) or 0)
         ep        = float(trade.get('entry_price', exit_price) or exit_price)
         commission= float(trade.get('commission_usd', 0) or 0)
+
+        # Try to get actual exit price from Binance trade history (more accurate)
+        if exit_price <= 0 or exit_price == ep:
+            actual = self._get_actual_exit_price(sym, ep)
+            if actual > 0:
+                exit_price = actual
 
         # Compute PnL
         if ep > 0 and notional > 0:
@@ -193,10 +257,8 @@ class PositionMonitor:
         else:
             pnl = 0.0
 
-        # Try actual exchange close
-        close_placed = False
-        if self._api_ok:
-            close_placed = self._place_market_close(sym, direction, trade, exit_price)
+        # Position already closed on exchange — no market close needed
+        close_placed = True
 
         # Always update DB
         try:

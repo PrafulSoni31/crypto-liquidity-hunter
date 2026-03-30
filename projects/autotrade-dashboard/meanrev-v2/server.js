@@ -154,30 +154,68 @@ app.post('/sign/hmac', (req, res) => {
 // ─────────────────────────────────────
 //  SIGNED BROKER REQUEST (server-side)
 //  POST /sign/binance-request
-//  Body: { key, secret, network, method, path, params }
-//  Server signs and proxies the full request — browser never uses crypto.subtle
+//  Browser sends {key?, secret?, network, method, fpath, params}.
+//  If key/secret omitted → uses saved credentials from broker_creds.json.
+//  Browser NEVER needs to hold the secret.
 // ─────────────────────────────────────
 app.post('/sign/binance-request', express.json(), async (req, res) => {
   try {
-    const { key, secret, network, method='GET', fpath, params={} } = req.body;
-    if (!key || !secret || !fpath)
-      return res.status(400).json({ error: 'key, secret, fpath required' });
-    if (!fpath.startsWith('/fapi/'))
-      return res.status(400).json({ error: 'invalid path' });
-    const base = network === 'mainnet'
+    let { key, secret, network, method='GET', fpath, params={} } = req.body;
+    if (!fpath) return res.status(400).json({ error: 'fpath required' });
+    if (!fpath.startsWith('/fapi/')) return res.status(400).json({ error: 'invalid path' });
+
+    // Fall back to stored credentials if browser doesn't send them
+    if (!key || !secret) {
+      const fs = require('fs');
+      const credsPath = path.join(__dirname, 'broker_creds.json');
+      if (fs.existsSync(credsPath)) {
+        const saved = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+        key     = key    || saved.binance?.key    || engine.brokerCreds.key;
+        secret  = secret || saved.binance?.secret || engine.brokerCreds.secret;
+        network = network || saved.binance?.network || 'mainnet';
+      }
+      // Also try engine in-memory
+      if (!secret) secret = engine.brokerCreds.secret;
+      if (!key)    key    = engine.brokerCreds.key;
+    }
+    if (!key || !secret) return res.status(400).json({ error: 'No API credentials available. Save credentials first.' });
+
+    const base = (network || 'mainnet') === 'mainnet'
       ? 'https://fapi.binance.com'
       : 'https://testnet.binancefuture.com';
 
-    const p = { ...params, timestamp: Date.now(), recvWindow: 5000 };
-    const qs = Object.entries(p).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+    const p   = { ...params, timestamp: Date.now(), recvWindow: 5000 };
+    const qs  = Object.entries(p).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     const sig = crypto.createHmac('sha256', secret).update(qs).digest('hex');
     const url = `${base}${fpath}?${qs}&signature=${sig}`;
     const headers = { 'X-MBX-APIKEY': key, 'Content-Type': 'application/x-www-form-urlencoded' };
-
-    // Proxy request
     proxyReq(method, url, headers, method === 'POST' ? qs : null, res);
   } catch(e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/test-creds — test stored Binance credentials server-side
+// Browser calls this instead of exposing secret in JS
+app.get('/api/test-creds', async (req, res) => {
+  try {
+    if (!engine.brokerCreds.key || !engine.brokerCreds.secret) {
+      // Try loading from disk
+      const fs = require('fs');
+      const credsPath = path.join(__dirname, 'broker_creds.json');
+      if (!fs.existsSync(credsPath)) return res.status(400).json({ status: 'error', message: 'No credentials saved' });
+      const saved = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+      if (!saved.binance?.key || !saved.binance?.secret)
+        return res.status(400).json({ status: 'error', message: 'Credentials incomplete' });
+      engine.setCreds(saved.binance.key, saved.binance.secret, saved.binance.network || 'mainnet');
+    }
+    const bal = await engine.binanceRequest('GET', '/fapi/v2/balance');
+    if (!Array.isArray(bal)) return res.status(400).json({ status: 'error', message: bal.msg || 'Auth failed' });
+    const usdt    = bal.find(b => b.asset === 'USDT');
+    const balance = parseFloat(usdt?.balance || 0);
+    res.json({ status: 'connected', balance, network: engine.brokerCreds.network });
+  } catch(e) {
+    res.status(400).json({ status: 'error', message: e.message });
   }
 });
 
@@ -653,24 +691,20 @@ app.get('/api/scan_trigger', (req, res) => {
   res.json({ triggered: _scanTriggerAt > since, triggeredAt: _scanTriggerAt });
 });
 
-// GET /api/scan — server-side Binance Futures scan (used by Telegram bot, no browser needed)
-// Scans ALL USDT-M perpetuals on Binance Futures
-app.get('/api/scan', async (req, res) => {
+// ── Server-side scan cache (prevents browser from doing heavy Binance fetches) ──
+let _scanCache    = null;   // last scan result
+let _scanRunning  = false;  // deduplicate concurrent scans
+let _scanAutoTimer = null;
+
+async function _runScanInternal(pumpThreshold, minVolume, revThreshold) {
+  if (_scanRunning) return _scanCache;
+  _scanRunning = true;
+  const STABLES = new Set(['BUSDUSDT','USDCUSDT','TUSDUSDT','USDTUSDT','DAIUSDT','FDUSDUSDT','USDPUSDT']);
   try {
-    const cfg = engine.cfg;
-    const pumpThreshold = parseFloat(req.query.pump || cfg.pumpThreshold || 20);
-    const minVolume     = parseFloat(req.query.vol  || cfg.minVolume     || 5e5);
-    const revThreshold  = parseFloat(req.query.rev  || cfg.reversalThreshold || 5);
-
-    const STABLES = new Set(['BUSDUSDT','USDCUSDT','TUSDUSDT','USDTUSDT','DAIUSDT','FDUSDUSDT','USDPUSDT']);
-
-    // Fetch all Binance Futures 24hr tickers
     const tickerData = await new Promise((resolve, reject) => {
       const req2 = https.request({
-        hostname: 'fapi.binance.com',
-        path:     '/fapi/v1/ticker/24hr',
-        method:   'GET',
-        headers:  { 'User-Agent': 'MeanRevTrader/2.0' },
+        hostname: 'fapi.binance.com', path: '/fapi/v1/ticker/24hr',
+        method: 'GET', headers: { 'User-Agent': 'MeanRevTrader/2.0' },
       }, r => {
         let data = '';
         r.on('data', c => data += c);
@@ -680,51 +714,91 @@ app.get('/api/scan', async (req, res) => {
       req2.setTimeout(10000, () => { req2.destroy(); reject(new Error('Timeout')); });
       req2.end();
     });
-
-    if (!Array.isArray(tickerData)) {
-      return res.status(502).json({ error: 'Binance returned unexpected data', raw: tickerData });
-    }
+    if (!Array.isArray(tickerData)) throw new Error('Bad Binance response');
 
     const totalPairs = tickerData.filter(t => t.symbol.endsWith('USDT') && !STABLES.has(t.symbol)).length;
-
-    const found = tickerData.filter(t => {
-      if (!t.symbol.endsWith('USDT'))                         return false;
-      if (STABLES.has(t.symbol))                              return false;
-      if (parseFloat(t.lastPrice) <= 0)                      return false;
-      if (parseFloat(t.priceChangePercent) < pumpThreshold)  return false;
-      if (parseFloat(t.quoteVolume) < minVolume)             return false;
-      return true;
-    }).sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
-    // ALL qualifying pairs — no slice
+    const found = tickerData
+      .filter(t => t.symbol.endsWith('USDT') && !STABLES.has(t.symbol)
+        && parseFloat(t.lastPrice) > 0
+        && parseFloat(t.priceChangePercent) >= pumpThreshold
+        && parseFloat(t.quoteVolume) >= minVolume)
+      .sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
 
     const results = found.map(t => {
-      const pump     = parseFloat(t.priceChangePercent);
-      const high     = parseFloat(t.highPrice);
-      const last     = parseFloat(t.lastPrice);
-      const fromHigh = high > 0 ? ((last - high) / high) * 100 : 0;
-      const hasSignal   = fromHigh <= -revThreshold;
-      const strength    = !hasSignal ? null : Math.abs(fromHigh) >= revThreshold * 2 ? 'STRONG' : 'WEAK';
-      const confidence  = Math.round(
+      const pump = parseFloat(t.priceChangePercent);
+      const high = parseFloat(t.highPrice), last = parseFloat(t.lastPrice);
+      const fromHigh  = high > 0 ? ((last - high) / high) * 100 : 0;
+      const hasSignal = fromHigh <= -revThreshold;
+      const strength  = !hasSignal ? null : Math.abs(fromHigh) >= revThreshold * 2 ? 'STRONG' : 'WEAK';
+      const confidence = Math.round(
         Math.min(40, pump / 2) +
         (hasSignal ? Math.min(40, Math.abs(fromHigh) * 4) : 0) +
         Math.min(20, Math.log10(Math.max(parseFloat(t.quoteVolume), 1e5) / 1e5) * 5)
       );
       return { symbol: t.symbol, pump, high, low: parseFloat(t.lowPrice), last,
-               vol: parseFloat(t.quoteVolume), fromHigh, hasSignal,
-               signalStrength: strength, confidence };
+               vol: parseFloat(t.quoteVolume), fromHigh, hasSignal, signalStrength: strength, confidence };
     });
 
-    const signals = results.filter(r => r.hasSignal);
-
-    res.json({
-      scannedAt:    new Date().toISOString(),
-      totalPairs,
-      pumped:       results.length,
-      signals:      signals.length,
+    _scanCache = {
+      scannedAt: new Date().toISOString(), totalPairs,
+      pumped: results.length, signals: results.filter(r => r.hasSignal).length,
       pumpThreshold, minVolume, revThreshold,
-      results,         // all pumped pairs
-      signalList: signals,  // only reversal signals
-    });
+      results, signalList: results.filter(r => r.hasSignal),
+    };
+    console.log(`[Scan] Complete: ${totalPairs} pairs, ${results.length} pumped, ${_scanCache.signals} signals`);
+    return _scanCache;
+  } finally {
+    _scanRunning = false;
+  }
+}
+
+// Start background auto-scan on server (every N seconds matching engine cfg)
+function startAutoScan() {
+  if (_scanAutoTimer) clearInterval(_scanAutoTimer);
+  const interval = Math.max(60, (engine.cfg.autoInterval || 300)) * 1000;
+  _scanAutoTimer = setInterval(async () => {
+    try {
+      const cfg = engine.cfg;
+      await _runScanInternal(cfg.pumpThreshold||20, cfg.minVolume||5e5, cfg.reversalThreshold||5);
+    } catch(e) { console.error('[AutoScan] Error:', e.message); }
+  }, interval);
+  // Run immediately on start
+  setTimeout(async () => {
+    try {
+      const cfg = engine.cfg;
+      await _runScanInternal(cfg.pumpThreshold||20, cfg.minVolume||5e5, cfg.reversalThreshold||5);
+    } catch(e) { console.error('[AutoScan] Initial scan error:', e.message); }
+  }, 5000);
+  console.log(`[AutoScan] Background scan every ${interval/1000}s`);
+}
+
+// GET /api/scan — returns cached scan result instantly; triggers fresh scan if stale
+// Scans ALL USDT-M perpetuals on Binance Futures
+app.get('/api/scan', async (req, res) => {
+  const force = req.query.force === '1';
+  try {
+    const cfg = engine.cfg;
+    const pumpThreshold = parseFloat(req.query.pump || cfg.pumpThreshold || 20);
+    const minVolume     = parseFloat(req.query.vol  || cfg.minVolume     || 5e5);
+    const revThreshold  = parseFloat(req.query.rev  || cfg.reversalThreshold || 5);
+
+    // Return cached result immediately if fresh enough (< 2 min) and not forced
+    const cacheAge = _scanCache ? (Date.now() - new Date(_scanCache.scannedAt).getTime()) : Infinity;
+    if (!force && _scanCache && cacheAge < 120000) {
+      return res.json({ ..._scanCache, cached: true, cacheAgeMs: cacheAge });
+    }
+    // If scan already running, return old cache with running flag
+    if (_scanRunning) {
+      return res.json({ ...(_scanCache || {}), running: true, cached: true });
+    }
+    // Run scan (non-blocking: returns immediately if cache available while scan runs)
+    if (_scanCache && !force) {
+      // Return stale cache, trigger background refresh
+      _runScanInternal(pumpThreshold, minVolume, revThreshold).catch(e => console.error('[Scan]', e.message));
+      return res.json({ ..._scanCache, cached: true, refreshing: true });
+    }
+    const result = await _runScanInternal(pumpThreshold, minVolume, revThreshold);
+    res.json(result);
   } catch(e) {
     console.error('[Scan] Error:', e.message);
     res.status(500).json({ error: e.message });
@@ -781,6 +855,10 @@ app.listen(PORT, HOST, () => {
   // Start backend trading engine (runs 24/7, browser-independent)
   engine.start();
   console.log(`[Server] Engine running — paper/live positions monitored in background`);
+
+  // Start background scan (server fetches Binance every 5 min, browser just polls cache)
+  startAutoScan();
+  console.log(`[Server] Background scan started — dashboard loads instantly from cache`);
 });
 
 // Graceful shutdown
