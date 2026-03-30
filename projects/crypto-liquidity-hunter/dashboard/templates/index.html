@@ -100,6 +100,10 @@
     }
     .tabnav-item:hover  { color: var(--text); }
     .tabnav-item.active { color: var(--blue2); border-bottom-color: var(--blue); }
+    .tabnav-item.admin-tab { color: var(--muted); }
+    .tabnav-item.admin-tab:hover { color: var(--text); }
+    #admin-overlay { display: none; }   /* hidden by default */
+    #admin-pw-input:focus { border-color: var(--blue, #3b82f6) !important; outline: none; }
 
     /* ── Page sections ───────────────────────────────────── */
     .page { display: none; padding: 16px 20px; flex-direction: column; gap: 14px; }
@@ -363,13 +367,37 @@
 </div>
 
 <!-- ── Tab Nav ────────────────────────────────────────────────────────────── -->
+<!-- ── Admin Login Overlay ─────────────────────────────────────────────── -->
+<div id="admin-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+  <div style="background:var(--bg2,#1a1f2e);border:1px solid var(--border,#2a3044);border-radius:12px;padding:32px 36px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:32px;margin-bottom:8px">🔐</div>
+      <div style="font-size:18px;font-weight:700;color:var(--text,#e2e8f0)">Admin Access</div>
+      <div style="font-size:12px;color:var(--muted,#64748b);margin-top:4px">Trading &amp; Settings are admin-only</div>
+    </div>
+    <input id="admin-pw-input" type="password" placeholder="Enter admin password"
+      style="width:100%;box-sizing:border-box;background:var(--bg3,#0f1420);border:1px solid var(--border,#2a3044);border-radius:8px;padding:10px 14px;font-size:14px;color:var(--text,#e2e8f0);outline:none;margin-bottom:12px"
+      onkeydown="if(event.key==='Enter')doAdminLogin()"
+      oninput="document.getElementById('admin-err').textContent=''">
+    <div id="admin-err" style="color:#ef4444;font-size:12px;min-height:18px;margin-bottom:8px;text-align:center"></div>
+    <button onclick="doAdminLogin()"
+      style="width:100%;background:var(--blue,#3b82f6);color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer">
+      Unlock Admin
+    </button>
+    <button onclick="closeAdminOverlay()"
+      style="width:100%;background:transparent;color:var(--muted,#64748b);border:1px solid var(--border,#2a3044);border-radius:8px;padding:8px;font-size:12px;cursor:pointer;margin-top:8px">
+      Cancel
+    </button>
+  </div>
+</div>
+
 <div class="tabnav">
   <div class="tabnav-item active" onclick="switchTab('scan',this)">📈 Live Scan</div>
   <div class="tabnav-item"        onclick="switchTab('signals',this)">⚡ Signals</div>
   <div class="tabnav-item"        onclick="switchTab('perf',this)">📊 Performance</div>
   <div class="tabnav-item"        onclick="switchTab('trades',this)">💼 Trades</div>
-  <div class="tabnav-item"        onclick="switchTab('trading',this);loadTradingTab()">⚙️ Trading</div>
-  <div class="tabnav-item"        onclick="switchTab('settings',this);loadSettings()">🔧 Settings</div>
+  <div class="tabnav-item admin-tab" onclick="adminGate('trading',this,'loadTradingTab')">⚙️ Trading 🔒</div>
+  <div class="tabnav-item admin-tab" onclick="adminGate('settings',this,'loadSettings')">🔧 Settings 🔒</div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════════
@@ -847,6 +875,105 @@ function toast(msg, type='green') {
 }
 
 // ── Tab switch ────────────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// ADMIN AUTH — Trading & Settings tabs locked behind password
+// ════════════════════════════════════════════════════════════════════════════
+let _adminToken = null;
+let _pendingAdminTab = null;
+let _pendingAdminEl  = null;
+let _pendingAdminFn  = null;
+
+function getCookie(name) {
+  return document.cookie.split(';').map(c=>c.trim())
+    .find(c=>c.startsWith(name+'='))?.split('=')[1] || null;
+}
+
+async function initAdminState() {
+  // Check if we already have a valid token (cookie)
+  const token = getCookie('clh_admin_token');
+  if (token) {
+    try {
+      const r = await fetch('/api/admin/check', {headers:{'X-Admin-Token':token}});
+      const d = await r.json();
+      if (d.admin) {
+        _adminToken = token;
+        unlockAdminTabs();
+      }
+    } catch(e) {}
+  }
+}
+
+function isAdmin() { return !!_adminToken; }
+
+function unlockAdminTabs() {
+  // Remove lock icon from admin tabs once authenticated
+  document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.textContent = tab.textContent.replace(' 🔒','');
+    tab.style.color = '';
+  });
+}
+
+function adminGate(tabName, el, loadFnName) {
+  if (isAdmin()) {
+    switchTab(tabName, el);
+    if (loadFnName && window[loadFnName]) window[loadFnName]();
+    return;
+  }
+  // Show login overlay
+  _pendingAdminTab = tabName;
+  _pendingAdminEl  = el;
+  _pendingAdminFn  = loadFnName;
+  const overlay = document.getElementById('admin-overlay');
+  overlay.style.display = 'flex';
+  setTimeout(() => document.getElementById('admin-pw-input').focus(), 100);
+}
+
+function closeAdminOverlay() {
+  document.getElementById('admin-overlay').style.display = 'none';
+  document.getElementById('admin-pw-input').value = '';
+  document.getElementById('admin-err').textContent = '';
+  _pendingAdminTab = null;
+  _pendingAdminEl  = null;
+  _pendingAdminFn  = null;
+}
+
+async function doAdminLogin() {
+  const pw    = document.getElementById('admin-pw-input').value;
+  const errEl = document.getElementById('admin-err');
+  if (!pw) { errEl.textContent = 'Enter password'; return; }
+  try {
+    const r = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({password: pw})
+    });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      _adminToken = d.token;
+      unlockAdminTabs();
+      closeAdminOverlay();
+      // Navigate to the tab they wanted
+      if (_pendingAdminTab) {
+        switchTab(_pendingAdminTab, _pendingAdminEl);
+        if (_pendingAdminFn && window[_pendingAdminFn]) window[_pendingAdminFn]();
+      }
+    } else {
+      errEl.textContent = d.message || 'Wrong password';
+      document.getElementById('admin-pw-input').value = '';
+      document.getElementById('admin-pw-input').focus();
+    }
+  } catch(e) {
+    errEl.textContent = 'Connection error';
+  }
+}
+
+// Close overlay on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('admin-overlay').style.display !== 'none') {
+    closeAdminOverlay();
+  }
+});
+
 function switchTab(name, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tabnav-item').forEach(t => t.classList.remove('active'));
@@ -1465,6 +1592,7 @@ async function refreshAll() {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  initAdminState();  // check if already admin (cookie) — unlock tabs silently
   initChart();
 
   // Reinit chart on symbol/TF change so price scale always resets cleanly

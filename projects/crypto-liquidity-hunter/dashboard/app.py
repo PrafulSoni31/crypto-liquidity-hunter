@@ -29,6 +29,46 @@ def load_config():
         return yaml.safe_load(f)
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
+app.secret_key = os.environ.get('FLASK_SECRET', 'clh-secret-2026-!@#')
+
+# ── Admin password (set via env var ADMIN_PASS or config) ───────────────────
+def get_admin_password():
+    pw = os.environ.get('ADMIN_PASS', '')
+    if not pw:
+        try:
+            cfg = load_config()
+            pw = cfg.get('admin_password', '')
+        except Exception:
+            pass
+    return pw or 'admin1234'   # default — change via ADMIN_PASS env or config admin_password
+
+def check_admin_token(req):
+    """Return True if request carries a valid admin token."""
+    pw = get_admin_password()
+    token = req.headers.get('X-Admin-Token') or req.args.get('admin_token') or \
+            req.cookies.get('clh_admin_token')
+    import hashlib
+    expected = hashlib.sha256(pw.encode()).hexdigest()[:32]
+    return token == expected
+
+@app.route('/api/admin/login', methods=['POST'])
+def admin_login():
+    """Verify admin password, return token if correct."""
+    import hashlib
+    data = request.get_json() or {}
+    pw = get_admin_password()
+    if data.get('password') == pw:
+        token = hashlib.sha256(pw.encode()).hexdigest()[:32]
+        resp = jsonify({'status': 'ok', 'token': token})
+        resp.set_cookie('clh_admin_token', token, max_age=86400*30,
+                        httponly=False, samesite='Lax')
+        return resp
+    return jsonify({'status': 'error', 'message': 'Wrong password'}), 401
+
+@app.route('/api/admin/check')
+def admin_check():
+    """Check if current session is admin."""
+    return jsonify({'admin': check_admin_token(request)})
 
 
 def _auto_start_monitor():
