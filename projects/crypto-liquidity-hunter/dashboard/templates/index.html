@@ -2055,7 +2055,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <label class="cfg-label">Position Sizing Mode
             <small>How lot size is calculated for live trades</small>
           </label>
-          <select class="cfg-input" id="cfg_live_position_sizing" onchange="toggleLiveSizingMode()">
+          <select class="cfg-input" id="cfg_live_position_sizing" onchange="toggleLiveSizingMode(); autoSaveLive(this,'live_position_sizing')">
             <option value="fixed_notional">Fixed Notional (USD)</option>
             <option value="risk_percent">Risk % of Balance</option>
           </select>
@@ -2065,27 +2065,29 @@ document.addEventListener('DOMContentLoaded', () => {
             <small>Trade size per live trade — exact USD amount</small>
           </label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_notional_usd"
-            step="10" min="5" oninput="previewLiveLot()">
+            step="10" min="5" oninput="previewLiveLot(); autoSaveLive(this,'live_notional_usd')">
         </div>
         <div id="live-risk-row" class="cfg-row" style="display:none">
           <label class="cfg-label">Risk % of Balance
             <small>e.g. 1.0 = 1% of free balance × leverage</small>
           </label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_risk_percent"
-            step="0.1" min="0.1" max="10" oninput="previewLiveLot()">
+            step="0.1" min="0.1" max="10" oninput="previewLiveLot(); autoSaveLive(this,'live_risk_percent')">
         </div>
         <div class="cfg-row">
           <label class="cfg-label">Margin Leverage <small>1–125× (must match your Binance account setting)</small></label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_leverage"
-            step="1" min="1" max="125" oninput="previewLiveLot()">
+            step="1" min="1" max="125" oninput="previewLiveLot(); autoSaveLive(this,'live_leverage')">
         </div>
         <div class="cfg-row">
           <label class="cfg-label">Max Notional Cap (USD) <small>Hard limit per trade — safety net</small></label>
-          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_max_notional" step="50" min="10">
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_max_notional"
+            step="50" min="10" oninput="autoSaveLive(this,'live_max_notional')">
         </div>
         <div class="cfg-row">
           <label class="cfg-label">Commission / Trade <small>Binance maker/taker rate (0.001 = 0.1%)</small></label>
-          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_commission" step="0.0001" min="0" max="0.01">
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_live_commission"
+            step="0.0001" min="0" max="0.01" oninput="autoSaveLive(this,'live_commission')">
         </div>
         <!-- Live lot preview box -->
         <div id="live-lot-box" style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-size:11px;display:none">
@@ -2975,6 +2977,64 @@ async function saveSettings() {
     cfgSetStatus('❌ Save failed: ' + e.message, 'err');
     toast('Save failed: ' + e.message, 'red');
   }
+}
+
+// ── Live Trading Auto-Save (fires on every input change, debounced 800ms) ────
+let _autoSaveLiveTimer = null;
+const _liveFieldsCache = {};   // track what's actually changed
+
+function autoSaveLive(el, fieldName) {
+  const val = el.type === 'checkbox' ? el.checked : parseFloat(el.value);
+  if (isNaN(val) && el.type !== 'checkbox') return;   // don't save invalid numbers
+  if (_liveFieldsCache[fieldName] === val) return;     // no change
+  _liveFieldsCache[fieldName] = val;
+
+  // Visual feedback on the field
+  el.style.borderColor = 'var(--yellow, #f59e0b)';
+
+  clearTimeout(_autoSaveLiveTimer);
+  _autoSaveLiveTimer = setTimeout(async () => {
+    // Collect ALL live fields at once (not just the changed one)
+    const gf = id => parseFloat(document.getElementById(id)?.value);
+    const gv = id => document.getElementById(id)?.value;
+    const payload = {
+      live_notional_usd:    gf('cfg_live_notional_usd'),
+      live_leverage:        gf('cfg_live_leverage'),
+      live_commission:      gf('cfg_live_commission'),
+      live_position_sizing: gv('cfg_live_position_sizing'),
+      live_risk_percent:    gf('cfg_live_risk_percent'),
+      live_max_notional:    gf('cfg_live_max_notional'),
+    };
+    // Remove NaN
+    Object.keys(payload).forEach(k => {
+      if (typeof payload[k] === 'number' && isNaN(payload[k])) delete payload[k];
+    });
+
+    try {
+      const r = await fetch('/api/binance/save_settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const d = await r.json();
+      if (d.status === 'ok') {
+        // Green flash — saved
+        el.style.borderColor = 'var(--green, #10b981)';
+        setTimeout(() => el.style.borderColor = '', 1500);
+        const preview = document.getElementById('live-lot-preview');
+        if (preview) {
+          preview.textContent = '✅ Saved';
+          setTimeout(() => { if (preview.textContent === '✅ Saved') preview.textContent = ''; }, 2000);
+        }
+      } else {
+        el.style.borderColor = 'var(--red, #ef4444)';
+        toast('Save failed: ' + (d.message || d.error || 'unknown'), 'red');
+      }
+    } catch(e) {
+      el.style.borderColor = 'var(--red, #ef4444)';
+      toast('Auto-save error: ' + e.message, 'red');
+    }
+  }, 800);  // 800ms debounce — saves after user stops typing
 }
 
 // ── Live Trading Lot Size Preview ─────────────────────────────────────────────

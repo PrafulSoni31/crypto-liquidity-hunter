@@ -71,6 +71,28 @@ def admin_check():
     return jsonify({'admin': check_admin_token(request)})
 
 
+@app.route('/api/live_settings')
+def get_live_settings():
+    """
+    Quick endpoint to get live trading settings.
+    Used by trade_executor, Telegram bot, and dashboard lot-size preview.
+    Always reads fresh from config (no cache) so changes apply immediately.
+    """
+    try:
+        cfg      = load_config()
+        live_cfg = cfg.get('live_trading', {})
+        return jsonify({
+            'fixed_notional_usd':  float(live_cfg.get('fixed_notional_usd', 20.0)),
+            'margin_leverage':     float(live_cfg.get('margin_leverage', 20.0)),
+            'commission_per_trade':float(live_cfg.get('commission_per_trade', 0.001)),
+            'position_sizing':     live_cfg.get('position_sizing', 'fixed_notional'),
+            'risk_percent':        float(live_cfg.get('risk_percent', 1.0)),
+            'max_notional_usd':    float(live_cfg.get('max_notional_usd', 500.0)),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 def _auto_start_monitor():
     """
     Auto-start position monitor on gunicorn startup for the active live account.
