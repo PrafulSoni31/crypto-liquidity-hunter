@@ -318,9 +318,16 @@ app.post('/api/open', express.json(), async (req, res) => {
   if (engine.mode === 'live' && engine.brokerCreds.key) {
     try {
       const sym       = symbol.replace('/USDT','USDT').replace('/','');
-      const qty       = (entrySize / entryPrice).toFixed(3);
       const entrySide = side === 'SHORT' ? 'SELL' : 'BUY';
       const exitSide  = side === 'SHORT' ? 'BUY'  : 'SELL';
+
+      // Use symbol-specific precision from exchangeInfo (prevents "Precision is over maximum" error)
+      const prec     = _symbolPrecision[sym] || {};
+      const qtyPrec  = prec.qtyPrecision  ?? 3;   // integer qty for some coins (e.g. ALPACA = 0)
+      const stepSize = prec.stepSize      ?? 0.001;
+      // Round qty DOWN to stepSize boundary
+      const rawQty   = entrySize / entryPrice;
+      const qty      = (Math.floor(rawQty / stepSize) * stepSize).toFixed(qtyPrec);
 
       // Calculate SL price from cfg
       const slPrice = side === 'SHORT'
@@ -444,8 +451,12 @@ app.post('/api/close', express.json(), async (req, res) => {
   if (engine.mode === 'live' && engine.brokerCreds.key) {
     try {
       const sym = pos.symbol.replace('/USDT','USDT').replace('/','');
-      const qty = (pos.totalSize / exitPrice).toFixed(3);
       const closeSide = pos.side === 'SHORT' ? 'BUY' : 'SELL';
+      const cPrec    = _symbolPrecision[sym] || {};
+      const cQtyPrec = cPrec.qtyPrecision  ?? 3;
+      const cStep    = cPrec.stepSize      ?? 0.001;
+      const rawCQty  = pos.contracts || (pos.totalSize / exitPrice);
+      const qty      = (Math.floor(rawCQty / cStep) * cStep).toFixed(cQtyPrec);
       const order = await engine.binanceRequest('POST', '/fapi/v1/order', {
         symbol: sym, side: closeSide, type: 'MARKET',
         quantity: qty, reduceOnly: 'true'
@@ -696,11 +707,64 @@ let _scanCache    = null;   // last scan result
 let _scanRunning  = false;  // deduplicate concurrent scans
 let _scanAutoTimer = null;
 
+// Cache of TRADING perpetuals with their precision info (refreshed every 6h)
+let _tradingSymbols = null;   // Set of symbol strings (TRADING perpetuals only)
+let _symbolPrecision = {};    // symbol → {qtyPrecision, pricePrecision, stepSize, tickSize}
+let _tradingSymsFetchedAt = 0;
+
+async function _refreshTradingSymbols() {
+  if (_tradingSymbols && Date.now() - _tradingSymsFetchedAt < 6 * 3600 * 1000) return;
+  return new Promise((resolve) => {
+    const req2 = https.request({
+      hostname: 'fapi.binance.com', path: '/fapi/v1/exchangeInfo',
+      method: 'GET', headers: { 'User-Agent': 'MeanRevTrader/2.0' },
+    }, r => {
+      let data = '';
+      r.on('data', c => data += c);
+      r.on('end', () => {
+        try {
+          const d = JSON.parse(data);
+          _tradingSymbols = new Set();
+          _symbolPrecision = {};
+          for (const s of d.symbols) {
+            // Only TRADING perpetuals — exclude SETTLING, DELIVERING, BREAK, etc.
+            if (s.quoteAsset !== 'USDT') continue;
+            if (s.contractType !== 'PERPETUAL') continue;
+            if (s.status !== 'TRADING') continue;
+            _tradingSymbols.add(s.symbol);
+            // Extract precision from filters
+            let stepSize = 1, tickSize = 0.01;
+            for (const f of s.filters) {
+              if (f.filterType === 'LOT_SIZE')    stepSize = parseFloat(f.stepSize);
+              if (f.filterType === 'PRICE_FILTER') tickSize = parseFloat(f.tickSize);
+            }
+            _symbolPrecision[s.symbol] = {
+              qtyPrecision:   s.quantityPrecision,
+              pricePrecision: s.pricePrecision,
+              stepSize,
+              tickSize,
+            };
+          }
+          _tradingSymsFetchedAt = Date.now();
+          console.log(`[Scan] Trading perpetuals: ${_tradingSymbols.size} USDT-M`);
+        } catch(e) { console.error('[Scan] exchangeInfo parse error:', e.message); }
+        resolve();
+      });
+    });
+    req2.on('error', () => resolve());
+    req2.setTimeout(10000, () => { req2.destroy(); resolve(); });
+    req2.end();
+  });
+}
+
 async function _runScanInternal(pumpThreshold, minVolume, revThreshold) {
   if (_scanRunning) return _scanCache;
   _scanRunning = true;
   const STABLES = new Set(['BUSDUSDT','USDCUSDT','TUSDUSDT','USDTUSDT','DAIUSDT','FDUSDUSDT','USDPUSDT']);
   try {
+    // Refresh symbol whitelist (TRADING only, no SETTLING contracts)
+    await _refreshTradingSymbols();
+
     const tickerData = await new Promise((resolve, reject) => {
       const req2 = https.request({
         hostname: 'fapi.binance.com', path: '/fapi/v1/ticker/24hr',
@@ -716,9 +780,15 @@ async function _runScanInternal(pumpThreshold, minVolume, revThreshold) {
     });
     if (!Array.isArray(tickerData)) throw new Error('Bad Binance response');
 
-    const totalPairs = tickerData.filter(t => t.symbol.endsWith('USDT') && !STABLES.has(t.symbol)).length;
+    // Only count TRADING symbols
+    const tradingSet = _tradingSymbols || new Set(tickerData.map(t => t.symbol));
+    const totalPairs = tickerData.filter(t =>
+      t.symbol.endsWith('USDT') && !STABLES.has(t.symbol) && tradingSet.has(t.symbol)
+    ).length;
+
     const found = tickerData
       .filter(t => t.symbol.endsWith('USDT') && !STABLES.has(t.symbol)
+        && tradingSet.has(t.symbol)          // ← exclude SETTLING / non-TRADING
         && parseFloat(t.lastPrice) > 0
         && parseFloat(t.priceChangePercent) >= pumpThreshold
         && parseFloat(t.quoteVolume) >= minVolume)
@@ -735,8 +805,13 @@ async function _runScanInternal(pumpThreshold, minVolume, revThreshold) {
         (hasSignal ? Math.min(40, Math.abs(fromHigh) * 4) : 0) +
         Math.min(20, Math.log10(Math.max(parseFloat(t.quoteVolume), 1e5) / 1e5) * 5)
       );
+      const prec = _symbolPrecision[t.symbol] || {};
       return { symbol: t.symbol, pump, high, low: parseFloat(t.lowPrice), last,
-               vol: parseFloat(t.quoteVolume), fromHigh, hasSignal, signalStrength: strength, confidence };
+               vol: parseFloat(t.quoteVolume), fromHigh, hasSignal, signalStrength: strength, confidence,
+               qtyPrecision: prec.qtyPrecision ?? 3,
+               pricePrecision: prec.pricePrecision ?? 4,
+               stepSize: prec.stepSize ?? 0.001,
+               tickSize: prec.tickSize ?? 0.0001 };
     });
 
     _scanCache = {
@@ -772,8 +847,16 @@ function startAutoScan() {
   console.log(`[AutoScan] Background scan every ${interval/1000}s`);
 }
 
+// GET /api/scan/precision/:symbol — return lot size + price precision for a symbol
+app.get('/api/scan/precision/:symbol', (req, res) => {
+  const sym  = req.params.symbol.toUpperCase().replace('/USDT','USDT').replace('/','');
+  const prec = _symbolPrecision[sym];
+  if (!prec) return res.status(404).json({ error: 'Symbol not found or not TRADING', symbol: sym });
+  res.json({ symbol: sym, ...prec, tradable: _tradingSymbols?.has(sym) || false });
+});
+
 // GET /api/scan — returns cached scan result instantly; triggers fresh scan if stale
-// Scans ALL USDT-M perpetuals on Binance Futures
+// Scans TRADING USDT-M perpetuals only (excludes SETTLING contracts)
 app.get('/api/scan', async (req, res) => {
   const force = req.query.force === '1';
   try {
