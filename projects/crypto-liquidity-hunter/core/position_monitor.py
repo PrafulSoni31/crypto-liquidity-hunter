@@ -406,8 +406,31 @@ class PositionMonitor:
 
     # ── Bracket order placement ────────────────────────────────────────────────
 
+    def _get_open_order_count(self, raw_sym: str) -> int:
+        """Return number of open reduceOnly orders for a symbol on Binance."""
+        try:
+            import time as _t, hmac as _h, hashlib as _ha, requests as _r
+            ts  = int(_t.time() * 1000)
+            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=5000"
+            sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
+            resp = _r.get(
+                f"https://fapi.binance.com/fapi/v1/openOrders?{par}&signature={sig}",
+                headers={"X-MBX-APIKEY": self.connector.api_key}, timeout=5
+            )
+            orders = resp.json()
+            if isinstance(orders, list):
+                return len([o for o in orders if o.get('reduceOnly')])
+        except Exception:
+            pass
+        return -1  # -1 = couldn't check
+
     def _try_place_bracket_orders(self, db_trades: List[Dict]):
-        """Try to place SL+TP bracket orders for trades that don't have them yet."""
+        """
+        Place SL+TP bracket orders for trades that don't have them yet.
+        CRITICAL: Always checks Binance FIRST — if orders already exist, skip.
+        This prevents duplicate orders after gunicorn restarts or monitor restarts.
+        _sltp_placed is only an in-memory cache; Binance is the source of truth.
+        """
         for trade in db_trades:
             trade_id = trade['id']
             if trade_id in self._sltp_placed:
@@ -417,28 +440,46 @@ class PositionMonitor:
             if sl <= 0 and tp <= 0:
                 continue
 
-            sym     = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
-            ccxt_sym = self._normalise_symbol(sym)
+            sym      = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
+            from core.binance_connector import _normalise_k_contract
+            norm_sym, mult = _normalise_k_contract(sym)
+            raw_sym  = norm_sym.split('/')[0].replace('/', '') + \
+                       (norm_sym.split('/')[1].split(':')[0] if '/' in norm_sym else '')
+            raw_sym  = raw_sym.replace('/', '')
             direction = trade.get('direction', 'long')
 
-            # Estimate qty from notional
+            # ── CHECK BINANCE FIRST ───────────────────────────────────────────
+            # If orders already exist on exchange, mark as placed and skip
+            existing_count = self._get_open_order_count(raw_sym)
+            if existing_count > 0:
+                logger.debug(f"[Monitor] Trade {trade_id} {sym}: {existing_count} orders already on exchange — skipping")
+                self._sltp_placed.add(trade_id)
+                continue
+            if existing_count < 0:
+                logger.debug(f"[Monitor] Could not check orders for {sym} — skipping to be safe")
+                continue  # Can't verify — skip rather than duplicate
+
+            # No existing orders — safe to place
             notional = float(trade.get('notional_usd', 0) or 0)
             ep       = float(trade.get('entry_price', 0) or 0)
             qty      = notional / ep if ep > 0 else 0
 
             if qty > 0:
                 try:
-                    result = self.connector.set_sl_tp(ccxt_sym, direction, qty, sl, tp)
+                    result = self.connector.set_sl_tp(norm_sym, direction, qty, sl, tp)
                     if 'error' in result:
-                        logger.error(f"[Monitor] Bracket order failed trade {trade_id}: {result['error']}")
                         err = result['error']
+                        logger.error(f"[Monitor] Bracket order failed trade {trade_id}: {err}")
                         if '-2015' in err or 'Invalid API-key' in err or 'IP' in err:
                             self._api_ok = False
+                        # Mark as placed anyway to avoid hammering exchange with failing requests
+                        self._sltp_placed.add(trade_id)
                     else:
-                        logger.info(f"[Monitor] Bracket placed trade {trade_id}: SL={result.get('sl_price')} TP={result.get('tp_price')}")
+                        logger.info(f"[Monitor] Bracket placed trade {trade_id} {sym}: SL={result.get('sl_price')} TP={result.get('tp_price')}")
                         self._sltp_placed.add(trade_id)
                 except Exception as e:
                     logger.error(f"[Monitor] _try_place_bracket error: {e}")
+                    self._sltp_placed.add(trade_id)  # mark placed to avoid retry storm
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 

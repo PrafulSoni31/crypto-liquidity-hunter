@@ -764,17 +764,45 @@ class BinanceConnector:
                 'mode': 'paper',
             }
         try:
-            qty_r = self._round_qty(symbol, qty)
-            sl_r  = self._round_price(symbol, sl_price) if sl_price else 0
-            tp_r  = self._round_price(symbol, tp_price) if tp_price else 0
-            result = {'sl_price': sl_r, 'tp_price': tp_r}
+            # Normalise symbol for 1000x contracts
+            norm_sym, mult = _normalise_k_contract(symbol)
+            raw_binance = norm_sym.split('/')[0].replace('/', '') + \
+                          (norm_sym.split('/')[1].split(':')[0] if '/' in norm_sym else '')
+            raw_binance = raw_binance.replace('/', '')
+
+            # ── Check if orders already exist BEFORE placing ─────────────────
+            # Prevents duplicate brackets on gunicorn restart / monitor restart
+            import time as _chk_t, hmac as _chk_h, hashlib as _chk_ha, requests as _chk_r
+            ts_chk  = int(_chk_t.time() * 1000)
+            par_chk = f"symbol={raw_binance}&timestamp={ts_chk}&recvWindow=5000"
+            sig_chk = _chk_h.new(self.api_secret.encode(), par_chk.encode(), _chk_ha.sha256).hexdigest()
+            r_chk   = _chk_r.get(
+                f"https://fapi.binance.com/fapi/v1/openOrders?{par_chk}&signature={sig_chk}",
+                headers={"X-MBX-APIKEY": self.api_key}, timeout=5
+            )
+            existing = r_chk.json()
+            if isinstance(existing, list) and existing:
+                logger.info(f"[Connector] {symbol}: {len(existing)} orders already on exchange — skipping set_sl_tp")
+                return {
+                    'sl_order_id': existing[0].get('orderId', 'existing'),
+                    'tp_order_id': existing[-1].get('orderId', 'existing') if len(existing) > 1 else None,
+                    'sl_price':    sl_price,
+                    'tp_price':    tp_price,
+                    'already_placed': True,
+                }
+
+            # Use normalised symbol for all subsequent calls
+            qty_r = self._round_qty(norm_sym, qty)
+            sl_r  = self._round_price(norm_sym, sl_price * mult) if sl_price else 0
+            tp_r  = self._round_price(norm_sym, tp_price * mult) if tp_price else 0
+            result = {'sl_price': sl_price, 'tp_price': tp_price}
 
             # ── Try STOP_MARKET / TAKE_PROFIT_MARKET first ──────────────────
             stop_market_ok = True
             if sl_r > 0:
                 try:
                     sl_order = self.exchange.create_order(
-                        symbol=symbol, type='stop_market', side=exit_side, amount=qty_r,
+                        symbol=norm_sym, type='stop_market', side=exit_side, amount=qty_r,
                         params={'stopPrice': sl_r, 'reduceOnly': True, 'closePosition': False}
                     )
                     result['sl_order_id'] = sl_order['id']
@@ -791,7 +819,7 @@ class BinanceConnector:
             if tp_r > 0:
                 try:
                     tp_order = self.exchange.create_order(
-                        symbol=symbol, type='take_profit_market', side=exit_side, amount=qty_r,
+                        symbol=norm_sym, type='take_profit_market', side=exit_side, amount=qty_r,
                         params={'stopPrice': tp_r, 'reduceOnly': True, 'closePosition': False}
                     )
                     result['tp_order_id'] = tp_order['id']
@@ -802,7 +830,7 @@ class BinanceConnector:
                         # ── Fallback: LIMIT reduceOnly ───────────────────────
                         try:
                             tp_limit = self.exchange.create_order(
-                                symbol=symbol, type='limit', side=exit_side, amount=qty_r,
+                                symbol=norm_sym, type='limit', side=exit_side, amount=qty_r,
                                 price=tp_r,
                                 params={'reduceOnly': True, 'timeInForce': 'GTC'}
                             )
