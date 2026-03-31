@@ -213,9 +213,13 @@ class PositionMonitor:
             # ── Price-based SL/TP check (always runs as safety net) ──────────
             self._check_trade(trade, price_map)
 
-        # Try to place SL/TP bracket orders if API is accessible
-        if self._api_ok:
-            self._try_place_bracket_orders(db_trades)
+        # NOTE: Do NOT call _try_place_bracket_orders here.
+        # SL/TP is placed atomically at entry via place_entry_with_sl (batchOrders).
+        # Placing bracket orders from the monitor causes duplicates because:
+        # - Multiple gunicorn workers each run a monitor instance
+        # - Each gunicorn restart resets _sltp_placed memory
+        # The monitor's only job is to DETECT closes and cancel orphans.
+        # Bracket placement is the executor's responsibility, not the monitor's.
 
     # ── Price-based SL/TP enforcement ─────────────────────────────────────────
 

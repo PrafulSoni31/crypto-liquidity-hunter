@@ -269,16 +269,9 @@ class TradeExecutor:
             account_id     = self.account_id,
         )
 
-        # Start position monitor for live accounts so SL/TP hits auto-close DB
-        if self.mode != 'paper' and self.account_id and trade_id:
-            try:
-                from core.position_monitor import start_monitor, get_monitor
-                m = start_monitor(self.connector, self.store,
-                                  account_id=self.account_id, interval=10)
-                if sltp_result and 'error' not in sltp_result:
-                    m.mark_sltp_placed(trade_id)
-            except Exception as e:
-                logger.warning(f"Could not start position monitor: {e}")
+        # Monitor is started once globally via app.py before_request (file-lock protected)
+        # Do NOT start it here — each trade execution would create duplicate monitor threads
+        # The monitor only needs to detect closes + cancel orphans; SL/TP already placed atomically
 
         return {
             'trade_id':       trade_id,

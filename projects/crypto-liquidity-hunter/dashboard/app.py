@@ -128,13 +128,30 @@ def _auto_start_monitor():
 
 # Auto-start monitor when gunicorn worker first handles a request
 _monitor_started = False
+_MONITOR_LOCK_FILE = '/tmp/clh_monitor.lock'
 
 @app.before_request
 def _on_first_request():
     global _monitor_started
-    if not _monitor_started:
+    if _monitor_started:
+        return
+    # Use a file-based lock so only ONE gunicorn worker starts the monitor
+    # (multiple workers share a filesystem, so only the first one creates the lock)
+    import os, fcntl
+    try:
+        lock_fd = open(_MONITOR_LOCK_FILE, 'w')
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # Got the lock — we are the first worker
         _monitor_started = True
         _auto_start_monitor()
+        # Write PID to lock file
+        lock_fd.write(str(os.getpid()))
+        lock_fd.flush()
+        # Keep lock_fd open (releasing it would release the lock)
+        app._monitor_lock_fd = lock_fd
+    except (IOError, OSError):
+        # Another worker already has the lock — skip
+        _monitor_started = True  # suppress future attempts in this worker
 
 
 @app.route('/')
