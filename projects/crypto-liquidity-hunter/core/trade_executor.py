@@ -91,6 +91,42 @@ class TradeExecutor:
             )
             self.connector.connect()
 
+    # ─── Price Fetch (handles 1000x contracts) ────────────────────────────────
+
+    def _fetch_price(self, symbol: str, norm_sym: str = None, mult: float = 1.0) -> float:
+        """
+        Fetch current mark/last price for a symbol.
+        Handles 1000x contracts: norm_sym=1000PEPE/USDT:USDT, mult=1000
+        Returns user-facing price (divided by multiplier for 1000x coins).
+        """
+        from core.binance_connector import _normalise_k_contract
+        if norm_sym is None:
+            norm_sym, mult = _normalise_k_contract(symbol)
+
+        # Method 1: Binance public REST (fastest, no auth, handles all futures)
+        try:
+            import urllib.request as _req, json as _json
+            raw_binance = norm_sym.split('/')[0].replace('/', '') + \
+                          norm_sym.split('/')[1].split(':')[0] if '/' in norm_sym else norm_sym
+            raw_binance = raw_binance.replace('/', '')
+            url = f'https://fapi.binance.com/fapi/v1/ticker/price?symbol={raw_binance}'
+            with _req.urlopen(url, timeout=5) as r:
+                price_exchange = float(_json.loads(r.read())['price'])
+                return price_exchange / mult   # scale back to user-facing price
+        except Exception as e:
+            logger.debug(f"[Executor] Futures price fetch failed for {raw_binance}: {e}")
+
+        # Method 2: ccxt spot (fallback for coins not yet on futures)
+        try:
+            import ccxt as _ccxt
+            _ex = _ccxt.binance({'enableRateLimit': False})
+            ticker = _ex.fetch_ticker(symbol.split(':')[0])
+            return float(ticker['last'])
+        except Exception as e:
+            logger.debug(f"[Executor] Spot price fetch failed for {symbol}: {e}")
+
+        return 0.0
+
     # ─── Execute Signal ────────────────────────────────────────────────────────
 
     def execute_signal(self, signal_dict: Dict, pair: str,
@@ -151,26 +187,11 @@ class TradeExecutor:
 
         # entry_price=0 means "market order" — fetch current price for record keeping
         if entry_price <= 0:
-            try:
-                if self.connector.exchange:
-                    ticker = self.connector.exchange.fetch_ticker(symbol)
-                    entry_price = float(ticker['last'])
-                else:
-                    # Paper fallback — use public price fetch via ccxt
-                    import ccxt as _ccxt
-                    _ex = _ccxt.binance({'enableRateLimit': True})
-                    ticker = _ex.fetch_ticker(symbol)
-                    entry_price = float(ticker['last'])
-            except Exception:
-                # Last resort — known approximate prices
-                _KNOWN_PRICES = {
-                    'BTC/USDT': 65000.0, 'ETH/USDT': 3500.0,
-                    'SOL/USDT': 150.0,   'BNB/USDT': 580.0,
-                }
-                sym_clean = symbol.replace(':USDT', '/USDT').upper()
-                entry_price = _KNOWN_PRICES.get(sym_clean, 1.0)
-                if entry_price == 1.0:
-                    return {'error': f'entry_price=0 and could not fetch current price for {symbol}'}
+            from core.binance_connector import _normalise_k_contract
+            norm_sym, mult = _normalise_k_contract(symbol)
+            entry_price = self._fetch_price(symbol, norm_sym, mult)
+            if entry_price <= 0:
+                return {'error': f'entry_price=0 and could not fetch current price for {symbol}'}
 
         # Normalise symbol for futures (BTC/USDT → BTC/USDT for ccxt binanceusdm)
         qty = self.connector.calc_qty(symbol, notional, entry_price, lev)

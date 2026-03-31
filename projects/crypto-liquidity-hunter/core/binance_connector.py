@@ -6,9 +6,52 @@ Zero changes to existing strategy logic.
 import ccxt
 import logging
 import math
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# ── 1000x Contract Map ─────────────────────────────────────────────────────────
+# Some Binance Futures contracts represent 1000 tokens per contract unit.
+# e.g. PEPE/USDT (price ~0.000003) → trades as 1000PEPEUSDT (price ~0.003)
+# We auto-detect and scale prices/quantities transparently.
+_K_CONTRACT_MAP: Dict[str, Dict] = {
+    # base_symbol → {futures_raw_sym, multiplier}
+    'PEPE':    {'raw': '1000PEPEUSDT',   'mult': 1000},
+    'BONK':    {'raw': '1000BONKUSDT',   'mult': 1000},
+    'SHIB':    {'raw': '1000SHIBUSDT',   'mult': 1000},
+    'FLOKI':   {'raw': '1000FLOKIUSDT',  'mult': 1000},
+    'LUNC':    {'raw': '1000LUNCUSDT',   'mult': 1000},
+    'SATS':    {'raw': '1000SATSUSDT',   'mult': 1000},
+    'RATS':    {'raw': '1000RATSUSDT',   'mult': 1000},
+    'CAT':     {'raw': '1000CATUSDT',    'mult': 1000},
+    'CHEEMS':  {'raw': '1000CHEEMSUSDT', 'mult': 1000},
+    'XEC':     {'raw': '1000XECUSDT',    'mult': 1000},
+    'BOB':     {'raw': '1000000BOBUSDT', 'mult': 1_000_000},
+    'MOG':     {'raw': '1000000MOGUSDT', 'mult': 1_000_000},
+}
+
+def _normalise_k_contract(symbol: str) -> Tuple[str, float]:
+    """
+    Given a user-facing symbol like 'PEPE/USDT' or 'PEPE/USDT:USDT',
+    return the correct Binance Futures symbol and price multiplier.
+
+    Returns (normalised_symbol, price_multiplier)
+    e.g. 'PEPE/USDT' → ('1000PEPE/USDT:USDT', 1000)
+         'BTC/USDT'  → ('BTC/USDT:USDT',       1)
+    """
+    base = symbol.split('/')[0].upper()
+    if base in _K_CONTRACT_MAP:
+        info = _K_CONTRACT_MAP[base]
+        raw  = info['raw']
+        mult = info['mult']
+        # Convert raw BINANCE symbol to ccxt format: 1000PEPEUSDT → 1000PEPE/USDT:USDT
+        ccxt_sym = raw.replace('USDT', '/USDT:USDT') if 'USDT' in raw else raw
+        return ccxt_sym, mult
+    # Standard symbol
+    if ':' not in symbol and '/' in symbol:
+        base2, quote = symbol.split('/', 1)
+        return f'{base2}/{quote}:{quote}', 1.0
+    return symbol, 1.0
 
 
 class BinanceConnector:
@@ -355,16 +398,18 @@ class BinanceConnector:
 
     def calc_qty(self, symbol: str, notional_usd: float, price: float, leverage: float = 1.0) -> float:
         """
-        Calculate order quantity (base asset units) from notional USDT.
-        Rounds DOWN to step_size.
-        qty = (notional * leverage) / price
+        Calculate order quantity (contract units) from notional USDT.
+        Auto-handles 1000x contracts (e.g. PEPE/USDT → 1000PEPEUSDT).
+        qty = (notional * leverage) / (price * multiplier)
         """
         if price <= 0:
             return 0.0
-        lot = self.get_lot_info(symbol)
-        raw_qty = (notional_usd * leverage) / price
+        # Normalise symbol and get price multiplier for 1000x contracts
+        norm_sym, mult = _normalise_k_contract(symbol)
+        price_adjusted = price * mult   # e.g. 0.000003 * 1000 = 0.003
+        lot = self.get_lot_info(norm_sym)
+        raw_qty = (notional_usd * leverage) / price_adjusted
         step    = lot['step_size']
-        # Floor to step
         qty = math.floor(raw_qty / step) * step
         qty = round(qty, lot['precision_qty'])
         return max(qty, lot['min_qty'])
@@ -446,20 +491,34 @@ class BinanceConnector:
             return {'can_trade': False, 'can_futures': False, 'reason': str(e)}
 
     def place_market_order(self, symbol: str, side: str, qty: float) -> Dict:
-        """Place a market order. In paper mode returns simulated fill."""
+        """
+        Place a market order.
+        Auto-handles 1000x contracts (PEPE/USDT → 1000PEPE/USDT:USDT).
+        In paper mode returns simulated fill.
+        """
+        norm_sym, mult = _normalise_k_contract(symbol)
         if self.mode == 'paper':
             try:
-                ticker = self.exchange.fetch_ticker(symbol)
-                price  = float(ticker['last'])
+                # Try normalised symbol first, fallback to spot price
+                try:
+                    ticker = self.exchange.fetch_ticker(norm_sym)
+                except Exception:
+                    import urllib.request as _req
+                    raw_sym = symbol.split('/')[0].replace('/', '') + 'USDT'
+                    r = _req.urlopen(f'https://api.binance.com/api/v3/ticker/price?symbol={raw_sym}', timeout=5)
+                    import json
+                    price_raw = float(json.loads(r.read())['price'])
+                    return self.paper_execute(symbol, side, qty, price_raw)
+                price = float(ticker['last']) / mult  # convert back to user-facing price
             except Exception:
                 price = 0.0
             return self.paper_execute(symbol, side, qty, price)
         try:
-            qty_r = self._round_qty(symbol, qty)
+            qty_r = self._round_qty(norm_sym, qty)
             order = self.exchange.create_order(
-                symbol=symbol, type='market', side=side, amount=qty_r
+                symbol=norm_sym, type='market', side=side, amount=qty_r
             )
-            logger.info(f"Market order: {side} {qty_r} {symbol} → {order['id']}")
+            logger.info(f"Market order: {side} {qty_r} {norm_sym} → {order['id']}")
             return order
         except Exception as e:
             err = str(e)
@@ -506,12 +565,19 @@ class BinanceConnector:
                 'sl_price': sl_price, 'tp_price': tp_price, 'mode': 'paper',
             }
 
-        raw_sym    = symbol.split(':')[0].replace('/', '')   # BTC/USDT:USDT → BTCUSDT
+        # Normalise for 1000x contracts (PEPE/USDT → 1000PEPE/USDT:USDT, mult=1000)
+        norm_sym, mult = _normalise_k_contract(symbol)
+        raw_sym    = norm_sym.split(':')[0].replace('/', '')  # 1000PEPE/USDT:USDT → 1000PEPEUSDT
         exit_side  = 'BUY'  if direction == 'short' else 'SELL'
         entry_side = 'SELL' if direction == 'short' else 'BUY'
-        qty_r      = self._round_qty(symbol, qty)
-        sl_r       = self._round_price(symbol, sl_price)
-        tp_r       = self._round_price(symbol, tp_price) if tp_price else 0
+        # Scale prices UP by multiplier for the exchange (0.000003 → 0.003 for 1000PEPE)
+        sl_price_x = sl_price * mult if sl_price else 0
+        tp_price_x = tp_price * mult if tp_price else 0
+        qty_r      = self._round_qty(norm_sym, qty)
+        sl_r       = self._round_price(norm_sym, sl_price_x) if sl_price_x else 0
+        tp_r       = self._round_price(norm_sym, tp_price_x) if tp_price_x else 0
+        logger.info(f"[Connector] {symbol} → {norm_sym} (mult={mult}) "
+                    f"qty={qty_r} sl={sl_r} tp={tp_r}")
 
         api_key = self.api_key
         secret  = self.api_secret
