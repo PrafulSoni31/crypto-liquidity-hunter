@@ -930,6 +930,33 @@ def binance_positions():
         # Load DB open trades
         db_trades = store.get_open_trades()
 
+        # For live accounts: if Binance has positions that aren't in DB, add them
+        # This handles the case where DB got out of sync (false closes, restarts etc.)
+        if live_connected and live_positions:
+            db_pairs = {
+                (t.get('pair','').split(':',1)[1] if ':' in t.get('pair','') else t.get('pair','')).replace('/','')
+                for t in db_trades
+            }
+            for sym_key, live_p in list(live_positions.items()):
+                raw_sym = live_p.get('raw_symbol', sym_key.replace('/','').replace(':USDT','USDT'))
+                if raw_sym not in db_pairs and ':' not in sym_key:
+                    # Live position exists on Binance but not in DB — add synthetic entry
+                    clean_pair = sym_key.replace(':USDT','/USDT') if ':USDT' in sym_key else sym_key
+                    db_trades.append({
+                        'id':           None,
+                        'pair':         f'binance:{clean_pair.split(":")[0]}',
+                        'direction':    live_p.get('side', 'short'),
+                        'entry_price':  live_p.get('entry_price', 0),
+                        'sl':           None,
+                        'tp':           None,
+                        'notional_usd': live_p.get('notional', 0),
+                        'commission_usd': 0,
+                        'mode':         'live',
+                        'status':       'open',
+                        'entry_time':   None,
+                        '_from_binance': True,   # marker: not in DB
+                    })
+
         result = []
         for t in db_trades:
             pair   = t.get('pair', '')
