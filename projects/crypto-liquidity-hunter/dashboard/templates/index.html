@@ -883,23 +883,58 @@ let _pendingAdminTab = null;
 let _pendingAdminEl  = null;
 let _pendingAdminFn  = null;
 
+const ADMIN_STORAGE_KEY = 'clh_admin_token';
+
 function getCookie(name) {
   return document.cookie.split(';').map(c=>c.trim())
     .find(c=>c.startsWith(name+'='))?.split('=')[1] || null;
 }
 
-async function initAdminState() {
-  // Check if we already have a valid token (cookie)
-  const token = getCookie('clh_admin_token');
+function getStoredToken() {
+  // Try sessionStorage first (current tab), then localStorage (same browser), then cookie
+  return sessionStorage.getItem(ADMIN_STORAGE_KEY)
+      || localStorage.getItem(ADMIN_STORAGE_KEY)
+      || getCookie(ADMIN_STORAGE_KEY)
+      || null;
+}
+
+function storeToken(token) {
+  // Save to all 3 places — survives page refresh within same browser session
   if (token) {
-    try {
-      const r = await fetch('/api/admin/check', {headers:{'X-Admin-Token':token}});
-      const d = await r.json();
-      if (d.admin) {
-        _adminToken = token;
-        unlockAdminTabs();
-      }
-    } catch(e) {}
+    sessionStorage.setItem(ADMIN_STORAGE_KEY, token);
+    localStorage.setItem(ADMIN_STORAGE_KEY, token);   // persists until logout
+    // Cookie already set by server
+  }
+}
+
+function clearStoredToken() {
+  sessionStorage.removeItem(ADMIN_STORAGE_KEY);
+  localStorage.removeItem(ADMIN_STORAGE_KEY);
+  document.cookie = ADMIN_STORAGE_KEY + '=;Max-Age=0;Path=/';
+  _adminToken = null;
+}
+
+async function initAdminState() {
+  const token = getStoredToken();
+  if (!token) return;
+  // Token found in storage — verify it silently with server
+  try {
+    const r = await fetch('/api/admin/check', {
+      headers: {'X-Admin-Token': token},
+      credentials: 'include'
+    });
+    const d = await r.json();
+    if (d.admin) {
+      _adminToken = token;
+      storeToken(token);   // refresh storage
+      unlockAdminTabs();
+    } else {
+      clearStoredToken();  // token invalid — clear it
+    }
+  } catch(e) {
+    // Network error — still trust cached token for UX (offline resilience)
+    _adminToken = token;
+    unlockAdminTabs();
   }
 }
 
@@ -950,6 +985,7 @@ async function doAdminLogin() {
     const d = await r.json();
     if (d.status === 'ok') {
       _adminToken = d.token;
+      storeToken(d.token);   // persist across refreshes
       unlockAdminTabs();
       closeAdminOverlay();
       // Navigate to the tab they wanted
@@ -2205,8 +2241,14 @@ async function loadPendingSignals() {
         : `<span style="color:${distColor}">${dist}%</span>`;
       const expiresAt = p.expires_at ? new Date(p.expires_at+'Z').toLocaleString('en-IN',{timeZone:'Asia/Kolkata',hour12:false}).replace(',',' ') : '—';
       const sym = p.pair.replace('binance:','');
-      return `<tr style="border-bottom:1px solid var(--border)">
-        <td style="padding:7px 10px;font-weight:600">${sym}</td>
+      // Check if symbol is in known SETTLING/problematic contracts
+      const _SETTLING = new Set(['A2Z/USDT','A2ZUSDT','1000BOBUSDT','BOB/USDT']);
+      const isSettling = _SETTLING.has(sym) || _SETTLING.has(sym.replace('/',''));
+      const settlingBadge = isSettling
+        ? `<span title="This futures contract is SETTLING — orders blocked" style="cursor:help;font-size:9px;background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:3px;padding:1px 4px;margin-left:4px">SETTLING</span>`
+        : '';
+      return `<tr style="border-bottom:1px solid var(--border);${isSettling?'opacity:0.6':''}">
+        <td style="padding:7px 10px;font-weight:600">${sym}${settlingBadge}</td>
         <td style="padding:7px 10px;font-size:11px;color:var(--muted)">${p.timeframe}</td>
         <td style="padding:7px 10px;color:${sideColor};font-weight:700">${p.direction.toUpperCase()}</td>
         <td style="padding:7px 10px;text-align:right;font-weight:600">$${ep.toFixed(6)}</td>
@@ -2217,8 +2259,9 @@ async function loadPendingSignals() {
         <td style="padding:7px 10px;text-align:right">${rr}</td>
         <td style="padding:7px 10px;font-size:11px;color:var(--muted)">${expiresAt}</td>
         <td style="padding:7px 10px;text-align:center;white-space:nowrap">
-          <button onclick="executePending(${p.id},'${sym}')"
-            style="background:var(--blue);color:#fff;border:none;border-radius:3px;padding:3px 8px;font-size:11px;cursor:pointer;margin-right:3px">🚀 Now</button>
+          <button onclick="${isSettling ? 'alert(\'⚠️ ' + sym + ' futures contract is SETTLING — new orders blocked by Binance. Remove this signal.\')' : 'executePending('+p.id+',\''+sym+'\')'}"
+            title="${isSettling ? 'Contract settling — cannot trade' : 'Execute at market price now'}"
+            style="background:${isSettling ? 'rgba(239,68,68,.2)' : 'var(--blue)'};color:${isSettling ? 'var(--red)' : '#fff'};border:${isSettling ? '1px solid rgba(239,68,68,.4)' : 'none'};border-radius:3px;padding:3px 8px;font-size:11px;cursor:pointer;margin-right:3px">${isSettling ? '⚠️ Settling' : '🚀 Now'}</button>
           <button onclick="cancelPending(${p.id})"
             style="background:rgba(239,68,68,0.15);color:var(--red);border:1px solid rgba(239,68,68,0.3);border-radius:3px;padding:3px 8px;font-size:11px;cursor:pointer">✕</button>
         </td>
@@ -2234,8 +2277,14 @@ async function executePending(pid, sym) {
   try {
     const r = await fetch(`/api/pending/${pid}/execute`, {method:'POST'});
     const d = await r.json();
-    if (d.error) { alert('❌ ' + d.error); return; }
-    alert(`✅ Executed! Trade ID: ${d.trade_id} | Qty: ${d.qty} | Mode: ${d.mode}`);
+    if (d.error) {
+      let msg = `❌ ${sym} — Cannot Execute\n\n${d.error}`;
+      if (d.status) msg += `\n\nContract Status: ${d.status}`;
+      if (d.tip)    msg += `\n\n💡 Tip: ${d.tip}`;
+      alert(msg);
+      return;
+    }
+    alert(`✅ Executed!\n\nTrade ID: ${d.trade_id}\nQty: ${d.qty}\nMode: ${d.mode}`);
     loadPendingSignals();
     loadPositions();
   } catch(e) { alert('Error: ' + e); }

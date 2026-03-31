@@ -1587,8 +1587,17 @@ def execute_on_account(account_id):
     from core.trade_executor import TradeExecutor
     data = request.get_json() or {}
     try:
+        pair = data.get('pair', 'binance:BTC/USDT')
+        # Pre-validate symbol is tradable on Binance Futures
+        check = _check_symbol_tradable(pair)
+        if not check.get('tradable'):
+            return jsonify({
+                'error': check.get('reason', f'{pair} cannot be traded'),
+                'status': check.get('status', 'UNKNOWN'),
+                'tip': 'This pair is not available for futures trading on Binance.'
+            }), 400
+
         executor = TradeExecutor(account_id=account_id)
-        pair     = data.get('pair', 'binance:BTC/USDT')
         signal_dict = {
             'direction':   data.get('direction', 'long'),
             'entry_price': float(data.get('entry_price', 0)),
@@ -1727,6 +1736,64 @@ def cancel_pending_signal(pid):
     return jsonify({'status': 'ok' if ok else 'error', 'id': pid})
 
 
+def _check_symbol_tradable(pair: str) -> dict:
+    """
+    Check if a symbol can be traded on Binance Futures.
+    Returns {'tradable': True} or {'tradable': False, 'reason': '...', 'status': '...'}
+    """
+    try:
+        import urllib.request as _req, json as _json
+        sym = pair.split(':', 1)[1] if ':' in pair else pair
+        # Normalise for 1000x contracts
+        from core.binance_connector import _normalise_k_contract
+        norm_sym, mult = _normalise_k_contract(sym)
+        raw_sym = norm_sym.split('/')[0].replace('/', '') + \
+                  (norm_sym.split('/')[1].split(':')[0] if '/' in norm_sym else '')
+        raw_sym = raw_sym.replace('/', '')
+
+        url = 'https://fapi.binance.com/fapi/v1/exchangeInfo'
+        with _req.urlopen(url, timeout=8) as r:
+            info = _json.loads(r.read())
+        for s in info['symbols']:
+            if s['symbol'] == raw_sym:
+                status   = s.get('status', 'UNKNOWN')
+                contract = s.get('contractType', 'UNKNOWN')
+                if status == 'TRADING' and contract == 'PERPETUAL':
+                    return {'tradable': True, 'symbol': raw_sym, 'mult': mult}
+                elif status == 'SETTLING':
+                    return {
+                        'tradable': False,
+                        'symbol':   raw_sym,
+                        'status':   status,
+                        'reason':   (
+                            f'{sym} futures contract is SETTLING (expiring). '
+                            f'Binance blocks new orders on settling contracts. '
+                            f'The contract will expire shortly.'
+                        )
+                    }
+                else:
+                    return {
+                        'tradable': False,
+                        'symbol':   raw_sym,
+                        'status':   status,
+                        'reason':   f'{sym} futures status is {status} (not TRADING)'
+                    }
+        # Symbol not found on Binance Futures at all
+        return {
+            'tradable': False,
+            'symbol':   raw_sym,
+            'status':   'NOT_LISTED',
+            'reason':   (
+                f'{sym} is not listed on Binance Futures. '
+                f'It may be a spot-only token. '
+                f'Futures trading is not available for this pair.'
+            )
+        }
+    except Exception as e:
+        logger.warning(f"Symbol check failed for {pair}: {e}")
+        return {'tradable': True, 'note': f'Could not verify: {e}'}  # allow if can't check
+
+
 @app.route('/api/pending/<int:pid>/execute', methods=['POST'])
 def execute_pending_signal(pid):
     """Manually trigger execution of a pending signal at market price."""
@@ -1737,6 +1804,16 @@ def execute_pending_signal(pid):
     if not ps:
         return jsonify({'error': 'Pending signal not found or not pending'}), 404
     try:
+        # Pre-validate symbol is tradable on Binance Futures
+        check = _check_symbol_tradable(ps['pair'])
+        if not check.get('tradable'):
+            return jsonify({
+                'error': check.get('reason', f'{ps["pair"]} cannot be traded'),
+                'status': check.get('status', 'UNKNOWN'),
+                'symbol': check.get('symbol', ''),
+                'tip': 'Remove this signal or change the pair to a listed futures contract.'
+            }), 400
+
         executor = TradeExecutor(account_id=ps.get('account_id'))
         result   = executor.execute_signal(
             {'direction': ps['direction'], 'entry_price': 0,
