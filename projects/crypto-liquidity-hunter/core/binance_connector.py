@@ -529,6 +529,17 @@ class BinanceConnector:
                     "check 'Enable Futures' (and/or 'Enable Spot & Margin Trading'). "
                     "Save and wait 30 seconds."
                 )}
+            if '-2019' in err or 'Margin is insufficient' in err:
+                logger.warning(f"place_market_order: insufficient margin for {norm_sym} qty={qty_r} — skipping")
+                try:
+                    import sys as _sy, os as _os2
+                    _sy.path.insert(0, _os2.path.dirname(_os2.path.dirname(_os2.path.abspath(__file__))))
+                    from scheduler.activity_logger import log_event as _log
+                    _log('ORDER_ERROR', symbol=norm_sym, error='Margin insufficient (-2019)',
+                         qty=qty_r, side=side)
+                except Exception:
+                    pass
+                return {'error': 'Margin insufficient — reduce notional or add funds'}
             logger.error(f"place_market_order error: {e}")
             return {'error': err}
 
@@ -625,12 +636,15 @@ class BinanceConnector:
                          data=body, headers=headers, timeout=10)
         batch_result = r.json()
 
-        if isinstance(batch_result, list) and len(batch_result) >= 2:
+        if isinstance(batch_result, list) and len(batch_result) >= 1:
             entry_r = batch_result[0]
-            sl_r_   = batch_result[1]
+            sl_r_   = batch_result[1] if len(batch_result) > 1 else {}
             tp_r_   = batch_result[2] if len(batch_result) > 2 else {}
 
-            if 'orderId' in entry_r and 'orderId' in sl_r_:
+            entry_filled = 'orderId' in entry_r  # entry order accepted by Binance
+
+            if entry_filled and 'orderId' in sl_r_:
+                # FULL SUCCESS: entry + SL both placed atomically
                 fill_price = float(entry_r.get('avgPrice') or entry_r.get('price') or 0)
                 logger.info(f"[Batch] Atomic entry+SL+TP: {symbol} entry={entry_r['orderId']} "
                             f"sl={sl_r_.get('orderId')} tp={tp_r_.get('orderId')} fill={fill_price}")
@@ -643,12 +657,46 @@ class BinanceConnector:
                     'tp_price':    tp_r,
                     'method':      'batch_atomic',
                 }
+
+            elif entry_filled and 'orderId' not in sl_r_:
+                # PARTIAL: Entry filled BUT SL/TP order failed (e.g. reduceOnly rejected)
+                # CRITICAL: DO NOT place another entry order — position is already open!
+                fill_price = float(entry_r.get('avgPrice') or entry_r.get('price') or 0)
+                err_sl = sl_r_.get('msg', sl_r_.get('code', 'unknown'))
+                logger.warning(f"[Batch] Entry filled but SL/TP failed: entry={entry_r['orderId']} "
+                               f"fill={fill_price} sl_err={err_sl}. Placing SL/TP separately.")
+                # Activity log
+                try:
+                    import sys as _sys, os as _os
+                    _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+                    from scheduler.activity_logger import log_event as _log
+                    _log('BATCH_PARTIAL', symbol=symbol, entry_order_id=entry_r['orderId'],
+                         fill_price=fill_price, sl_error=str(err_sl)[:100])
+                except Exception:
+                    pass
+                # Entry is live — only place SL/TP bracket orders
+                import time as _t2
+                _t2.sleep(0.5)  # brief pause for position to register
+                sl_result = self.set_sl_tp(symbol, direction, qty, sl_price, tp_price)
+                return {
+                    'entry_order': entry_r,
+                    'entry_price': fill_price,
+                    'sl_order_id': sl_result.get('sl_order_id', 'price_watch'),
+                    'tp_order_id': sl_result.get('tp_order_id'),
+                    'sl_price':    sl_price,
+                    'tp_price':    tp_price,
+                    'method':      'batch_entry_only',
+                }
             else:
+                # FULL FAILURE: entry itself was rejected — safe to fall through to sequential
                 err0 = entry_r.get('msg', entry_r.get('code', '?'))
-                err1 = sl_r_.get('msg', sl_r_.get('code', '?'))
-                logger.warning(f"[Batch] batchOrders partial failure: entry={err0} sl={err1}")
+                err1 = sl_r_.get('msg', sl_r_.get('code', '?')) if sl_r_ else 'N/A'
+                logger.warning(f"[Batch] batchOrders full failure: entry={err0} sl={err1}")
+                # Fall through to sequential below
 
         # ── FALLBACK: sequential (entry → SL immediately after) ───────────
+        # ONLY reached if the batch entirely failed (entry NOT placed).
+        # Never reached if entry filled above.
         logger.warning(f"[Entry+SL] batchOrders failed, placing sequentially")
         entry_order = self.place_market_order(symbol, 'buy' if direction == 'long' else 'sell', qty)
         if 'error' in entry_order:

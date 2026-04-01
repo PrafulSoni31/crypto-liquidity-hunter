@@ -1,0 +1,1511 @@
+21:05:02 __main__ INFO: Volume filter: fetching all tickers in one call...
+21:05:03 __main__ INFO: Volume filter: 161/447 pairs pass $1M threshold
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:292: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  scan_start = datetime.utcnow()   # for duration tracking
+21:05:05 core.binance_connector INFO: BinanceConnector: connected [LIVE FUTURES MAINNET]
+21:05:05 __main__ INFO: Auto-executor: account 'Liquiddbot1' mode=live exec=auto
+21:05:06 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:06 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:05:06 core.sweep_detector INFO: FVGs: 12 detected, 1 unfilled
+21:05:08 core.sweep_detector INFO: SweepDetector v2: 7 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:05:08 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:05:08 core.sweep_detector INFO: FVGs: 6 detected, 2 unfilled
+21:05:10 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:10 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:05:10 core.sweep_detector INFO: FVGs: 14 detected, 6 unfilled
+21:05:12 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:05:12 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:05:12 core.sweep_detector INFO: FVGs: 12 detected, 4 unfilled
+21:05:14 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:05:14 core.sweep_detector INFO: OrderBlocks: 5 detected, 3 unmitigated
+21:05:14 core.sweep_detector INFO: FVGs: 11 detected, 9 unfilled
+21:05:16 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:16 core.sweep_detector INFO: OrderBlocks: 5 detected, 3 unmitigated
+21:05:16 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:05:18 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:05:18 core.sweep_detector INFO: OrderBlocks: 8 detected, 3 unmitigated
+21:05:18 core.sweep_detector INFO: FVGs: 10 detected, 5 unfilled
+21:05:19 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:05:20 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:05:20 core.sweep_detector INFO: FVGs: 13 detected, 1 unfilled
+21:05:22 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:22 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:05:22 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:05:23 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:05:23 core.sweep_detector INFO: OrderBlocks: 9 detected, 1 unmitigated
+21:05:23 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:05:27 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:27 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:05:27 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:05:29 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:05:29 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:05:29 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:05:31 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:31 core.sweep_detector INFO: OrderBlocks: 6 detected, 4 unmitigated
+21:05:31 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:05:34 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:05:34 core.sweep_detector INFO: OrderBlocks: 9 detected, 5 unmitigated
+21:05:34 core.sweep_detector INFO: FVGs: 17 detected, 7 unfilled
+21:05:36 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:05:36 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:05:36 core.sweep_detector INFO: FVGs: 12 detected, 5 unfilled
+21:05:38 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:05:38 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:05:38 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:05:40 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:05:40 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:05:40 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:05:41 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:05:41 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:05:41 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:05:44 core.sweep_detector INFO: SweepDetector v2: 7 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:05:44 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:05:44 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:05:45 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:45 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:05:45 core.sweep_detector INFO: FVGs: 15 detected, 2 unfilled
+21:05:47 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:47 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:05:47 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:05:49 core.sweep_detector INFO: SweepDetector v2: 7 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:05:49 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:05:49 core.sweep_detector INFO: FVGs: 8 detected, 0 unfilled
+21:05:51 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:05:51 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:05:51 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:05:52 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:05:52 core.sweep_detector INFO: OrderBlocks: 2 detected, 1 unmitigated
+21:05:52 core.sweep_detector INFO: FVGs: 3 detected, 1 unfilled
+21:05:54 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:05:54 core.sweep_detector INFO: OrderBlocks: 7 detected, 3 unmitigated
+21:05:54 core.sweep_detector INFO: FVGs: 12 detected, 4 unfilled
+21:05:56 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:05:56 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:05:56 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:05:57 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:05:57 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:05:57 core.sweep_detector INFO: FVGs: 12 detected, 5 unfilled
+21:05:58 __main__ INFO: Pending signal #None: binance:ANIME/USDT short entry=0.00474 current=0.00471 dist=0.64% expires=2h
+21:05:58 alerts.telegram INFO: Alert suppressed (binance:ANIME/USDT short): conf 0.62 < threshold 0.80
+21:06:00 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:00 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:06:00 core.sweep_detector INFO: FVGs: 7 detected, 0 unfilled
+21:06:01 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:01 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:06:01 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:06:03 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:03 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:06:03 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:06:04 core.sweep_detector INFO: SweepDetector v2: 2 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:06:04 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:06:04 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:06:06 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:06:06 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:06:06 core.sweep_detector INFO: FVGs: 12 detected, 2 unfilled
+21:06:09 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:09 core.sweep_detector INFO: OrderBlocks: 10 detected, 5 unmitigated
+21:06:09 core.sweep_detector INFO: FVGs: 12 detected, 5 unfilled
+21:06:10 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:06:10 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:06:10 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:06:12 core.sweep_detector INFO: SweepDetector v2: 7 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:06:12 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:06:12 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+21:06:14 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:14 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:06:14 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:06:16 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:16 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:06:16 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:06:17 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:06:17 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:06:17 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:06:20 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:06:20 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:06:20 core.sweep_detector INFO: FVGs: 1 detected, 0 unfilled
+21:06:21 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:06:21 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:06:21 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:06:23 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:23 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:06:23 core.sweep_detector INFO: FVGs: 12 detected, 1 unfilled
+21:06:25 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:06:25 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:06:25 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:06:27 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:06:27 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:06:27 core.sweep_detector INFO: FVGs: 2 detected, 1 unfilled
+21:06:28 core.sweep_detector INFO: SweepDetector v2: 12 raw → 8 confirmed (vol≥1.5× body≥40%)
+21:06:28 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:06:28 core.sweep_detector INFO: FVGs: 1 detected, 0 unfilled
+21:06:30 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:30 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:06:30 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:06:32 core.sweep_detector INFO: SweepDetector v2: 6 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:06:32 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:06:32 core.sweep_detector INFO: FVGs: 4 detected, 0 unfilled
+21:06:34 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:06:34 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:06:34 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:06:36 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:36 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:06:36 core.sweep_detector INFO: FVGs: 4 detected, 1 unfilled
+21:06:38 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:06:38 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:06:38 core.sweep_detector INFO: FVGs: 10 detected, 5 unfilled
+21:06:40 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:40 core.sweep_detector INFO: OrderBlocks: 10 detected, 2 unmitigated
+21:06:40 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:06:41 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:06:41 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:06:41 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:06:43 core.sweep_detector INFO: SweepDetector v2: 10 raw → 7 confirmed (vol≥1.5× body≥40%)
+21:06:43 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:06:43 core.sweep_detector INFO: FVGs: 11 detected, 5 unfilled
+21:06:45 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:45 core.sweep_detector INFO: OrderBlocks: 8 detected, 1 unmitigated
+21:06:45 core.sweep_detector INFO: FVGs: 11 detected, 1 unfilled
+21:06:47 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:06:47 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:06:47 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:06:49 core.sweep_detector INFO: SweepDetector v2: 7 raw → 7 confirmed (vol≥1.5× body≥40%)
+21:06:49 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:06:49 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:06:51 core.sweep_detector INFO: SweepDetector v2: 2 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:06:51 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:06:51 core.sweep_detector INFO: FVGs: 10 detected, 4 unfilled
+21:06:53 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:53 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:06:53 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:06:55 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:06:55 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:06:55 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:06:57 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:06:57 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:06:57 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:06:59 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:06:59 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:06:59 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:07:01 core.sweep_detector INFO: SweepDetector v2: 8 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:07:01 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:07:01 core.sweep_detector INFO: FVGs: 6 detected, 0 unfilled
+21:07:01 core.trade_executor INFO: [Executor] Placing entry+SL atomically: long BANANAS31/USDT qty=30623.181 sl=0.01299799 tp=0.01338733
+21:07:01 core.binance_connector INFO: [Connector] BANANAS31/USDT → BANANAS31/USDT:USDT (mult=1.0) qty=30623.0 sl=0.012998 tp=0.013387
+21:07:01 core.binance_connector WARNING: [Batch] batchOrders full failure: entry=Margin is insufficient. sl=ReduceOnly Order Failed. Please check your existing position and open orders.
+21:07:01 core.binance_connector WARNING: [Entry+SL] batchOrders failed, placing sequentially
+21:07:01 core.binance_connector ERROR: place_market_order error: binanceusdm {"code":-2019,"msg":"Margin is insufficient."}
+21:07:01 __main__ ERROR: Pending trigger failed #172: binanceusdm {"code":-2019,"msg":"Margin is insufficient."}
+21:07:03 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:07:03 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:07:03 core.sweep_detector INFO: FVGs: 12 detected, 0 unfilled
+21:07:03 __main__ INFO: Pending signal #172: binance:BANANAS31/USDT long entry=0.0130775 current=0.013048 dist=0.23% expires=8h
+21:07:03 alerts.telegram INFO: Alert suppressed (binance:BANANAS31/USDT long): conf 0.62 < threshold 0.80
+21:07:03 core.trade_executor INFO: [Executor] Placing entry+SL atomically: long BANANAS31/USDT qty=30623.181 sl=0.01299799 tp=0.01338733
+21:07:03 core.binance_connector INFO: [Connector] BANANAS31/USDT → BANANAS31/USDT:USDT (mult=1.0) qty=30623.0 sl=0.012998 tp=0.013387
+21:07:03 core.binance_connector WARNING: [Batch] batchOrders full failure: entry=Margin is insufficient. sl=ReduceOnly Order Failed. Please check your existing position and open orders.
+21:07:03 core.binance_connector WARNING: [Entry+SL] batchOrders failed, placing sequentially
+21:07:03 core.binance_connector ERROR: place_market_order error: binanceusdm {"code":-2019,"msg":"Margin is insufficient."}
+21:07:03 __main__ ERROR: Pending trigger failed #172: binanceusdm {"code":-2019,"msg":"Margin is insufficient."}
+21:07:06 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:06 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:07:06 core.sweep_detector INFO: FVGs: 15 detected, 2 unfilled
+21:07:06 core.trade_executor INFO: [Executor] Placing entry+SL atomically: long BANANAS31/USDT qty=30623.181 sl=0.01299799 tp=0.01338733
+21:07:06 core.binance_connector INFO: [Connector] BANANAS31/USDT → BANANAS31/USDT:USDT (mult=1.0) qty=30623.0 sl=0.012998 tp=0.013387
+21:07:06 core.binance_connector WARNING: [Batch] batchOrders full failure: entry=Margin is insufficient. sl=ReduceOnly Order Failed. Please check your existing position and open orders.
+21:07:06 core.binance_connector WARNING: [Entry+SL] batchOrders failed, placing sequentially
+21:07:06 core.binance_connector ERROR: place_market_order error: binanceusdm {"code":-2019,"msg":"Margin is insufficient."}
+21:07:06 __main__ ERROR: Pending trigger failed #172: binanceusdm {"code":-2019,"msg":"Margin is insufficient."}
+21:07:08 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:07:08 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:07:08 core.sweep_detector INFO: FVGs: 11 detected, 4 unfilled
+21:07:10 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:10 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:07:10 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:07:12 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:12 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:07:12 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:07:14 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:07:14 core.sweep_detector INFO: OrderBlocks: 3 detected, 2 unmitigated
+21:07:14 core.sweep_detector INFO: FVGs: 6 detected, 2 unfilled
+21:07:15 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:07:15 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:07:15 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:07:18 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:07:18 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:07:18 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:07:20 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:07:20 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:07:20 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:07:21 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:07:21 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:07:21 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:07:23 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:07:23 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:07:23 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:07:25 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:25 core.sweep_detector INFO: OrderBlocks: 9 detected, 6 unmitigated
+21:07:25 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:07:27 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:07:27 core.sweep_detector INFO: OrderBlocks: 8 detected, 1 unmitigated
+21:07:27 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:07:28 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:07:28 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:07:28 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:07:30 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:30 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:07:30 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:07:32 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:07:32 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:07:32 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+21:07:34 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:34 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:07:34 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:07:35 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:35 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:07:35 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:07:37 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:37 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:07:38 core.sweep_detector INFO: FVGs: 11 detected, 1 unfilled
+21:07:39 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:39 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:07:39 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:07:41 core.sweep_detector INFO: SweepDetector v2: 9 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:07:41 core.sweep_detector INFO: OrderBlocks: 2 detected, 2 unmitigated
+21:07:41 core.sweep_detector INFO: FVGs: 9 detected, 5 unfilled
+21:07:43 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:07:43 core.sweep_detector INFO: OrderBlocks: 4 detected, 4 unmitigated
+21:07:43 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:07:45 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:07:45 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:07:45 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:07:46 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:07:46 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:07:46 core.sweep_detector INFO: FVGs: 11 detected, 1 unfilled
+21:07:48 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:07:48 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:07:48 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:07:49 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:07:49 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:07:49 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:07:51 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:07:51 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:07:51 core.sweep_detector INFO: FVGs: 11 detected, 4 unfilled
+21:07:53 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:07:53 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:07:53 core.sweep_detector INFO: FVGs: 19 detected, 7 unfilled
+21:07:55 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:07:55 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:07:55 core.sweep_detector INFO: FVGs: 12 detected, 4 unfilled
+21:07:57 core.sweep_detector INFO: SweepDetector v2: 8 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:07:57 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:07:57 core.sweep_detector INFO: FVGs: 12 detected, 2 unfilled
+21:07:59 core.sweep_detector INFO: SweepDetector v2: 1 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:07:59 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:07:59 core.sweep_detector INFO: FVGs: 16 detected, 3 unfilled
+21:08:01 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:08:01 core.sweep_detector INFO: OrderBlocks: 6 detected, 4 unmitigated
+21:08:01 core.sweep_detector INFO: FVGs: 8 detected, 6 unfilled
+21:08:03 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:08:03 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:08:03 core.sweep_detector INFO: FVGs: 6 detected, 4 unfilled
+21:08:05 core.sweep_detector INFO: SweepDetector v2: 3 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:08:05 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:08:05 core.sweep_detector INFO: FVGs: 6 detected, 4 unfilled
+21:08:06 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:08:06 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:08:06 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:08:09 core.sweep_detector INFO: SweepDetector v2: 1 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:08:09 core.sweep_detector INFO: OrderBlocks: 3 detected, 2 unmitigated
+21:08:09 core.sweep_detector INFO: FVGs: 7 detected, 6 unfilled
+21:08:11 core.sweep_detector INFO: SweepDetector v2: 1 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:08:11 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:08:11 core.sweep_detector INFO: FVGs: 4 detected, 0 unfilled
+21:08:13 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:08:13 core.sweep_detector INFO: OrderBlocks: 10 detected, 1 unmitigated
+21:08:13 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:08:15 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:08:15 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:08:15 core.sweep_detector INFO: FVGs: 12 detected, 7 unfilled
+21:08:17 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:08:17 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:08:17 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:08:19 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:08:19 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:08:19 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:08:21 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:08:21 core.sweep_detector INFO: OrderBlocks: 11 detected, 1 unmitigated
+21:08:21 core.sweep_detector INFO: FVGs: 14 detected, 2 unfilled
+21:08:23 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:08:23 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:08:23 core.sweep_detector INFO: FVGs: 15 detected, 3 unfilled
+21:08:25 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:08:25 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:08:25 core.sweep_detector INFO: FVGs: 6 detected, 4 unfilled
+21:08:27 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:08:27 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:08:27 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:08:28 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:08:28 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:08:28 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:08:30 core.sweep_detector INFO: SweepDetector v2: 8 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:08:30 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:08:30 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:08:32 core.sweep_detector INFO: SweepDetector v2: 7 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:08:32 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:08:32 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:08:33 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:08:33 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:08:33 core.sweep_detector INFO: FVGs: 11 detected, 1 unfilled
+21:08:35 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:08:35 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:08:35 core.sweep_detector INFO: FVGs: 12 detected, 1 unfilled
+21:08:37 core.sweep_detector INFO: SweepDetector v2: 7 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:08:37 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:08:37 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+21:08:39 core.sweep_detector INFO: SweepDetector v2: 8 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:08:39 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:08:39 core.sweep_detector INFO: FVGs: 10 detected, 5 unfilled
+21:08:41 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:08:41 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:08:41 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:08:42 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:08:42 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:08:42 core.sweep_detector INFO: FVGs: 3 detected, 1 unfilled
+21:08:44 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:08:44 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:08:44 core.sweep_detector INFO: FVGs: 11 detected, 1 unfilled
+21:08:46 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:08:46 core.sweep_detector INFO: OrderBlocks: 8 detected, 1 unmitigated
+21:08:46 core.sweep_detector INFO: FVGs: 11 detected, 1 unfilled
+21:08:47 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:08:47 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:08:47 core.sweep_detector INFO: FVGs: 4 detected, 2 unfilled
+21:08:47 core.trade_executor INFO: [Executor] Placing entry+SL atomically: short DEGO/USDT qty=1367.053 sl=0.296296 tp=0.283
+21:08:47 core.binance_connector INFO: [Connector] DEGO/USDT → DEGO/USDT:USDT (mult=1.0) qty=1367.0 sl=0.2963 tp=0.283
+21:08:48 core.binance_connector WARNING: [Batch] batchOrders full failure: entry=Exceeded the maximum allowable position at current leverage. sl=Exceeded the maximum allowable position at current leverage.
+21:08:48 core.binance_connector WARNING: [Entry+SL] batchOrders failed, placing sequentially
+21:08:48 core.binance_connector ERROR: place_market_order error: binanceusdm {"code":-2027,"msg":"Exceeded the maximum allowable position at current leverage."}
+21:08:48 __main__ ERROR: Pending trigger failed #159: binanceusdm {"code":-2027,"msg":"Exceeded the maximum allowable position at current leverage."}
+21:08:49 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:08:49 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:08:49 core.sweep_detector INFO: FVGs: 12 detected, 2 unfilled
+21:08:50 core.trade_executor INFO: [Executor] Placing entry+SL atomically: short DEGO/USDT qty=1367.053 sl=0.296296 tp=0.283
+21:08:50 core.binance_connector INFO: [Connector] DEGO/USDT → DEGO/USDT:USDT (mult=1.0) qty=1367.0 sl=0.2963 tp=0.283
+21:08:50 core.binance_connector WARNING: [Batch] batchOrders full failure: entry=Exceeded the maximum allowable position at current leverage. sl=Exceeded the maximum allowable position at current leverage.
+21:08:50 core.binance_connector WARNING: [Entry+SL] batchOrders failed, placing sequentially
+21:08:50 core.binance_connector ERROR: place_market_order error: binanceusdm {"code":-2027,"msg":"Exceeded the maximum allowable position at current leverage."}
+21:08:50 __main__ ERROR: Pending trigger failed #159: binanceusdm {"code":-2027,"msg":"Exceeded the maximum allowable position at current leverage."}
+21:08:52 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:08:52 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:08:52 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:08:53 core.trade_executor INFO: [Executor] Placing entry+SL atomically: short DEGO/USDT qty=1367.053 sl=0.296296 tp=0.283
+21:08:53 core.binance_connector INFO: [Connector] DEGO/USDT → DEGO/USDT:USDT (mult=1.0) qty=1367.0 sl=0.2963 tp=0.283
+21:08:53 core.binance_connector WARNING: [Batch] batchOrders full failure: entry=Exceeded the maximum allowable position at current leverage. sl=Exceeded the maximum allowable position at current leverage.
+21:08:53 core.binance_connector WARNING: [Entry+SL] batchOrders failed, placing sequentially
+21:08:53 core.binance_connector ERROR: place_market_order error: binanceusdm {"code":-2027,"msg":"Exceeded the maximum allowable position at current leverage."}
+21:08:53 __main__ ERROR: Pending trigger failed #159: binanceusdm {"code":-2027,"msg":"Exceeded the maximum allowable position at current leverage."}
+21:08:55 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:08:55 core.sweep_detector INFO: OrderBlocks: 9 detected, 1 unmitigated
+21:08:55 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:08:56 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:08:56 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:08:56 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:08:58 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:08:58 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:08:58 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:09:00 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:09:00 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:09:00 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:09:02 core.sweep_detector INFO: SweepDetector v2: 10 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:09:02 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:09:02 core.sweep_detector INFO: FVGs: 9 detected, 0 unfilled
+21:09:04 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:09:04 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:09:04 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:09:06 core.sweep_detector INFO: SweepDetector v2: 2 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:09:06 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:09:06 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:09:07 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:09:07 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:09:07 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:09:09 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:09:09 core.sweep_detector INFO: OrderBlocks: 8 detected, 3 unmitigated
+21:09:09 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:09:12 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:09:12 core.sweep_detector INFO: OrderBlocks: 10 detected, 3 unmitigated
+21:09:12 core.sweep_detector INFO: FVGs: 13 detected, 5 unfilled
+21:09:13 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:09:13 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:09:13 core.sweep_detector INFO: FVGs: 18 detected, 5 unfilled
+21:09:15 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:09:15 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:09:15 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:09:17 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:09:17 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:09:17 core.sweep_detector INFO: FVGs: 6 detected, 4 unfilled
+21:09:19 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:09:19 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:09:19 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:09:21 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:09:21 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:09:21 core.sweep_detector INFO: FVGs: 1 detected, 0 unfilled
+21:09:22 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:09:22 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:09:22 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:09:24 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:09:24 core.sweep_detector INFO: OrderBlocks: 10 detected, 0 unmitigated
+21:09:24 core.sweep_detector INFO: FVGs: 9 detected, 0 unfilled
+21:09:26 core.sweep_detector INFO: SweepDetector v2: 8 raw → 7 confirmed (vol≥1.5× body≥40%)
+21:09:26 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:09:26 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:09:29 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:09:29 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:09:29 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:09:30 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:09:30 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:09:30 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:09:33 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:09:33 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:09:33 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:09:35 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:09:35 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:09:35 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:09:36 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:09:36 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:09:36 core.sweep_detector INFO: FVGs: 16 detected, 2 unfilled
+21:09:38 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:09:38 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:09:38 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:09:40 core.sweep_detector INFO: SweepDetector v2: 7 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:09:40 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:09:40 core.sweep_detector INFO: FVGs: 10 detected, 4 unfilled
+21:09:41 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:09:41 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:09:41 core.sweep_detector INFO: FVGs: 12 detected, 3 unfilled
+21:09:44 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:09:44 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:09:44 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:09:45 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:09:45 core.sweep_detector INFO: OrderBlocks: 2 detected, 2 unmitigated
+21:09:45 core.sweep_detector INFO: FVGs: 11 detected, 4 unfilled
+21:09:45 __main__ INFO: Pending signal #147: binance:ETHFI/USDT short entry=0.4815 current=0.475 dist=1.37% expires=24h
+21:09:45 alerts.telegram INFO: Alert suppressed (binance:ETHFI/USDT short): conf 0.62 < threshold 0.80
+21:09:47 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:09:47 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:09:47 core.sweep_detector INFO: FVGs: 8 detected, 0 unfilled
+21:09:47 __main__ INFO: Pending signal #147: binance:ETHFI/USDT short entry=0.481 current=0.475 dist=1.26% expires=8h
+21:09:47 alerts.telegram INFO: Alert suppressed (binance:ETHFI/USDT short): conf 0.62 < threshold 0.80
+21:09:49 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:09:49 core.sweep_detector INFO: OrderBlocks: 2 detected, 1 unmitigated
+21:09:49 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:09:51 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:09:51 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:09:51 core.sweep_detector INFO: FVGs: 7 detected, 4 unfilled
+21:09:52 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:09:52 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:09:52 core.sweep_detector INFO: FVGs: 9 detected, 5 unfilled
+21:09:54 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:09:54 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:09:54 core.sweep_detector INFO: FVGs: 5 detected, 3 unfilled
+21:09:55 core.sweep_detector INFO: SweepDetector v2: 7 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:09:55 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:09:56 core.sweep_detector INFO: FVGs: 3 detected, 2 unfilled
+21:09:57 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:09:58 core.sweep_detector INFO: OrderBlocks: 10 detected, 3 unmitigated
+21:09:58 core.sweep_detector INFO: FVGs: 4 detected, 2 unfilled
+21:10:00 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:10:00 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:10:00 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:10:02 core.sweep_detector INFO: SweepDetector v2: 5 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:10:02 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:10:02 core.sweep_detector INFO: FVGs: 1 detected, 1 unfilled
+21:10:04 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:10:04 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:10:04 core.sweep_detector INFO: FVGs: 3 detected, 2 unfilled
+21:10:06 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:10:06 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:10:06 core.sweep_detector INFO: FVGs: 1 detected, 1 unfilled
+21:10:08 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:10:08 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:10:08 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:10:09 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:10:09 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:10:09 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:10:11 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:10:11 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:10:11 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:10:13 core.sweep_detector INFO: SweepDetector v2: 2 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:10:13 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:10:13 core.sweep_detector INFO: FVGs: 14 detected, 3 unfilled
+21:10:15 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:10:15 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:10:15 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:10:17 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:10:17 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:10:17 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+21:10:19 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:10:19 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:10:19 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:10:20 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:10:20 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:10:20 core.sweep_detector INFO: FVGs: 14 detected, 1 unfilled
+21:10:22 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:10:22 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:10:22 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+21:10:24 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:10:24 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:10:24 core.sweep_detector INFO: FVGs: 12 detected, 2 unfilled
+21:10:26 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:10:26 core.sweep_detector INFO: OrderBlocks: 9 detected, 1 unmitigated
+21:10:26 core.sweep_detector INFO: FVGs: 13 detected, 1 unfilled
+21:10:27 core.sweep_detector INFO: SweepDetector v2: 7 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:10:27 core.sweep_detector INFO: OrderBlocks: 10 detected, 2 unmitigated
+21:10:27 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:10:29 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:10:29 core.sweep_detector INFO: OrderBlocks: 6 detected, 4 unmitigated
+21:10:29 core.sweep_detector INFO: FVGs: 6 detected, 4 unfilled
+21:10:31 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:10:31 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:10:31 core.sweep_detector INFO: FVGs: 13 detected, 1 unfilled
+21:10:32 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:10:32 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:10:32 core.sweep_detector INFO: FVGs: 6 detected, 2 unfilled
+21:10:34 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:10:34 core.sweep_detector INFO: OrderBlocks: 9 detected, 4 unmitigated
+21:10:34 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:10:36 core.sweep_detector INFO: SweepDetector v2: 8 raw → 7 confirmed (vol≥1.5× body≥40%)
+21:10:36 core.sweep_detector INFO: OrderBlocks: 10 detected, 5 unmitigated
+21:10:36 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:10:38 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:10:38 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:10:38 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:10:39 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:10:39 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:10:39 core.sweep_detector INFO: FVGs: 4 detected, 3 unfilled
+21:10:41 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:10:41 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:10:41 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:10:43 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:10:43 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:10:43 core.sweep_detector INFO: FVGs: 8 detected, 0 unfilled
+21:10:44 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:10:45 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:10:45 core.sweep_detector INFO: FVGs: 3 detected, 0 unfilled
+21:10:46 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:10:46 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:10:46 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:10:48 core.sweep_detector INFO: SweepDetector v2: 7 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:10:48 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:10:48 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:10:49 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:10:49 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:10:49 core.sweep_detector INFO: FVGs: 6 detected, 3 unfilled
+21:10:51 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:10:51 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:10:51 core.sweep_detector INFO: FVGs: 10 detected, 5 unfilled
+21:10:53 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:10:53 core.sweep_detector INFO: OrderBlocks: 8 detected, 3 unmitigated
+21:10:53 core.sweep_detector INFO: FVGs: 12 detected, 3 unfilled
+21:10:54 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:10:54 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:10:54 core.sweep_detector INFO: FVGs: 17 detected, 4 unfilled
+21:10:56 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:10:56 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:10:56 core.sweep_detector INFO: FVGs: 13 detected, 2 unfilled
+21:10:58 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:10:58 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:10:58 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:11:00 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:11:00 core.sweep_detector INFO: OrderBlocks: 8 detected, 4 unmitigated
+21:11:00 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:11:02 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:02 core.sweep_detector INFO: OrderBlocks: 7 detected, 3 unmitigated
+21:11:02 core.sweep_detector INFO: FVGs: 12 detected, 2 unfilled
+21:11:03 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:11:03 core.sweep_detector INFO: OrderBlocks: 8 detected, 3 unmitigated
+21:11:03 core.sweep_detector INFO: FVGs: 9 detected, 6 unfilled
+21:11:05 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:05 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:11:05 core.sweep_detector INFO: FVGs: 14 detected, 2 unfilled
+21:11:07 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:07 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:11:07 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:11:09 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:09 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:11:09 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:11:10 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:11:10 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:11:10 core.sweep_detector INFO: FVGs: 5 detected, 2 unfilled
+21:11:13 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:13 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:11:13 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:11:15 core.sweep_detector INFO: SweepDetector v2: 7 raw → 7 confirmed (vol≥1.5× body≥40%)
+21:11:15 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:11:15 core.sweep_detector INFO: FVGs: 2 detected, 0 unfilled
+21:11:17 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:17 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:11:17 core.sweep_detector INFO: FVGs: 12 detected, 3 unfilled
+21:11:18 core.sweep_detector INFO: SweepDetector v2: 3 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:11:18 core.sweep_detector INFO: OrderBlocks: 8 detected, 0 unmitigated
+21:11:18 core.sweep_detector INFO: FVGs: 12 detected, 2 unfilled
+21:11:21 core.sweep_detector INFO: SweepDetector v2: 6 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:21 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:11:21 core.sweep_detector INFO: FVGs: 9 detected, 5 unfilled
+21:11:22 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:11:22 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:11:22 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:11:24 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:24 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:11:24 core.sweep_detector INFO: FVGs: 13 detected, 2 unfilled
+21:11:26 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:26 core.sweep_detector INFO: OrderBlocks: 6 detected, 4 unmitigated
+21:11:26 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:11:27 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:27 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:11:27 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:11:29 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:29 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:11:29 core.sweep_detector INFO: FVGs: 14 detected, 3 unfilled
+21:11:31 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:11:31 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:11:31 core.sweep_detector INFO: FVGs: 8 detected, 6 unfilled
+21:11:33 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:33 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:11:33 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:11:34 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:34 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:11:34 core.sweep_detector INFO: FVGs: 13 detected, 1 unfilled
+21:11:36 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:11:36 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:11:36 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:11:37 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:37 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:11:37 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:11:39 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:39 core.sweep_detector INFO: OrderBlocks: 9 detected, 3 unmitigated
+21:11:39 core.sweep_detector INFO: FVGs: 14 detected, 6 unfilled
+21:11:41 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:11:41 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:11:41 core.sweep_detector INFO: FVGs: 3 detected, 2 unfilled
+21:11:42 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:11:42 core.sweep_detector INFO: OrderBlocks: 8 detected, 3 unmitigated
+21:11:42 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:11:45 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:11:45 core.sweep_detector INFO: OrderBlocks: 10 detected, 3 unmitigated
+21:11:45 core.sweep_detector INFO: FVGs: 11 detected, 5 unfilled
+21:11:46 core.sweep_detector INFO: SweepDetector v2: 8 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:11:46 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:11:46 core.sweep_detector INFO: FVGs: 5 detected, 3 unfilled
+21:11:49 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:49 core.sweep_detector INFO: OrderBlocks: 3 detected, 2 unmitigated
+21:11:49 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:11:51 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:11:51 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:11:51 core.sweep_detector INFO: FVGs: 5 detected, 2 unfilled
+21:11:52 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:52 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:11:52 core.sweep_detector INFO: FVGs: 6 detected, 3 unfilled
+21:11:54 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:11:54 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:11:54 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:11:55 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:11:56 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:11:56 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:11:57 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:11:57 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:11:57 core.sweep_detector INFO: FVGs: 10 detected, 4 unfilled
+21:11:59 core.sweep_detector INFO: SweepDetector v2: 10 raw → 7 confirmed (vol≥1.5× body≥40%)
+21:11:59 core.sweep_detector INFO: OrderBlocks: 8 detected, 1 unmitigated
+21:11:59 core.sweep_detector INFO: FVGs: 15 detected, 2 unfilled
+21:12:01 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:12:01 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:12:01 core.sweep_detector INFO: FVGs: 15 detected, 4 unfilled
+21:12:03 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:12:03 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:12:03 core.sweep_detector INFO: FVGs: 8 detected, 4 unfilled
+21:12:05 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:12:05 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:12:05 core.sweep_detector INFO: FVGs: 13 detected, 7 unfilled
+21:12:06 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:12:06 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:12:06 core.sweep_detector INFO: FVGs: 13 detected, 3 unfilled
+21:12:08 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:12:08 core.sweep_detector INFO: OrderBlocks: 11 detected, 2 unmitigated
+21:12:08 core.sweep_detector INFO: FVGs: 5 detected, 2 unfilled
+21:12:10 core.sweep_detector INFO: SweepDetector v2: 7 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:12:10 core.sweep_detector INFO: OrderBlocks: 9 detected, 3 unmitigated
+21:12:10 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:12:12 core.sweep_detector INFO: SweepDetector v2: 9 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:12:12 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:12:12 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:12:14 core.sweep_detector INFO: SweepDetector v2: 4 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:12:14 core.sweep_detector INFO: OrderBlocks: 7 detected, 3 unmitigated
+21:12:14 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:12:16 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:12:16 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:12:16 core.sweep_detector INFO: FVGs: 10 detected, 4 unfilled
+21:12:17 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:12:17 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:12:17 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:12:20 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:12:20 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:12:20 core.sweep_detector INFO: FVGs: 6 detected, 2 unfilled
+21:12:22 core.sweep_detector INFO: SweepDetector v2: 7 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:12:22 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:12:22 core.sweep_detector INFO: FVGs: 3 detected, 0 unfilled
+21:12:24 core.sweep_detector INFO: SweepDetector v2: 8 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:12:24 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:12:24 core.sweep_detector INFO: FVGs: 2 detected, 0 unfilled
+21:12:26 core.sweep_detector INFO: SweepDetector v2: 12 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:12:26 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:12:26 core.sweep_detector INFO: FVGs: 6 detected, 0 unfilled
+21:12:28 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:12:28 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:12:28 core.sweep_detector INFO: FVGs: 2 detected, 2 unfilled
+21:12:29 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:12:29 core.sweep_detector INFO: OrderBlocks: 8 detected, 1 unmitigated
+21:12:29 core.sweep_detector INFO: FVGs: 9 detected, 0 unfilled
+21:12:31 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:12:31 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:12:31 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:12:33 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:12:33 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:12:33 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:12:35 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:12:35 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:12:35 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:12:37 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:12:37 core.sweep_detector INFO: OrderBlocks: 1 detected, 1 unmitigated
+21:12:37 core.sweep_detector INFO: FVGs: 2 detected, 1 unfilled
+21:12:39 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:12:39 core.sweep_detector INFO: OrderBlocks: 7 detected, 3 unmitigated
+21:12:39 core.sweep_detector INFO: FVGs: 12 detected, 6 unfilled
+21:12:40 core.sweep_detector INFO: SweepDetector v2: 7 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:12:40 core.sweep_detector INFO: OrderBlocks: 10 detected, 6 unmitigated
+21:12:40 core.sweep_detector INFO: FVGs: 21 detected, 11 unfilled
+21:12:42 core.sweep_detector INFO: SweepDetector v2: 7 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:12:42 core.sweep_detector INFO: OrderBlocks: 9 detected, 6 unmitigated
+21:12:42 core.sweep_detector INFO: FVGs: 12 detected, 7 unfilled
+21:12:44 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:12:44 core.sweep_detector INFO: OrderBlocks: 9 detected, 0 unmitigated
+21:12:44 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:12:45 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:12:45 core.sweep_detector INFO: OrderBlocks: 8 detected, 0 unmitigated
+21:12:45 core.sweep_detector INFO: FVGs: 9 detected, 0 unfilled
+21:12:47 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:12:47 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:12:47 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:12:49 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:12:49 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:12:49 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:12:50 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:12:50 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:12:50 core.sweep_detector INFO: FVGs: 11 detected, 1 unfilled
+21:12:51 __main__ INFO: Pending signal #None: binance:NEIRO/USDT short entry=5.726e-05 current=5.703e-05 dist=0.40% expires=8h
+21:12:51 alerts.telegram INFO: Alert suppressed (binance:NEIRO/USDT short): conf 0.62 < threshold 0.80
+21:12:52 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:12:52 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:12:52 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:12:54 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:12:54 core.sweep_detector INFO: OrderBlocks: 9 detected, 3 unmitigated
+21:12:54 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:12:56 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:12:56 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:12:56 core.sweep_detector INFO: FVGs: 13 detected, 3 unfilled
+21:12:58 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:12:58 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:12:58 core.sweep_detector INFO: FVGs: 13 detected, 10 unfilled
+21:13:00 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:13:00 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:13:00 core.sweep_detector INFO: FVGs: 16 detected, 3 unfilled
+21:13:01 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:13:01 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:13:01 core.sweep_detector INFO: FVGs: 14 detected, 6 unfilled
+21:13:03 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:13:03 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:13:03 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:13:05 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:13:05 core.sweep_detector INFO: OrderBlocks: 11 detected, 5 unmitigated
+21:13:05 core.sweep_detector INFO: FVGs: 13 detected, 3 unfilled
+21:13:07 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:13:07 core.sweep_detector INFO: OrderBlocks: 2 detected, 2 unmitigated
+21:13:07 core.sweep_detector INFO: FVGs: 9 detected, 5 unfilled
+21:13:09 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:13:09 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:13:09 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:13:11 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:13:11 core.sweep_detector INFO: OrderBlocks: 15 detected, 2 unmitigated
+21:13:11 core.sweep_detector INFO: FVGs: 15 detected, 1 unfilled
+21:13:13 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:13:13 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:13:13 core.sweep_detector INFO: FVGs: 14 detected, 3 unfilled
+21:13:15 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:13:15 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:13:15 core.sweep_detector INFO: FVGs: 11 detected, 7 unfilled
+21:13:17 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:13:17 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:13:17 core.sweep_detector INFO: FVGs: 12 detected, 5 unfilled
+21:13:18 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:13:18 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:13:18 core.sweep_detector INFO: FVGs: 8 detected, 4 unfilled
+21:13:20 core.sweep_detector INFO: SweepDetector v2: 7 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:13:20 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:13:20 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:13:22 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:13:22 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:13:22 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:13:24 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:13:24 core.sweep_detector INFO: OrderBlocks: 11 detected, 3 unmitigated
+21:13:24 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:13:26 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:13:26 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:13:26 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:13:28 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:13:28 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:13:28 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:13:29 core.sweep_detector INFO: SweepDetector v2: 7 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:13:29 core.sweep_detector INFO: OrderBlocks: 9 detected, 0 unmitigated
+21:13:29 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:13:31 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:13:31 core.sweep_detector INFO: OrderBlocks: 2 detected, 1 unmitigated
+21:13:31 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:13:33 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:13:33 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:13:33 core.sweep_detector INFO: FVGs: 12 detected, 5 unfilled
+21:13:35 core.sweep_detector INFO: SweepDetector v2: 2 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:13:35 core.sweep_detector INFO: OrderBlocks: 8 detected, 4 unmitigated
+21:13:35 core.sweep_detector INFO: FVGs: 12 detected, 7 unfilled
+21:13:37 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:13:37 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:13:37 core.sweep_detector INFO: FVGs: 8 detected, 6 unfilled
+21:13:38 core.sweep_detector INFO: SweepDetector v2: 6 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:13:38 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:13:38 core.sweep_detector INFO: FVGs: 14 detected, 4 unfilled
+21:13:40 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:13:40 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:13:40 core.sweep_detector INFO: FVGs: 18 detected, 3 unfilled
+21:13:42 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:13:42 core.sweep_detector INFO: OrderBlocks: 5 detected, 4 unmitigated
+21:13:42 core.sweep_detector INFO: FVGs: 14 detected, 4 unfilled
+21:13:43 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:13:43 core.sweep_detector INFO: OrderBlocks: 9 detected, 5 unmitigated
+21:13:43 core.sweep_detector INFO: FVGs: 11 detected, 4 unfilled
+21:13:45 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:13:45 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:13:45 core.sweep_detector INFO: FVGs: 13 detected, 3 unfilled
+21:13:47 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:13:47 core.sweep_detector INFO: OrderBlocks: 11 detected, 6 unmitigated
+21:13:47 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:13:48 core.sweep_detector INFO: SweepDetector v2: 7 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:13:48 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:13:48 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:13:50 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:13:50 core.sweep_detector INFO: OrderBlocks: 9 detected, 5 unmitigated
+21:13:50 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:13:52 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:13:52 core.sweep_detector INFO: OrderBlocks: 6 detected, 4 unmitigated
+21:13:52 core.sweep_detector INFO: FVGs: 3 detected, 3 unfilled
+21:13:54 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:13:54 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:13:54 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:13:56 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:13:56 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:13:56 core.sweep_detector INFO: FVGs: 14 detected, 1 unfilled
+21:13:58 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:13:58 core.sweep_detector INFO: OrderBlocks: 11 detected, 0 unmitigated
+21:13:58 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:14:00 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:14:00 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:14:00 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:14:01 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:14:01 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:14:01 core.sweep_detector INFO: FVGs: 14 detected, 1 unfilled
+21:14:03 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:14:03 core.sweep_detector INFO: OrderBlocks: 9 detected, 1 unmitigated
+21:14:03 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:14:05 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:05 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:14:05 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:14:06 core.sweep_detector INFO: SweepDetector v2: 7 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:14:06 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:14:06 core.sweep_detector INFO: FVGs: 6 detected, 0 unfilled
+21:14:08 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:08 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:14:08 core.sweep_detector INFO: FVGs: 4 detected, 0 unfilled
+21:14:10 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:14:10 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:14:10 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:14:12 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:12 core.sweep_detector INFO: OrderBlocks: 3 detected, 2 unmitigated
+21:14:12 core.sweep_detector INFO: FVGs: 6 detected, 3 unfilled
+21:14:14 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:14:14 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:14:14 core.sweep_detector INFO: FVGs: 5 detected, 3 unfilled
+21:14:17 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:17 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:14:17 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:14:19 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:19 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:14:19 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:14:21 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:21 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:14:21 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:14:22 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:14:22 core.sweep_detector INFO: OrderBlocks: 11 detected, 3 unmitigated
+21:14:22 core.sweep_detector INFO: FVGs: 14 detected, 4 unfilled
+21:14:24 core.sweep_detector INFO: SweepDetector v2: 8 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:14:24 core.sweep_detector INFO: OrderBlocks: 9 detected, 3 unmitigated
+21:14:24 core.sweep_detector INFO: FVGs: 16 detected, 6 unfilled
+21:14:26 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:14:26 core.sweep_detector INFO: OrderBlocks: 5 detected, 3 unmitigated
+21:14:26 core.sweep_detector INFO: FVGs: 6 detected, 3 unfilled
+21:14:28 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:14:28 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:14:28 core.sweep_detector INFO: FVGs: 6 detected, 0 unfilled
+21:14:30 core.sweep_detector INFO: SweepDetector v2: 6 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:14:30 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:14:30 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:14:31 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:14:32 core.sweep_detector INFO: OrderBlocks: 2 detected, 1 unmitigated
+21:14:32 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:14:33 core.sweep_detector INFO: SweepDetector v2: 1 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:14:33 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:14:33 core.sweep_detector INFO: FVGs: 6 detected, 3 unfilled
+21:14:35 core.sweep_detector INFO: SweepDetector v2: 8 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:14:35 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:14:35 core.sweep_detector INFO: FVGs: 13 detected, 1 unfilled
+21:14:37 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:37 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:14:37 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:14:39 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:14:39 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:14:39 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:14:40 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:40 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:14:40 core.sweep_detector INFO: FVGs: 6 detected, 0 unfilled
+21:14:42 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:14:42 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:14:42 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:14:44 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:44 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:14:44 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:14:45 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:14:45 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:14:45 core.sweep_detector INFO: FVGs: 14 detected, 4 unfilled
+21:14:47 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:14:47 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:14:47 core.sweep_detector INFO: FVGs: 13 detected, 10 unfilled
+21:14:49 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:14:49 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:14:49 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:14:50 core.sweep_detector INFO: SweepDetector v2: 1 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:14:50 core.sweep_detector INFO: OrderBlocks: 6 detected, 4 unmitigated
+21:14:50 core.sweep_detector INFO: FVGs: 12 detected, 6 unfilled
+21:14:52 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:52 core.sweep_detector INFO: OrderBlocks: 9 detected, 5 unmitigated
+21:14:52 core.sweep_detector INFO: FVGs: 16 detected, 8 unfilled
+21:14:54 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:14:54 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:14:54 core.sweep_detector INFO: FVGs: 5 detected, 0 unfilled
+21:14:55 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:14:55 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:14:56 core.sweep_detector INFO: FVGs: 1 detected, 0 unfilled
+21:14:57 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:14:58 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:14:58 core.sweep_detector INFO: FVGs: 1 detected, 0 unfilled
+21:15:00 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:15:00 core.sweep_detector INFO: OrderBlocks: 8 detected, 3 unmitigated
+21:15:00 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:15:02 core.sweep_detector INFO: SweepDetector v2: 9 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:02 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:15:02 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:15:04 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:04 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:15:04 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:15:05 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:05 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:15:05 core.sweep_detector INFO: FVGs: 15 detected, 7 unfilled
+21:15:07 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:15:07 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:15:07 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:15:09 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:15:09 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:15:09 core.sweep_detector INFO: FVGs: 11 detected, 6 unfilled
+21:15:11 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:15:12 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:15:12 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:15:13 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:15:13 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:15:13 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:15:15 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:15:15 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:15:15 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:15:17 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:17 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:15:17 core.sweep_detector INFO: FVGs: 6 detected, 3 unfilled
+21:15:19 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:19 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:15:19 core.sweep_detector INFO: FVGs: 7 detected, 4 unfilled
+21:15:22 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:15:22 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:15:22 core.sweep_detector INFO: FVGs: 4 detected, 0 unfilled
+21:15:24 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:24 core.sweep_detector INFO: OrderBlocks: 8 detected, 0 unmitigated
+21:15:24 core.sweep_detector INFO: FVGs: 12 detected, 4 unfilled
+21:15:26 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:26 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:15:26 core.sweep_detector INFO: FVGs: 10 detected, 0 unfilled
+21:15:28 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:15:28 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:15:28 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:15:29 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:15:30 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:15:30 core.sweep_detector INFO: FVGs: 11 detected, 4 unfilled
+21:15:31 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:31 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:15:31 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:15:33 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:33 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:15:33 core.sweep_detector INFO: FVGs: 12 detected, 1 unfilled
+21:15:37 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:37 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:15:37 core.sweep_detector INFO: FVGs: 13 detected, 8 unfilled
+21:15:38 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:15:38 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:15:38 core.sweep_detector INFO: FVGs: 13 detected, 3 unfilled
+21:15:40 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:40 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:15:40 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:15:42 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:15:42 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:15:42 core.sweep_detector INFO: FVGs: 10 detected, 4 unfilled
+21:15:44 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:44 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:15:44 core.sweep_detector INFO: FVGs: 6 detected, 2 unfilled
+21:15:46 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:15:46 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:15:46 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:15:48 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:48 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:15:48 core.sweep_detector INFO: FVGs: 7 detected, 0 unfilled
+21:15:49 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:49 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:15:49 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:15:51 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:52 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:15:52 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:15:53 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:53 core.sweep_detector INFO: OrderBlocks: 3 detected, 2 unmitigated
+21:15:53 core.sweep_detector INFO: FVGs: 12 detected, 9 unfilled
+21:15:55 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:15:55 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:15:55 core.sweep_detector INFO: FVGs: 4 detected, 2 unfilled
+21:15:57 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:15:57 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:15:57 core.sweep_detector INFO: FVGs: 4 detected, 2 unfilled
+21:15:59 core.sweep_detector INFO: SweepDetector v2: 7 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:15:59 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:15:59 core.sweep_detector INFO: FVGs: 12 detected, 1 unfilled
+21:16:00 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:00 core.sweep_detector INFO: OrderBlocks: 2 detected, 1 unmitigated
+21:16:00 core.sweep_detector INFO: FVGs: 14 detected, 4 unfilled
+21:16:03 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:16:03 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:16:03 core.sweep_detector INFO: FVGs: 4 detected, 1 unfilled
+21:16:05 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:16:05 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:16:05 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:16:07 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:16:07 core.sweep_detector INFO: OrderBlocks: 8 detected, 1 unmitigated
+21:16:07 core.sweep_detector INFO: FVGs: 12 detected, 4 unfilled
+21:16:09 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:16:09 core.sweep_detector INFO: OrderBlocks: 3 detected, 2 unmitigated
+21:16:09 core.sweep_detector INFO: FVGs: 5 detected, 3 unfilled
+21:16:11 core.sweep_detector INFO: SweepDetector v2: 7 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:16:11 core.sweep_detector INFO: OrderBlocks: 9 detected, 1 unmitigated
+21:16:11 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:16:13 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:13 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:16:13 core.sweep_detector INFO: FVGs: 9 detected, 1 unfilled
+21:16:15 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:16:15 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:16:15 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:16:17 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:17 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:16:17 core.sweep_detector INFO: FVGs: 14 detected, 2 unfilled
+21:16:18 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:18 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:16:18 core.sweep_detector INFO: FVGs: 8 detected, 4 unfilled
+21:16:20 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:16:20 core.sweep_detector INFO: OrderBlocks: 3 detected, 3 unmitigated
+21:16:20 core.sweep_detector INFO: FVGs: 8 detected, 4 unfilled
+21:16:22 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:16:22 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:16:22 core.sweep_detector INFO: FVGs: 13 detected, 6 unfilled
+21:16:23 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:16:24 core.sweep_detector INFO: OrderBlocks: 3 detected, 3 unmitigated
+21:16:24 core.sweep_detector INFO: FVGs: 3 detected, 2 unfilled
+21:16:25 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:25 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:16:25 core.sweep_detector INFO: FVGs: 12 detected, 5 unfilled
+21:16:27 core.sweep_detector INFO: SweepDetector v2: 10 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:16:27 core.sweep_detector INFO: OrderBlocks: 7 detected, 6 unmitigated
+21:16:27 core.sweep_detector INFO: FVGs: 14 detected, 6 unfilled
+21:16:29 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:16:29 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:16:29 core.sweep_detector INFO: FVGs: 9 detected, 2 unfilled
+21:16:31 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:16:31 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:16:31 core.sweep_detector INFO: FVGs: 15 detected, 5 unfilled
+21:16:33 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:16:33 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:16:33 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:16:34 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:16:34 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:16:34 core.sweep_detector INFO: FVGs: 13 detected, 0 unfilled
+21:16:36 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:36 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:16:36 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:16:38 core.sweep_detector INFO: SweepDetector v2: 1 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:16:38 core.sweep_detector INFO: OrderBlocks: 7 detected, 4 unmitigated
+21:16:38 core.sweep_detector INFO: FVGs: 12 detected, 4 unfilled
+21:16:41 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:16:41 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:16:41 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:16:43 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:16:43 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:16:43 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:16:45 core.sweep_detector INFO: SweepDetector v2: 5 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:45 core.sweep_detector INFO: OrderBlocks: 8 detected, 4 unmitigated
+21:16:45 core.sweep_detector INFO: FVGs: 9 detected, 5 unfilled
+21:16:46 core.sweep_detector INFO: SweepDetector v2: 3 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:16:46 core.sweep_detector INFO: OrderBlocks: 10 detected, 3 unmitigated
+21:16:46 core.sweep_detector INFO: FVGs: 10 detected, 0 unfilled
+21:16:48 core.sweep_detector INFO: SweepDetector v2: 7 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:16:48 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:16:48 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:16:51 core.sweep_detector INFO: SweepDetector v2: 9 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:16:51 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:16:51 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:16:52 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:16:52 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:16:52 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:16:54 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:54 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:16:54 core.sweep_detector INFO: FVGs: 3 detected, 0 unfilled
+21:16:56 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:16:56 core.sweep_detector INFO: OrderBlocks: 3 detected, 2 unmitigated
+21:16:56 core.sweep_detector INFO: FVGs: 14 detected, 8 unfilled
+21:16:58 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:16:58 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:16:58 core.sweep_detector INFO: FVGs: 5 detected, 2 unfilled
+21:17:00 core.sweep_detector INFO: SweepDetector v2: 2 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:00 core.sweep_detector INFO: OrderBlocks: 8 detected, 4 unmitigated
+21:17:00 core.sweep_detector INFO: FVGs: 5 detected, 3 unfilled
+21:17:01 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:17:01 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:17:01 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:17:03 core.sweep_detector INFO: SweepDetector v2: 7 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:17:03 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:17:03 core.sweep_detector INFO: FVGs: 13 detected, 0 unfilled
+21:17:05 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:17:05 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:17:05 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:17:07 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:17:07 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:17:07 core.sweep_detector INFO: FVGs: 14 detected, 4 unfilled
+21:17:08 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:17:08 core.sweep_detector INFO: OrderBlocks: 9 detected, 0 unmitigated
+21:17:08 core.sweep_detector INFO: FVGs: 4 detected, 0 unfilled
+21:17:10 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:17:10 core.sweep_detector INFO: OrderBlocks: 2 detected, 1 unmitigated
+21:17:10 core.sweep_detector INFO: FVGs: 4 detected, 1 unfilled
+21:17:11 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:17:11 core.sweep_detector INFO: OrderBlocks: 9 detected, 0 unmitigated
+21:17:11 core.sweep_detector INFO: FVGs: 11 detected, 0 unfilled
+21:17:13 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:17:13 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:17:13 core.sweep_detector INFO: FVGs: 14 detected, 0 unfilled
+21:17:15 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:17:15 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:17:15 core.sweep_detector INFO: FVGs: 12 detected, 2 unfilled
+21:17:17 core.sweep_detector INFO: SweepDetector v2: 1 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:17 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:17:17 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:17:18 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:17:18 core.sweep_detector INFO: OrderBlocks: 7 detected, 3 unmitigated
+21:17:18 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:17:20 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:17:20 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:17:20 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:17:22 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:17:22 core.sweep_detector INFO: OrderBlocks: 10 detected, 1 unmitigated
+21:17:22 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:17:24 core.sweep_detector INFO: SweepDetector v2: 4 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:17:24 core.sweep_detector INFO: OrderBlocks: 4 detected, 2 unmitigated
+21:17:24 core.sweep_detector INFO: FVGs: 9 detected, 6 unfilled
+21:17:25 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:17:25 core.sweep_detector INFO: OrderBlocks: 8 detected, 4 unmitigated
+21:17:25 core.sweep_detector INFO: FVGs: 4 detected, 3 unfilled
+21:17:27 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:17:27 core.sweep_detector INFO: OrderBlocks: 7 detected, 6 unmitigated
+21:17:27 core.sweep_detector INFO: FVGs: 11 detected, 6 unfilled
+21:17:29 core.sweep_detector INFO: SweepDetector v2: 3 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:29 core.sweep_detector INFO: OrderBlocks: 11 detected, 5 unmitigated
+21:17:29 core.sweep_detector INFO: FVGs: 8 detected, 5 unfilled
+21:17:30 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:17:30 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:17:30 core.sweep_detector INFO: FVGs: 8 detected, 0 unfilled
+21:17:32 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:32 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:17:32 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:34 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:34 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:17:34 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:36 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:36 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:17:36 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:38 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:17:38 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:17:38 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:17:40 core.sweep_detector INFO: SweepDetector v2: 6 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:17:40 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:17:40 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:17:42 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:17:42 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:17:42 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:17:44 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:17:44 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:17:44 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:46 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:46 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:17:46 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:47 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:47 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:17:47 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:49 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:49 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:17:49 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:51 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:51 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:17:51 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:52 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:52 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:17:52 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:54 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:54 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:17:54 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:56 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:56 core.sweep_detector INFO: OrderBlocks: 1 detected, 0 unmitigated
+21:17:56 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:57 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:17:58 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:17:58 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:17:59 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:17:59 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:17:59 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:18:01 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:18:01 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:18:01 core.sweep_detector INFO: FVGs: 13 detected, 2 unfilled
+21:18:03 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:03 core.sweep_detector INFO: OrderBlocks: 7 detected, 3 unmitigated
+21:18:03 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:18:05 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:05 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:18:05 core.sweep_detector INFO: FVGs: 11 detected, 4 unfilled
+21:18:07 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:18:07 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:18:07 core.sweep_detector INFO: FVGs: 12 detected, 2 unfilled
+21:18:10 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:10 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:18:10 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:18:11 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:11 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:18:11 core.sweep_detector INFO: FVGs: 6 detected, 3 unfilled
+21:18:14 core.sweep_detector INFO: SweepDetector v2: 8 raw → 7 confirmed (vol≥1.5× body≥40%)
+21:18:14 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:18:14 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:18:15 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:18:15 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:18:15 core.sweep_detector INFO: FVGs: 3 detected, 1 unfilled
+21:18:17 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:17 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:18:17 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:18:19 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:18:19 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:18:19 core.sweep_detector INFO: FVGs: 12 detected, 1 unfilled
+21:18:21 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:21 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:18:21 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:18:23 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:18:23 core.sweep_detector INFO: OrderBlocks: 6 detected, 3 unmitigated
+21:18:23 core.sweep_detector INFO: FVGs: 13 detected, 6 unfilled
+21:18:24 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:18:24 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:18:24 core.sweep_detector INFO: FVGs: 19 detected, 2 unfilled
+21:18:26 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:26 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:18:26 core.sweep_detector INFO: FVGs: 9 detected, 8 unfilled
+21:18:28 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:28 core.sweep_detector INFO: OrderBlocks: 1 detected, 1 unmitigated
+21:18:28 core.sweep_detector INFO: FVGs: 8 detected, 3 unfilled
+21:18:30 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:18:30 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:18:30 core.sweep_detector INFO: FVGs: 5 detected, 0 unfilled
+21:18:32 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:18:32 core.sweep_detector INFO: OrderBlocks: 2 detected, 1 unmitigated
+21:18:32 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:18:34 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:18:34 core.sweep_detector INFO: OrderBlocks: 5 detected, 4 unmitigated
+21:18:34 core.sweep_detector INFO: FVGs: 13 detected, 6 unfilled
+21:18:35 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:18:35 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:18:35 core.sweep_detector INFO: FVGs: 7 detected, 1 unfilled
+21:18:37 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:37 core.sweep_detector INFO: OrderBlocks: 6 detected, 0 unmitigated
+21:18:37 core.sweep_detector INFO: FVGs: 4 detected, 0 unfilled
+21:18:39 core.sweep_detector INFO: SweepDetector v2: 6 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:18:39 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:18:39 core.sweep_detector INFO: FVGs: 5 detected, 1 unfilled
+21:18:41 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:18:41 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:18:41 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+21:18:43 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:43 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:18:43 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+21:18:44 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:18:44 core.sweep_detector INFO: OrderBlocks: 2 detected, 1 unmitigated
+21:18:44 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:18:46 core.sweep_detector INFO: SweepDetector v2: 1 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:18:46 core.sweep_detector INFO: OrderBlocks: 8 detected, 5 unmitigated
+21:18:46 core.sweep_detector INFO: FVGs: 10 detected, 4 unfilled
+21:18:48 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:18:48 core.sweep_detector INFO: OrderBlocks: 5 detected, 4 unmitigated
+21:18:48 core.sweep_detector INFO: FVGs: 4 detected, 3 unfilled
+21:18:50 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:50 core.sweep_detector INFO: OrderBlocks: 9 detected, 0 unmitigated
+21:18:50 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+21:18:51 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:18:51 core.sweep_detector INFO: OrderBlocks: 8 detected, 1 unmitigated
+21:18:51 core.sweep_detector INFO: FVGs: 12 detected, 0 unfilled
+21:18:53 core.sweep_detector INFO: SweepDetector v2: 2 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:18:53 core.sweep_detector INFO: OrderBlocks: 7 detected, 1 unmitigated
+21:18:53 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:18:55 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:18:55 core.sweep_detector INFO: OrderBlocks: 10 detected, 3 unmitigated
+21:18:55 core.sweep_detector INFO: FVGs: 11 detected, 3 unfilled
+21:18:56 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:18:56 core.sweep_detector INFO: OrderBlocks: 8 detected, 2 unmitigated
+21:18:56 core.sweep_detector INFO: FVGs: 13 detected, 1 unfilled
+21:18:58 core.sweep_detector INFO: SweepDetector v2: 6 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:18:58 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:18:58 core.sweep_detector INFO: FVGs: 9 detected, 3 unfilled
+21:19:00 core.sweep_detector INFO: SweepDetector v2: 7 raw → 6 confirmed (vol≥1.5× body≥40%)
+21:19:00 core.sweep_detector INFO: OrderBlocks: 8 detected, 3 unmitigated
+21:19:00 core.sweep_detector INFO: FVGs: 7 detected, 2 unfilled
+21:19:02 core.sweep_detector INFO: SweepDetector v2: 6 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:19:02 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:19:02 core.sweep_detector INFO: FVGs: 6 detected, 0 unfilled
+21:19:04 core.sweep_detector INFO: SweepDetector v2: 4 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:19:04 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:19:04 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:19:06 core.sweep_detector INFO: SweepDetector v2: 3 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:06 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:19:06 core.sweep_detector INFO: FVGs: 9 detected, 5 unfilled
+21:19:07 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:07 core.sweep_detector INFO: OrderBlocks: 5 detected, 0 unmitigated
+21:19:07 core.sweep_detector INFO: FVGs: 7 detected, 3 unfilled
+21:19:09 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:19:09 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:19:09 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:19:11 core.sweep_detector INFO: SweepDetector v2: 1 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:19:11 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:19:11 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:19:13 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:19:13 core.sweep_detector INFO: OrderBlocks: 3 detected, 0 unmitigated
+21:19:13 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:19:15 core.sweep_detector INFO: SweepDetector v2: 0 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:19:15 core.sweep_detector INFO: OrderBlocks: 0 detected, 0 unmitigated
+21:19:15 core.sweep_detector INFO: FVGs: 0 detected, 0 unfilled
+21:19:17 core.sweep_detector INFO: SweepDetector v2: 2 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:19:17 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:19:17 core.sweep_detector INFO: FVGs: 13 detected, 0 unfilled
+21:19:19 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:19:19 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:19:19 core.sweep_detector INFO: FVGs: 10 detected, 2 unfilled
+21:19:21 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:21 core.sweep_detector INFO: OrderBlocks: 6 detected, 1 unmitigated
+21:19:21 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:19:23 core.sweep_detector INFO: SweepDetector v2: 3 raw → 0 confirmed (vol≥1.5× body≥40%)
+21:19:23 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:19:23 core.sweep_detector INFO: FVGs: 6 detected, 0 unfilled
+21:19:24 core.sweep_detector INFO: SweepDetector v2: 4 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:24 core.sweep_detector INFO: OrderBlocks: 8 detected, 1 unmitigated
+21:19:24 core.sweep_detector INFO: FVGs: 8 detected, 1 unfilled
+21:19:26 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:19:26 core.sweep_detector INFO: OrderBlocks: 4 detected, 1 unmitigated
+21:19:26 core.sweep_detector INFO: FVGs: 6 detected, 1 unfilled
+21:19:28 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:28 core.sweep_detector INFO: OrderBlocks: 9 detected, 5 unmitigated
+21:19:28 core.sweep_detector INFO: FVGs: 13 detected, 5 unfilled
+21:19:29 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:19:29 core.sweep_detector INFO: OrderBlocks: 5 detected, 2 unmitigated
+21:19:29 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:19:31 core.sweep_detector INFO: SweepDetector v2: 3 raw → 1 confirmed (vol≥1.5× body≥40%)
+21:19:31 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:19:31 core.sweep_detector INFO: FVGs: 10 detected, 3 unfilled
+21:19:33 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:19:33 core.sweep_detector INFO: OrderBlocks: 8 detected, 4 unmitigated
+21:19:33 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:19:34 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:34 core.sweep_detector INFO: OrderBlocks: 4 detected, 3 unmitigated
+21:19:34 core.sweep_detector INFO: FVGs: 11 detected, 4 unfilled
+21:19:36 core.sweep_detector INFO: SweepDetector v2: 7 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:19:36 core.sweep_detector INFO: OrderBlocks: 9 detected, 2 unmitigated
+21:19:36 core.sweep_detector INFO: FVGs: 6 detected, 2 unfilled
+21:19:38 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:38 core.sweep_detector INFO: OrderBlocks: 7 detected, 2 unmitigated
+21:19:38 core.sweep_detector INFO: FVGs: 11 detected, 2 unfilled
+21:19:39 core.sweep_detector INFO: SweepDetector v2: 6 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:39 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:19:39 core.sweep_detector INFO: FVGs: 12 detected, 3 unfilled
+21:19:41 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:41 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:19:41 core.sweep_detector INFO: FVGs: 8 detected, 5 unfilled
+21:19:43 core.sweep_detector INFO: SweepDetector v2: 3 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:19:43 core.sweep_detector INFO: OrderBlocks: 6 detected, 2 unmitigated
+21:19:43 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:19:45 core.sweep_detector INFO: SweepDetector v2: 5 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:19:45 core.sweep_detector INFO: OrderBlocks: 7 detected, 0 unmitigated
+21:19:45 core.sweep_detector INFO: FVGs: 12 detected, 1 unfilled
+21:19:47 core.sweep_detector INFO: SweepDetector v2: 7 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:19:47 core.sweep_detector INFO: OrderBlocks: 9 detected, 1 unmitigated
+21:19:47 core.sweep_detector INFO: FVGs: 8 detected, 2 unfilled
+21:19:49 core.sweep_detector INFO: SweepDetector v2: 5 raw → 3 confirmed (vol≥1.5× body≥40%)
+21:19:49 core.sweep_detector INFO: OrderBlocks: 6 detected, 4 unmitigated
+21:19:49 core.sweep_detector INFO: FVGs: 10 detected, 4 unfilled
+21:19:52 core.sweep_detector INFO: SweepDetector v2: 5 raw → 4 confirmed (vol≥1.5× body≥40%)
+21:19:52 core.sweep_detector INFO: OrderBlocks: 7 detected, 3 unmitigated
+21:19:52 core.sweep_detector INFO: FVGs: 11 detected, 4 unfilled
+21:19:54 core.sweep_detector INFO: SweepDetector v2: 7 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:19:54 core.sweep_detector INFO: OrderBlocks: 5 detected, 1 unmitigated
+21:19:54 core.sweep_detector INFO: FVGs: 9 detected, 4 unfilled
+21:19:56 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:19:56 core.sweep_detector INFO: OrderBlocks: 3 detected, 1 unmitigated
+21:19:56 core.sweep_detector INFO: FVGs: 4 detected, 3 unfilled
+21:19:59 core.sweep_detector INFO: SweepDetector v2: 4 raw → 2 confirmed (vol≥1.5× body≥40%)
+21:19:59 core.sweep_detector INFO: OrderBlocks: 2 detected, 0 unmitigated
+21:19:59 core.sweep_detector INFO: FVGs: 6 detected, 0 unfilled
+21:20:01 core.sweep_detector INFO: SweepDetector v2: 6 raw → 5 confirmed (vol≥1.5× body≥40%)
+21:20:01 core.sweep_detector INFO: OrderBlocks: 4 detected, 0 unmitigated
+21:20:01 core.sweep_detector INFO: FVGs: 10 detected, 1 unfilled
+/root/.openclaw/workspace/projects/crypto-liquidity-hunter/main.py:545: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  scan_end     = datetime.utcnow()
+
+=== SCAN ALL: 161 pairs, 3 timeframes ===
+Total signals generated: 5
+  binance:ANIME/USDT 15m SHORT Entry=0.00 SL=0.00 TP=0.00 R:R=4.44
+  binance:BANANAS31/USDT 1h LONG Entry=0.01 SL=0.01 TP=0.01 R:R=3.90
+  binance:ETHFI/USDT 4h SHORT Entry=0.48 SL=0.49 TP=0.44 R:R=5.57
+  binance:ETHFI/USDT 1h SHORT Entry=0.48 SL=0.49 TP=0.45 R:R=5.65
+  binance:NEIRO/USDT 1h SHORT Entry=0.00 SL=0.00 TP=0.00 R:R=3.55

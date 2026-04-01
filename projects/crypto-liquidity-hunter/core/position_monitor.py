@@ -170,7 +170,27 @@ class PositionMonitor:
                 trade_id = trade['id']
                 live_p = live_positions.get(raw_sym) or live_positions.get(ccxt_sym)
                 if not live_p:
-                    # Position NOT found on Binance this cycle
+                    # Position NOT found on Binance this cycle.
+                    # IMPORTANT: Verify the trade was actually entered before closing it.
+                    # A trade in DB can have mode='live' but the entry order may have failed
+                    # silently, meaning the position never existed on Binance. In that case
+                    # we should mark it as 'entry_failed' not 'closed_on_exchange'.
+                    entry_time_str = trade.get('entry_time', '')
+                    trade_age_secs = 0
+                    try:
+                        from datetime import datetime as _dt2
+                        if entry_time_str:
+                            et = _dt2.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                            et_utc = et.replace(tzinfo=timezone.utc) if et.tzinfo is None else et
+                            trade_age_secs = (datetime.now(timezone.utc) - et_utc).total_seconds()
+                    except Exception:
+                        pass
+
+                    # If trade is very fresh (< 30s) — skip, give entry time to register on Binance
+                    if trade_age_secs < 30:
+                        logger.debug(f"[Monitor] {sym} trade #{trade_id} is only {trade_age_secs:.0f}s old — skip close check")
+                        continue
+
                     # Increment missing counter — require _CLOSE_THRESHOLD consecutive
                     # misses before marking closed (prevents false closes on API glitch)
                     self._missing_count[trade_id] = self._missing_count.get(trade_id, 0) + 1
@@ -179,8 +199,21 @@ class PositionMonitor:
                     if miss_count < self._CLOSE_THRESHOLD:
                         logger.info(f"[Monitor] {sym} missing {miss_count}/{self._CLOSE_THRESHOLD} — waiting for confirmation")
                         continue  # don't close yet — wait for next cycle
-                    # Confirmed missing — position was closed on exchange
+
+                    # Confirmed missing — check trade history to distinguish:
+                    #   a) Entry never filled → entry_failed
+                    #   b) Position closed after being open → closed_on_exchange / stop_loss / target_hit
                     self._missing_count.pop(trade_id, None)
+
+                    # Check Binance user trade history to confirm entry was ever filled
+                    entry_was_filled = self._verify_entry_filled(sym, float(trade.get('entry_price', 0)))
+                    if not entry_was_filled:
+                        logger.warning(f"[Monitor] Trade {trade_id} {sym} — no fill found on exchange. "
+                                       f"Marking as entry_failed (position never opened).")
+                        self._close_trade_now(trade, float(trade.get('entry_price', 0)), 'entry_failed', sym)
+                        self._cancel_orphaned_orders(raw_sym)
+                        continue
+
                     mark = price_map.get(raw_sym, 0.0)
                     exit_price = self._get_actual_exit_price(sym, float(trade.get('entry_price', 0)))
                     if exit_price <= 0:
@@ -188,14 +221,22 @@ class PositionMonitor:
                     direction = trade.get('direction', 'short')
                     sl = float(trade.get('sl') or 0)
                     tp = float(trade.get('tp') or 0)
+                    # ── Classify exit reason using STRICT price logic ──────
+                    # LONG:  SL hit  → exit_price <= sl (price fell to/below SL)
+                    #        TP hit  → exit_price >= tp (price rose to/above TP)
+                    # SHORT: SL hit  → exit_price >= sl (price rose to/above SL)
+                    #        TP hit  → exit_price <= tp (price fell to/below TP)
+                    # Tolerance ±0.15% only to account for slippage on market fills.
+                    # (Previous 0.5% tolerance caused false SL labels when exit was between entry & SL)
+                    TOL = 0.0015
                     reason = 'closed_on_exchange'
                     if sl > 0 and exit_price > 0:
-                        if (direction == 'long'  and exit_price <= sl * 1.005) or \
-                           (direction == 'short' and exit_price >= sl * 0.995):
+                        if (direction == 'long'  and exit_price <= sl * (1 + TOL)) or \
+                           (direction == 'short' and exit_price >= sl * (1 - TOL)):
                             reason = 'stop_loss'
                     if tp > 0 and exit_price > 0:
-                        if (direction == 'long'  and exit_price >= tp * 0.995) or \
-                           (direction == 'short' and exit_price <= tp * 1.005):
+                        if (direction == 'long'  and exit_price >= tp * (1 - TOL)) or \
+                           (direction == 'short' and exit_price <= tp * (1 + TOL)):
                             reason = 'target_hit'
                     logger.info(f"[Monitor] Position {trade_id} {sym} confirmed closed: "
                                 f"exit={exit_price:.6g} reason={reason}")
@@ -244,25 +285,65 @@ class PositionMonitor:
         hit_sl = False
         hit_tp = False
 
+        # STRICT exit logic — no tolerance buffer on real-time price check
+        # LONG:  price must fall TO or BELOW SL to trigger SL exit
+        #        price must rise TO or ABOVE TP to trigger TP exit
+        # SHORT: price must rise TO or ABOVE SL to trigger SL exit
+        #        price must fall TO or BELOW TP to trigger TP exit
         if direction == 'long':
             if sl > 0 and mark <= sl:
                 hit_sl = True
-                logger.warning(f"[Monitor] SL hit: {sym} mark={mark} <= sl={sl} (LONG)")
+                logger.warning(f"[Monitor] SL hit: {sym} mark={mark:.6g} <= sl={sl:.6g} (LONG)")
             if tp > 0 and mark >= tp:
                 hit_tp = True
-                logger.info(f"[Monitor] TP hit: {sym} mark={mark} >= tp={tp} (LONG)")
+                logger.info(f"[Monitor] TP hit: {sym} mark={mark:.6g} >= tp={tp:.6g} (LONG)")
         else:  # short
             if sl > 0 and mark >= sl:
                 hit_sl = True
-                logger.warning(f"[Monitor] SL hit: {sym} mark={mark} >= sl={sl} (SHORT)")
+                logger.warning(f"[Monitor] SL hit: {sym} mark={mark:.6g} >= sl={sl:.6g} (SHORT)")
             if tp > 0 and mark <= tp:
                 hit_tp = True
-                logger.info(f"[Monitor] TP hit: {sym} mark={mark} <= tp={tp} (SHORT)")
+                logger.info(f"[Monitor] TP hit: {sym} mark={mark:.6g} <= tp={tp:.6g} (SHORT)")
 
         if hit_tp or hit_sl:
             status = 'target_hit' if hit_tp else 'stop_loss'
             exit_price = mark
             self._close_trade_now(trade, exit_price, status, sym)
+
+    def _verify_entry_filled(self, sym: str, entry_price: float) -> bool:
+        """
+        Check Binance user trade history to see if an entry order was ever filled.
+        Returns True if a trade was found near entry_price (within 2%), False otherwise.
+        This distinguishes 'entry never placed' from 'position already closed'.
+        """
+        try:
+            import hmac as _hmac, hashlib as _hashlib, time as _time, requests as _req
+            raw_sym = sym.replace('/', '')
+            ts  = int(_time.time() * 1000)
+            # Look back 24h for any trades on this symbol
+            start_time = ts - 86_400_000
+            par = f"symbol={raw_sym}&limit=10&startTime={start_time}&timestamp={ts}&recvWindow=5000"
+            sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
+            r = _req.get(
+                f"https://fapi.binance.com/fapi/v1/userTrades?{par}&signature={sig}",
+                headers={"X-MBX-APIKEY": self.connector.api_key}, timeout=8
+            )
+            trades = r.json()
+            if isinstance(trades, list) and trades:
+                for t in trades:
+                    price = float(t.get('price', 0))
+                    if entry_price > 0 and abs(price - entry_price) / entry_price < 0.02:
+                        return True  # Found a fill near our entry price
+                # Trades exist but none near our entry — position may have been different
+                # Still return True to be safe (avoid marking valid closed positions as entry_failed)
+                return True
+            # No trades found at all — entry likely never executed
+            return False
+        except Exception as e:
+            logger.debug(f"[Monitor] _verify_entry_filled error for {sym}: {e}")
+            # On error, assume entry was filled (safe default — better to mark closed_on_exchange
+            # than to leave a zombie trade open forever)
+            return True
 
     def _get_actual_exit_price(self, sym: str, entry_price: float) -> float:
         """
@@ -322,9 +403,6 @@ class PositionMonitor:
         else:
             pnl = 0.0
 
-        # Position already closed on exchange — no market close needed
-        close_placed = True
-
         # Always update DB
         try:
             self.store.close_trade(
@@ -338,9 +416,19 @@ class PositionMonitor:
             self._sltp_placed.discard(trade_id)
             logger.info(
                 f"[Monitor] Trade {trade_id} {sym} closed "
-                f"exit={exit_price:.6g} pnl=${pnl:.2f} status={status} "
-                f"exchange_close={'ok' if close_placed else 'FAILED-IP-restricted'}"
+                f"exit={exit_price:.6g} pnl=${pnl:.2f} status={status}"
             )
+            # Activity log
+            try:
+                import sys, os
+                sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                from scheduler.activity_logger import log_event as _log
+                evt_type = {'target_hit': 'TP_HIT', 'stop_loss': 'SL_HIT',
+                            'entry_failed': 'ENTRY_FAILED_NO_POSITION'}.get(status, 'CLOSED_ON_EXCHANGE')
+                _log(evt_type, pair=sym, trade_id=trade_id, direction=direction,
+                     entry=ep, exit=exit_price, pnl=round(pnl, 4), status=status)
+            except Exception:
+                pass
         except Exception as e:
             logger.error(f"[Monitor] DB close error trade {trade_id}: {e}")
 
@@ -559,15 +647,18 @@ class PositionMonitor:
             prices = self._fetch_public_prices([bsym])
             exit_price = prices.get(bsym, entry_price)
 
-        # Determine status
+        # Determine status — STRICT logic, ±0.15% slippage tolerance only
+        # LONG:  exit <= sl → stop_loss  |  exit >= tp → target_hit
+        # SHORT: exit >= sl → stop_loss  |  exit <= tp → target_hit
+        TOL = 0.0015
         status = 'closed'
         if tp > 0 and exit_price > 0:
-            if (direction == 'long' and exit_price >= tp * 0.995) or \
-               (direction == 'short' and exit_price <= tp * 1.005):
+            if (direction == 'long'  and exit_price >= tp * (1 - TOL)) or \
+               (direction == 'short' and exit_price <= tp * (1 + TOL)):
                 status = 'target_hit'
         if sl > 0 and exit_price > 0:
-            if (direction == 'long' and exit_price <= sl * 1.005) or \
-               (direction == 'short' and exit_price >= sl * 0.995):
+            if (direction == 'long'  and exit_price <= sl * (1 + TOL)) or \
+               (direction == 'short' and exit_price >= sl * (1 - TOL)):
                 status = 'stop_loss'
 
         return exit_price, status

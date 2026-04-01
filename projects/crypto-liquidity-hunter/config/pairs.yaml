@@ -476,13 +476,6 @@ paper_trading:
   fixed_notional_usd: 20
   margin_leverage: 20
   position_sizing: fixed_notional
-live_trading:
-  commission_per_trade: 0.001
-  fixed_notional_usd: 20.0
-  margin_leverage: 10.0
-  position_sizing: fixed_notional
-  risk_percent: 1.0
-  max_notional_usd: 50.0
 signal_engine:
   min_risk_reward: 3
   require_confluence: true
@@ -516,3 +509,4 @@ signal_execution:
   mode: auto
   entry_tolerance_pct: 0.3
   auto_execute: true
+  min_sl_gap_pct: 1.0   # Minimum % gap between entry and SL required to trigger entry (0 = disabled)

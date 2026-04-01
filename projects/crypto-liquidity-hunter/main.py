@@ -296,15 +296,23 @@ def cmd_scan_all(args):
     dispatcher = AlertDispatcher(config['alerts'])
     all_signals = []
 
+    # Activity logging
+    try:
+        from scheduler.activity_logger import log_event as _log
+    except ImportError:
+        def _log(evt, **kw): pass
+    _log('SCAN_START', pairs_count=len(pairs), timeframes=timeframes)
+
     # Auto-trade setup — load active account from config
     trader = None
     trade_executor = None
     open_positions = {}  # pair -> dict of order ids
     active_account_id = config.get('active_account_id', None)
-    exec_cfg   = config.get('signal_execution', {})
-    exec_mode  = exec_cfg.get('mode', 'pending')          # 'pending' or 'immediate'
-    entry_tol  = float(exec_cfg.get('entry_tolerance_pct', 0.3)) / 100
-    auto_exec  = exec_cfg.get('auto_execute', True)
+    exec_cfg        = config.get('signal_execution', {})
+    exec_mode       = exec_cfg.get('mode', 'pending')          # 'pending' or 'immediate'
+    entry_tol       = float(exec_cfg.get('entry_tolerance_pct', 0.3)) / 100
+    auto_exec       = exec_cfg.get('auto_execute', True)
+    min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 1.0)) / 100  # e.g. 1.0% → 0.01
 
     if active_account_id:
         try:
@@ -397,6 +405,11 @@ def cmd_scan_all(args):
                     if signal:
                         # Save signal to DB
                         signal_id = store.save_signal(pair, tf, signal)
+                        _log('SIGNAL_FOUND', pair=pair, tf=tf,
+                             direction=signal.direction,
+                             entry=signal.entry_price, sl=signal.stop_loss,
+                             tp=signal.target, confidence=signal.confidence,
+                             rr=getattr(signal,'risk_reward',0))
 
                         # Timeframe expiry map
                         tf_expires = {'15m': 2, '1h': 8, '4h': 24, '1d': 72}
@@ -419,6 +432,16 @@ def cmd_scan_all(args):
                                 except Exception as e:
                                     logger.error(f"Immediate execute error {pair}: {e}")
                         else:
+                            # ── Pre-filter: reject signals with tight SL gap at creation time ──
+                            _sl_gap_chk = abs(signal.entry_price - signal.stop_loss) / max(signal.entry_price, 1e-12)
+                            if min_sl_gap_pct > 0 and _sl_gap_chk < min_sl_gap_pct:
+                                logger.info(f"Signal {pair} {signal.direction} REJECTED: "
+                                            f"SL gap {_sl_gap_chk*100:.2f}% < min {min_sl_gap_pct*100:.1f}%")
+                                _log('DUPLICATE_BLOCKED', pair=pair, tf=tf,
+                                     direction=signal.direction,
+                                     reason=f'signal_sl_gap_too_tight_{_sl_gap_chk*100:.2f}pct')
+                                continue
+
                             # PENDING mode: wait for price to reach fib entry
                             pending_id = store.create_pending_signal(
                                 pair=pair, timeframe=tf, direction=signal.direction,
@@ -427,10 +450,20 @@ def cmd_scan_all(args):
                                 notional_usd=signal.notional_usd, signal_id=signal_id,
                                 account_id=active_account_id, expires_hours=expires_h
                             )
-                            logger.info(f"Pending signal #{pending_id}: {pair} {signal.direction} "
-                                        f"entry={signal.entry_price:.6g} current={latest_price:.6g} "
-                                        f"dist={abs(latest_price-signal.entry_price)/latest_price*100:.2f}% "
-                                        f"expires={expires_h}h")
+                            if pending_id:
+                                dist_pct = abs(latest_price - signal.entry_price) / max(latest_price, 1e-9) * 100
+                                logger.info(f"Pending signal #{pending_id}: {pair} {signal.direction} "
+                                            f"entry={signal.entry_price:.6g} current={latest_price:.6g} "
+                                            f"dist={dist_pct:.2f}% expires={expires_h}h")
+                                _log('PENDING_CREATED', pair=pair, tf=tf,
+                                     direction=signal.direction,
+                                     entry=signal.entry_price, sl=signal.stop_loss,
+                                     tp=signal.target, pending_id=pending_id,
+                                     dist_pct=round(dist_pct, 2), expires_h=expires_h)
+                            else:
+                                logger.info(f"Pending signal deduped for {pair} {signal.direction} — open trade or duplicate exists")
+                                _log('DUPLICATE_BLOCKED', pair=pair, tf=tf,
+                                     direction=signal.direction, reason='pending_dedup')
 
                         signal_record = {
                             'pair':      pair,
@@ -449,14 +482,49 @@ def cmd_scan_all(args):
                     pair_pending = [p for p in pending if p['pair'] == pair]
                     for ps in pair_pending:
                         ep  = float(ps['entry_price'])
-                        cur = latest_prices.get(sym, 0) or latest_price
+                        # FIX: use `symbol` (current pair variable), NOT `sym` (was undefined/stale)
+                        cur = latest_prices.get(symbol, 0) or latest_price
                         if cur <= 0 or ep <= 0:
                             continue
                         dist = abs(cur - ep) / ep
                         if dist <= entry_tol:
+                            # ── MIN SL GAP FILTER ────────────────────────────────────────────────
+                            # Skip entries where the gap between entry and SL is too tight.
+                            # Tight SL = poor risk management; these get stopped out immediately
+                            # by normal price noise. min_sl_gap_pct configurable in pairs.yaml.
+                            sl_val = float(ps.get('stop_loss') or 0)
+                            if min_sl_gap_pct > 0 and sl_val > 0 and ep > 0:
+                                sl_gap = abs(ep - sl_val) / ep  # fractional gap
+                                if sl_gap < min_sl_gap_pct:
+                                    logger.info(f"Pending #{ps['id']} SKIPPED: SL gap {sl_gap*100:.2f}% < "
+                                                f"min {min_sl_gap_pct*100:.1f}% ({pair} {ps['direction']} "
+                                                f"entry={ep:.6g} sl={sl_val:.6g})")
+                                    _log('DUPLICATE_BLOCKED', pair=pair, pending_id=ps['id'],
+                                         direction=ps['direction'],
+                                         reason=f'SL_gap_too_tight_{sl_gap*100:.2f}pct',
+                                         sl_gap_pct=round(sl_gap*100, 3),
+                                         min_required_pct=min_sl_gap_pct*100)
+                                    store.cancel_pending_signal(ps['id'])
+                                    continue
+
                             max_concurrent = config.get('backtester', {}).get('max_concurrent_trades', 3)
                             open_trades_count = len(store.get_open_trades())
                             if open_trades_count >= max_concurrent:
+                                logger.info(f"Pending #{ps['id']} skipped: {open_trades_count}/{max_concurrent} max trades open")
+                                continue
+                            # ── DEDUP CHECK: do NOT fire if open trade already exists for this pair+direction ──
+                            # This prevents the same pending signal firing multiple times across cron runs.
+                            # The trade dedup in store.create_open_trade() only catches same entry_price ±0.5%
+                            # but can miss if previous entry closed and pending signal is still alive.
+                            existing_open = [t for t in store.get_open_trades()
+                                             if t['pair'] == pair
+                                             and t['direction'] == ps['direction']
+                                             and t.get('account_id') == ps.get('account_id')]
+                            if existing_open:
+                                logger.info(f"Pending #{ps['id']} skipped: open trade already exists for {pair} {ps['direction']}")
+                                _log('DUPLICATE_BLOCKED', pair=pair, pending_id=ps['id'],
+                                     direction=ps['direction'], reason='open_trade_exists',
+                                     existing_trade_id=existing_open[0]['id'])
                                 continue
                             try:
                                 result = trade_executor.execute_signal(
@@ -471,55 +539,52 @@ def cmd_scan_all(args):
                                     logger.info(f"Triggered pending #{ps['id']}: {pair} {ps['direction']} "
                                                 f"@ {cur:.6g} (entry was {ep:.6g}) "
                                                 f"trade_id={result.get('trade_id')} mode={result.get('mode')}")
+                                    _log('PENDING_TRIGGERED', pair=pair, pending_id=ps['id'],
+                                         direction=ps['direction'], entry_was=ep, current=round(cur, 6),
+                                         trade_id=result.get('trade_id'),
+                                         sl=ps['stop_loss'], tp=ps['target'],
+                                         method=result.get('method', '?'))
+                                    _log('ENTRY_PLACED', pair=pair,
+                                         direction=ps['direction'],
+                                         entry_price=result.get('entry_price', cur),
+                                         sl=ps['stop_loss'], tp=ps['target'],
+                                         trade_id=result.get('trade_id'),
+                                         order_id=result.get('order_id'),
+                                         sl_order_id=result.get('sl_order_id'),
+                                         tp_order_id=result.get('tp_order_id'),
+                                         method=result.get('method', '?'))
+                                    # Cancel all other pending signals for same pair+direction
+                                    dupes = [p for p in pair_pending
+                                             if p['id'] != ps['id']
+                                             and p['direction'] == ps['direction']
+                                             and p['status'] == 'pending']
+                                    for dup in dupes:
+                                        store.cancel_pending_signal(dup['id'])
+                                        logger.info(f"Cancelled duplicate pending #{dup['id']} for {pair} {ps['direction']}")
+                                        _log('PENDING_CANCELLED', pair=pair, pending_id=dup['id'],
+                                             reason='entry_placed_cancel_dupes')
+                                    break  # Only fire ONE entry per pair per scan run
                                 else:
-                                    logger.error(f"Pending trigger failed #{ps['id']}: {result['error']}")
+                                    err = result['error']
+                                    logger.error(f"Pending trigger failed #{ps['id']}: {err}")
+                                    _log('ORDER_ERROR', pair=pair, pending_id=ps['id'],
+                                         direction=ps['direction'], error=str(err)[:200])
                             except Exception as e:
                                 logger.error(f"Pending trigger error #{ps['id']}: {e}")
+                                _log('ORDER_ERROR', pair=pair, pending_id=ps['id'],
+                                     direction=ps['direction'], error=str(e)[:200])
             except Exception as e:
                 logger.error(f"Error scanning {pair} {tf}: {e}")
                 continue
 
-    # Check open trades for exit (SL/TP) before considering new signals
-    open_trades = store.get_open_trades()
-    if open_trades:
-        logger.info(f"Checking {len(open_trades)} open trades for exit conditions")
-        for trade in open_trades:
-            # Extract symbol from trade['pair']
-            pair_full = trade['pair']
-            if ':' in pair_full:
-                _, sym = pair_full.split(':', 1)
-            else:
-                sym = pair_full
-            if sym not in latest_prices:
-                continue
-            price = latest_prices[sym]
-            direction = trade['direction']
-            sl = trade['sl']
-            tp = trade['tp']
-            entry_price = trade['entry_price']
-            notional_usd = trade['notional_usd']
-            commission_usd = trade['commission_usd']
-            status = None
-            exit_price = None
-            if direction == 'long':
-                if price >= tp:
-                    status = 'target_hit'
-                    exit_price = tp
-                elif price <= sl:
-                    status = 'stop_loss'
-                    exit_price = sl
-            else:  # short
-                if price <= tp:
-                    status = 'target_hit'
-                    exit_price = tp
-                elif price >= sl:
-                    status = 'stop_loss'
-                    exit_price = sl
-            if status:
-                price_diff = price - entry_price if direction == 'long' else entry_price - price
-                pnl_usd = (price_diff / entry_price) * notional_usd - (2 * commission_usd)
-                store.close_trade(trade['id'], exit_price, datetime.utcnow(), status, pnl_usd)
-                logger.info(f"Closed trade {trade['id']} {trade['pair']} {status} P&L=${pnl_usd:.2f}")
+    # NOTE: Trade exit detection (SL/TP hit, position closed on exchange) is handled
+    # EXCLUSIVELY by the PositionMonitor background thread (position_monitor.py).
+    # The monitor uses LIVE Binance position data as source of truth — not stale OHLCV
+    # candle prices from this scan. Closing trades here would:
+    #   1. Use the wrong price (candle close ≠ real-time mark price)
+    #   2. Conflict with the monitor which already handles this correctly
+    #   3. Close trades before the broker position is actually closed (causing ghost trades)
+    # The scan's only job: generate signals + trigger entries. NOT close trades.
 
     # Save latest signals to cache for dashboard
     store = DataStore()
@@ -550,6 +615,14 @@ def cmd_scan_all(args):
             'fvg_confluence':          sig_dict.get('fvg_confluence', False),
         })
     store.save_latest_signals(serializable_signals)
+
+    # ── Log scan end ───────────────────────────────────────────────────────────
+    import time as _scan_time_mod
+    scan_duration = round(_scan_time_mod.time() - _scan_time_mod.mktime(scan_start.timetuple()), 1)
+    _log('SCAN_END',
+         signals_found=len(all_signals),
+         pairs_scanned=len(pairs),
+         duration_s=scan_duration)
 
     # ── Scan duration ──────────────────────────────────────────────────────────
     scan_end     = datetime.utcnow()

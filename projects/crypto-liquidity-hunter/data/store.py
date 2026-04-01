@@ -166,12 +166,28 @@ class DataStore:
                                confidence: float, notional_usd: float,
                                signal_id: int = None, account_id: int = None,
                                expires_hours: float = 4) -> int:
-        """Create a pending signal waiting for price to reach entry. Returns id."""
+        """Create a pending signal waiting for price to reach entry. Returns id or None if deduped."""
         from datetime import datetime as _dt, timedelta as _td
         now     = _dt.utcnow()
         expires = now + _td(hours=expires_hours)
         with sqlite3.connect(self.db_path) as conn:
-            # Dedup: skip if same pair+direction+entry already pending
+            # Dedup check 1: same pair+direction already has an open LIVE trade → block new pending
+            # This prevents re-entering a position that is already open on the broker.
+            if account_id is not None:
+                open_trade = conn.execute(
+                    "SELECT id FROM trades WHERE pair=? AND direction=? AND account_id=? AND status='open' AND mode!='paper'",
+                    (pair, direction, account_id)
+                ).fetchone()
+            else:
+                open_trade = conn.execute(
+                    "SELECT id FROM trades WHERE pair=? AND direction=? AND status='open' AND mode!='paper'",
+                    (pair, direction)
+                ).fetchone()
+            if open_trade:
+                logger.debug(f"create_pending_signal: skipping {pair} {direction} — open trade #{open_trade[0]} already exists")
+                return None
+
+            # Dedup check 2: same pair+direction+entry already pending (within ±0.5%)
             existing = conn.execute(
                 "SELECT id FROM pending_signals WHERE pair=? AND direction=? AND status='pending'",
                 (pair, direction)
@@ -179,7 +195,8 @@ class DataStore:
             for (eid,) in existing:
                 row = conn.execute("SELECT entry_price FROM pending_signals WHERE id=?", (eid,)).fetchone()
                 if row and abs(row[0] - entry_price) / max(entry_price, 1e-9) < 0.005:
-                    return eid  # already pending
+                    logger.debug(f"create_pending_signal: dedup — pending #{eid} already exists for {pair} {direction}")
+                    return eid  # already pending, return existing id
             cur = conn.cursor()
             cur.execute("""
                 INSERT INTO pending_signals
@@ -540,8 +557,15 @@ class DataStore:
                 pair, timeframe, entry_time.isoformat(), direction, entry_price,
                 sl, tp, notional_usd, commission_usd, notes, signal_id, mode, order_id, account_id
             ))
+            new_trade_id = cur.lastrowid
+            # Cancel ALL remaining pending signals for this pair+direction
+            # This is critical: once we enter, no more pending signals should fire for the same zone
+            conn.execute(
+                "UPDATE pending_signals SET status='cancelled' WHERE pair=? AND direction=? AND status='pending'",
+                (pair, direction)
+            )
             conn.commit()
-            return cur.lastrowid
+            return new_trade_id
 
     def get_open_trades(self) -> List[Dict]:
         """Return all open trades."""

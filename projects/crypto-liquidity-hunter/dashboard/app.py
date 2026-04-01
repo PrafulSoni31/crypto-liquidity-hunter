@@ -1958,6 +1958,7 @@ def get_config():
             'signal_execution_mode':    c.get('signal_execution', {}).get('mode', 'pending'),
             'auto_execute':             c.get('signal_execution', {}).get('auto_execute', False),
             'entry_tolerance_pct':      c.get('signal_execution', {}).get('entry_tolerance_pct', 0.3),
+            'min_sl_gap_pct':           c.get('signal_execution', {}).get('min_sl_gap_pct', 1.0),
             # ── Liquidity Mapper ──
             'equal_touch_tolerance':    c.get('liquidity_mapper', {}).get('equal_touch_tolerance', 0.001),
             'swing_lookback':           c.get('liquidity_mapper', {}).get('swing_lookback', 5),
@@ -2009,6 +2010,7 @@ def update_config():
         'signal_execution_mode':  'signal_execution.mode',
         'auto_execute':           'signal_execution.auto_execute',
         'entry_tolerance_pct':    'signal_execution.entry_tolerance_pct',
+        'min_sl_gap_pct':         'signal_execution.min_sl_gap_pct',
         'equal_touch_tolerance':  'liquidity_mapper.equal_touch_tolerance',
         'swing_lookback':         'liquidity_mapper.swing_lookback',
         'round_tolerance':        'liquidity_mapper.round_tolerance',
