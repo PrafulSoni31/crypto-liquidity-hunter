@@ -121,6 +121,27 @@ When spawning subagents, always pass these instructions:
 - **Cron Jobs:** 2 automated alerts (Mon-Fri only, skips weekends)
 - **Files:** oi_momentum_scanner.py, send_alert.py, README.md
 
+### Crypto Liquidity Hunter Bot (April 2-3, 2026)
+- **Status:** Running, active scanning 389 pairs on Binance Futures every 5 min
+- **Dashboard:** http://76.13.247.112:5000 | Admin Bot: Telegram
+- **6-Hour Review Schedule:** 00:00, 06:00, 12:00, 18:00 UTC
+- **Model:** xiaomi/mimo-v2-pro (changed from mimo-v2-flash April 2, 2026)
+
+#### Critical Bug Fixes (April 3, 2026)
+- **Bug 1 - SL Direction Validation:** No check that SL was on correct side of entry. SHORT trades had SL below entry (wrong). Fixed with Gate 8 in signal_engine.py - hard rejects wrong-side SL.
+- **Bug 2 - min_sl_gap_pct Never Enforced:** Config param existed (1.0%) but signal engine never read it. Signals with SL 0.01% from entry were accepted. Fixed by adding param to SignalEngine + enforcement gate.
+- **Bug 3 - Positions NOT Closing on Binance:** Most critical. When SL/TP hit (price-based detection), only DB was updated - never placed market close order on Binance. Positions stayed open forever. Fixed by adding `_place_market_close()` call in `_check_trade()`.
+- **Dashboard Overhaul:** Added Overview tab (KPI cards, open positions, recent signals), Activity Feed tab (event log with filters, 200-entry display), improved CSS (pulse animations, status bar).
+- **Param Sync:** All 32 dashboard parameters synced with admin bot. Added min_sl_gap_pct to both.
+- **All 4 SignalEngine sites updated** with min_sl_gap_pct (main.py ×3, dashboard/app.py ×1)
+
+#### Open Items
+- **Strategy Audit (April 3):** Charlie asked to compare original liquidity hunting strategy spec vs what's actually implemented. 7,162 lines of Python across 22 files. Audit interrupted by compaction - needs follow-up.
+- **Liquidation data & funding rates** not yet implemented (would improve signal quality)
+- **News event filter** not yet implemented
+- **Order book imbalance detection** not yet implemented
+- **Backtest optimizer** for parameter tuning not yet implemented
+
 ### Important Notes
 
 **MEMORY HABIT:** Always check memory (MEMORY.md + memory_search) before answering questions about prior work, decisions, or conversations. Charlie emphasized this.
