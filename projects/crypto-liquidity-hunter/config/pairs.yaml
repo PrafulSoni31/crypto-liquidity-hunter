@@ -3,7 +3,7 @@ alerts:
     bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
     chat_id: '686482312'
     enabled: true
-    min_confidence: 0.75
+    min_confidence: 0.7
 backtester:
   commission_pct: 0.001
   max_concurrent_trades: 5
@@ -21,9 +21,9 @@ data_fetch:
   - 15m
 liquidity_mapper:
   equal_touch_tolerance: 0.005
-  min_swing_strength: 2
+  min_swing_strength: 3
   round_tolerance: 0.005
-  swing_lookback: 5
+  swing_lookback: 4
 pairs:
 - binance:0G/USDT
 - binance:1000CAT/USDT
@@ -475,7 +475,7 @@ sweep_detector:
 signal_engine:
   min_risk_reward: 3
   require_confluence: true
-  risk_per_trade: 0.1
+  risk_per_trade: 0.05
   stop_buffer_pct: 0.001
   target_buffer_pct: 0.001
   retracement_levels:
@@ -494,15 +494,15 @@ signal_execution:
   mode: auto
   auto_execute: true
   entry_tolerance_pct: 0.3
-  min_sl_gap_pct: 0.3
-  sl_tp_mode: binance_bracket
+  min_sl_gap_pct: 0.5
+  sl_tp_mode: monitor_only
   sl_tp_delay_sec: 3
   monitor_interval_sec: 5
 live_trading:
-  fixed_notional_usd: 50.0
-  margin_leverage: 10.0
+  fixed_notional_usd: 100.0
+  margin_leverage: 20.0
   commission_per_trade: 0.001
   position_sizing: fixed_notional
   risk_percent: 1.0
-  max_notional_usd: 60.0
+  max_notional_usd: 110.0
 active_account_id: 2
