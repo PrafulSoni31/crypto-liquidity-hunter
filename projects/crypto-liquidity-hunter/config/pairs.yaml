@@ -491,11 +491,11 @@ paper_trading:
   commission_per_trade: 0.001
   position_sizing: fixed_notional
 signal_execution:
-  mode: auto
+  mode: pending
   auto_execute: true
   entry_tolerance_pct: 0.3
-  min_sl_gap_pct: 0.5
-  sl_tp_mode: monitor_only
+  min_sl_gap_pct: 1.5
+  sl_tp_mode: binance_bracket
   sl_tp_delay_sec: 3
   monitor_interval_sec: 5
 live_trading:
