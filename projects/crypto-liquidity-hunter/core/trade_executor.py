@@ -464,6 +464,22 @@ class TradeExecutor:
         except Exception:
             pass
 
+        # ── POST-ENTRY VALIDATION — verify on Binance + Telegram alert ────
+        if self.mode != 'paper':
+            try:
+                from core.trade_validator import validate_entry
+                exec_cfg = _cfg.get('signal_execution', {})
+                validate_entry(
+                    symbol=symbol, direction=direction,
+                    entry_price=entry_price, sl=stop_loss, tp=target,
+                    qty=qty, notional=notional, trade_id=trade_id,
+                    sl_tp_mode=exec_cfg.get('sl_tp_mode', 'monitor_only'),
+                    api_key=self.connector.api_key,
+                    api_secret=self.connector.api_secret,
+                )
+            except Exception as e:
+                logger.error(f'[Executor] Post-entry validation error: {e}')
+
         return {
             'trade_id': trade_id,
             'mode': self.mode,

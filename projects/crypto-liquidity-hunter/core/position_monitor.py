@@ -460,6 +460,19 @@ class PositionMonitor:
                      entry=ep, exit=exit_price, pnl=round(pnl, 4), status=status)
             except Exception:
                 pass
+
+            # ── Telegram close alert ──────────────────────────────────────
+            try:
+                from core.trade_validator import validate_close
+                validate_close(
+                    symbol=sym, direction=direction,
+                    entry_price=ep, exit_price=exit_price,
+                    pnl=round(pnl, 4), status=status, trade_id=trade_id,
+                    api_key=self.connector.api_key if self.connector else None,
+                    api_secret=self.connector.api_secret if self.connector else None,
+                )
+            except Exception as ve:
+                logger.debug(f"[Monitor] Validate close alert failed: {ve}")
         except Exception as e:
             logger.error(f"[Monitor] DB close error trade {trade_id}: {e}")
 
