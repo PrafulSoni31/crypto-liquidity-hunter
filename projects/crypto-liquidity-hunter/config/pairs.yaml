@@ -3,7 +3,7 @@ alerts:
     bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
     chat_id: '686482312'
     enabled: true
-    min_confidence: 0.7
+    min_confidence: 0.75
 backtester:
   commission_pct: 0.001
   max_concurrent_trades: 5
@@ -466,7 +466,7 @@ pairs:
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
 sweep_detector:
   sweep_multiplier: 0.5
-  volume_multiplier: 2.5
+  volume_multiplier: 3
   wick_ratio: 0.4
   min_sweep_pct: 0.2
   confirmation_bars: 5
@@ -495,6 +495,9 @@ signal_execution:
   auto_execute: true
   entry_tolerance_pct: 0.3
   min_sl_gap_pct: 0.3
+  sl_tp_mode: binance_bracket
+  sl_tp_delay_sec: 3
+  monitor_interval_sec: 5
 live_trading:
   fixed_notional_usd: 50.0
   margin_leverage: 10.0

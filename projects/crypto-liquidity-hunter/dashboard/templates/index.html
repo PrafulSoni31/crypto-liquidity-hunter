@@ -2424,6 +2424,21 @@ document.addEventListener('DOMContentLoaded', () => {
           <label class="cfg-label">Min SL Gap % <small>Minimum distance between entry and stop-loss (0.1–5.0)</small></label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_min_sl_gap_pct" step="0.1" min="0.1" max="5.0">
         </div>
+        <div class="cfg-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <label class="cfg-label">SL/TP Mode <small>How stop-loss and take-profit are managed</small></label>
+          <select class="cfg-input" id="cfg_sl_tp_mode" onchange="toggleSlTpMode()">
+            <option value="binance_bracket">📌 Place on Binance (LIMIT orders after delay)</option>
+            <option value="monitor_only">👁️ Monitor Only (bot watches price, closes via market order)</option>
+          </select>
+        </div>
+        <div class="cfg-row" id="row_sl_tp_delay">
+          <label class="cfg-label">SL/TP Delay (sec) <small>Seconds to wait after entry before placing SL/TP on Binance (1–60)</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_sl_tp_delay_sec" step="1" min="1" max="60">
+        </div>
+        <div class="cfg-row" id="row_monitor_interval">
+          <label class="cfg-label">Monitor Interval (sec) <small>How often bot checks prices for SL/TP (3–60)</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_monitor_interval_sec" step="1" min="3" max="60">
+        </div>
       </div>
     </div>
 
@@ -3161,6 +3176,10 @@ async function loadSettings() {
     sv('cfg_auto_execute',          d.auto_execute);
     sv('cfg_entry_tolerance_pct',   d.entry_tolerance_pct);
     sv('cfg_min_sl_gap_pct',        d.min_sl_gap_pct);
+    sv('cfg_sl_tp_mode',            d.sl_tp_mode || 'binance_bracket');
+    sv('cfg_sl_tp_delay_sec',       d.sl_tp_delay_sec ?? 3);
+    sv('cfg_monitor_interval_sec',  d.monitor_interval_sec ?? 5);
+    toggleSlTpMode();
 
     // Liquidity Mapper
     sv('cfg_equal_touch_tolerance', d.equal_touch_tolerance);
@@ -3222,6 +3241,9 @@ async function saveSettings() {
       auto_execute:           gb('cfg_auto_execute'),
       entry_tolerance_pct:    gf('cfg_entry_tolerance_pct'),
       min_sl_gap_pct:         gf('cfg_min_sl_gap_pct'),
+      sl_tp_mode:             gv('cfg_sl_tp_mode'),
+      sl_tp_delay_sec:        gi('cfg_sl_tp_delay_sec'),
+      monitor_interval_sec:   gi('cfg_monitor_interval_sec'),
       // Liquidity Mapper
       equal_touch_tolerance:  gf('cfg_equal_touch_tolerance'),
       swing_lookback:         gi('cfg_swing_lookback'),
@@ -3332,6 +3354,14 @@ function autoSaveLive(el, fieldName) {
 }
 
 // ── Live Trading Lot Size Preview ─────────────────────────────────────────────
+function toggleSlTpMode() {
+  const mode = document.getElementById('cfg_sl_tp_mode')?.value || 'binance_bracket';
+  const delayRow   = document.getElementById('row_sl_tp_delay');
+  const monitorRow = document.getElementById('row_monitor_interval');
+  if (delayRow)   delayRow.style.display   = mode === 'binance_bracket' ? '' : 'none';
+  if (monitorRow) monitorRow.style.display  = mode === 'monitor_only'   ? '' : 'none';
+}
+
 function toggleLiveSizingMode() {
   const mode = document.getElementById('cfg_live_position_sizing')?.value;
   const fixedRow = document.getElementById('live-fixed-row');

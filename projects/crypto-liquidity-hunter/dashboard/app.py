@@ -97,6 +97,7 @@ def _auto_start_monitor():
     """
     Auto-start position monitor on gunicorn startup for the active live account.
     Called once per worker via with app.app_context().
+    Uses monitor_interval_sec from config (Settings → Signal Execution).
     """
     try:
         config = load_config()
@@ -108,16 +109,16 @@ def _auto_start_monitor():
         if not acct:
             return
         is_paper = acct.get('mode', 'paper') == 'paper'
+        monitor_interval = int(config.get('signal_execution', {}).get('monitor_interval_sec', 5))
 
         if is_paper:
-            # Paper mode: start monitor in price-watch-only mode (no Binance API needed)
             from core.position_monitor import PositionMonitor, _monitors, _monitors_lock
             try:
                 connector = _make_connector_from_account(acct, connect=False)
             except Exception as ce:
                 logger.error(f"[Startup] Connector creation failed: {ce}")
                 connector = None
-            m = PositionMonitor(connector, store, account_id=int(active_id), interval=5)
+            m = PositionMonitor(connector, store, account_id=int(active_id), interval=monitor_interval)
             m._api_ok = False   # skip API calls, use public price only
             m.start()
             with _monitors_lock:
@@ -128,12 +129,12 @@ def _auto_start_monitor():
         connector = _make_connector_from_account(acct, connect=True)
         if connector and connector.connected:
             from core.position_monitor import start_monitor
-            start_monitor(connector, store, account_id=int(active_id), interval=5)
+            start_monitor(connector, store, account_id=int(active_id), interval=monitor_interval)
             logger.info(f"[Startup] Position monitor auto-started for account {active_id}")
         else:
             # API restricted — still start monitor in price-watch-only mode
             from core.position_monitor import start_monitor, PositionMonitor
-            m = PositionMonitor(connector, store, account_id=int(active_id), interval=5)
+            m = PositionMonitor(connector, store, account_id=int(active_id), interval=monitor_interval)
             m._api_ok = False   # skip API calls, use public price only
             m.start()
             from core.position_monitor import _monitors, _monitors_lock
@@ -1118,8 +1119,9 @@ def monitor_restart():
             return jsonify({'error': 'No active account'}), 400
         stop_monitor(active_id)
         connector = _make_connector_from_account(acct, connect=True)
-        m = start_monitor(connector, store, account_id=active_id, interval=5)
-        return jsonify({'status': 'ok', 'running': m.is_running(), 'api_ok': m._api_ok})
+        _mon_interval = int(config.get('signal_execution', {}).get('monitor_interval_sec', 5))
+        m = start_monitor(connector, store, account_id=active_id, interval=_mon_interval)
+        return jsonify({'status': 'ok', 'running': m.is_running(), 'api_ok': m._api_ok, 'interval': _mon_interval})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1631,7 +1633,9 @@ def connect_account(account_id):
     if acct.get('mode', 'paper') != 'paper':
         try:
             from core.position_monitor import start_monitor
-            start_monitor(connector, store, account_id=account_id, interval=10)
+            _cfg_mon = load_config()
+            _mon_int = int(_cfg_mon.get('signal_execution', {}).get('monitor_interval_sec', 5))
+            start_monitor(connector, store, account_id=account_id, interval=_mon_int)
             logger.info(f"[App] Position monitor started for account {account_id}")
         except Exception as e:
             logger.warning(f"[App] Could not start position monitor: {e}")
@@ -2023,6 +2027,9 @@ def get_config():
             'auto_execute':             c.get('signal_execution', {}).get('auto_execute', False),
             'entry_tolerance_pct':      c.get('signal_execution', {}).get('entry_tolerance_pct', 0.3),
             'min_sl_gap_pct':           c.get('signal_execution', {}).get('min_sl_gap_pct', 0.3),
+            'sl_tp_mode':               c.get('signal_execution', {}).get('sl_tp_mode', 'binance_bracket'),
+            'sl_tp_delay_sec':          c.get('signal_execution', {}).get('sl_tp_delay_sec', 3),
+            'monitor_interval_sec':     c.get('signal_execution', {}).get('monitor_interval_sec', 5),
             # ── Liquidity Mapper ──
             'equal_touch_tolerance':    c.get('liquidity_mapper', {}).get('equal_touch_tolerance', 0.001),
             'swing_lookback':           c.get('liquidity_mapper', {}).get('swing_lookback', 5),
@@ -2080,6 +2087,9 @@ def update_config():
         'auto_execute':           'signal_execution.auto_execute',
         'entry_tolerance_pct':    'signal_execution.entry_tolerance_pct',
         'min_sl_gap_pct':         'signal_execution.min_sl_gap_pct',
+        'sl_tp_mode':             'signal_execution.sl_tp_mode',
+        'sl_tp_delay_sec':        'signal_execution.sl_tp_delay_sec',
+        'monitor_interval_sec':   'signal_execution.monitor_interval_sec',
         'retracement_levels':     'signal_engine.retracement_levels',
         'equal_touch_tolerance':  'liquidity_mapper.equal_touch_tolerance',
         'swing_lookback':         'liquidity_mapper.swing_lookback',

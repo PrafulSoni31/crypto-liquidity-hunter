@@ -351,8 +351,13 @@ class TradeExecutor:
                 entry_price = actual_fill
             logger.info(f'[Executor] Filled: {symbol} @ {entry_price} order={order_result.get("id")}')
 
-            # STEP 2 — Verify position on Binance (3s for settlement)
-            time.sleep(3)
+            # ── Read SL/TP mode from config ─────────────────────────────────
+            exec_cfg = _cfg.get('signal_execution', {})
+            sl_tp_mode = exec_cfg.get('sl_tp_mode', 'binance_bracket')
+            sl_tp_delay = int(exec_cfg.get('sl_tp_delay_sec', 3))
+
+            # STEP 2 — Wait for position to register on Binance
+            time.sleep(sl_tp_delay)
             pos = _get_position(api_key, api_secret, raw_sym)
 
             if pos is None:
@@ -361,7 +366,6 @@ class TradeExecutor:
                     f'Cancelling all orders. Trade recorded as entry_failed.'
                 )
                 _cancel_all_orders(api_key, api_secret, raw_sym)
-                # Record as failed — do NOT place any orders
                 sltp_result = {'sl_order_id': 'entry_failed', 'tp_order_id': 'entry_failed'}
                 now = datetime.now(timezone.utc)
                 trade_id = self.store.create_open_trade(
@@ -372,7 +376,6 @@ class TradeExecutor:
                     mode=self.mode, order_id=str(order_result.get('id', '')),
                     account_id=self.account_id,
                 )
-                # Immediately close it in DB
                 self.store.close_trade(trade_id, entry_price, now, 'entry_failed', 0.0)
                 return {'error': f'Position not found on Binance after market entry for {symbol}'}
 
@@ -385,9 +388,7 @@ class TradeExecutor:
                     f'[Executor] DIRECTION MISMATCH: intended={direction} actual={actual_dir} '
                     f'for {symbol}. Closing inverted position immediately.'
                 )
-                # Cancel all orders first
                 _cancel_all_orders(api_key, api_secret, raw_sym)
-                # Close the wrong-direction position
                 close_side = 'sell' if actual_dir == 'long' else 'buy'
                 try:
                     qty_r = _round_qty(raw_sym, actual_qty, exi)
@@ -401,23 +402,41 @@ class TradeExecutor:
                     logger.error(f'[Executor] Failed to close inverted position: {ce}')
                 return {'error': f'Direction mismatch for {symbol}: intended {direction}, got {actual_dir}'}
 
-            # STEP 4 — Check if SL/TP already placed (idempotent)
-            existing = _get_open_orders(api_key, api_secret, raw_sym)
-            if len(existing) >= 2:
-                logger.info(f'[Executor] SL/TP already on exchange for {symbol} — skipping')
+            # STEP 4 — SL/TP handling based on mode
+            if sl_tp_mode == 'binance_bracket':
+                # ── MODE A: Place SL+TP as LIMIT orders on Binance ─────────
+                existing = _get_open_orders(api_key, api_secret, raw_sym)
+                if len(existing) >= 2:
+                    logger.info(f'[Executor] SL/TP already on exchange for {symbol} — skipping')
+                    sltp_result = {
+                        'sl_order_id': existing[0].get('orderId', 'existing'),
+                        'tp_order_id': existing[-1].get('orderId', 'existing'),
+                    }
+                else:
+                    if stop_loss > 0 or target > 0:
+                        sltp_result = _place_sl_tp(
+                            api_key, api_secret, raw_sym,
+                            actual_dir, actual_qty,
+                            stop_loss, target, exi
+                        )
+                        logger.info(f'[Executor] SL/TP placed on Binance for {symbol}: {sltp_result}')
+
+            elif sl_tp_mode == 'monitor_only':
+                # ── MODE B: Bot monitors price, no orders on Binance ───────
+                # SL/TP levels are saved in DB; the PositionMonitor checks
+                # every N seconds (configurable) and closes via market order.
                 sltp_result = {
-                    'sl_order_id': existing[0].get('orderId', 'existing'),
-                    'tp_order_id': existing[-1].get('orderId', 'existing'),
+                    'sl_order_id': 'monitor',
+                    'tp_order_id': 'monitor',
+                    'method': 'monitor_only',
                 }
+                logger.info(f'[Executor] SL/TP monitor mode for {symbol}: '
+                            f'SL={stop_loss} TP={target} (no orders on Binance, '
+                            f'position monitor will enforce)')
+
             else:
-                # STEP 5 — Place SL + TP using ACTUAL position qty
-                if stop_loss > 0 or target > 0:
-                    sltp_result = _place_sl_tp(
-                        api_key, api_secret, raw_sym,
-                        actual_dir, actual_qty,
-                        stop_loss, target, exi
-                    )
-                    logger.info(f'[Executor] SL/TP placed for {symbol}: {sltp_result}')
+                logger.warning(f'[Executor] Unknown sl_tp_mode: {sl_tp_mode}. Defaulting to monitor_only.')
+                sltp_result = {'sl_order_id': 'monitor', 'tp_order_id': 'monitor'}
 
         if 'error' in order_result and self.mode != 'paper':
             return {'error': order_result.get('error', 'Order failed')}
