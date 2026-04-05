@@ -501,16 +501,35 @@ class PositionMonitor:
 
     def _place_market_close(self, sym: str, direction: str, trade: Dict,
                             exit_price: float) -> bool:
-        """Place a reduceOnly market order to close position. Returns success."""
+        """Place a reduceOnly market order to close FULL position. Returns success."""
         try:
-            ccxt_sym   = self._normalise_symbol(sym)
             close_side = 'sell' if direction == 'long' else 'buy'
-            notional   = float(trade.get('notional_usd', 0) or 0)
-            ep         = float(trade.get('entry_price', exit_price) or exit_price)
-            qty        = notional / ep if ep > 0 else 0
-            if qty <= 0:
-                return False
-            qty_r = self.connector._round_qty(ccxt_sym, qty)
+
+            # ── Get ACTUAL position qty from Binance (not estimated from notional) ──
+            # Using notional/price gives wrong qty due to rounding/dust.
+            # Binance positionRisk returns the exact amt we need to close.
+            import time as _t, hmac as _h, hashlib as _ha, requests as _rq
+            raw_sym = sym.replace('/', '')
+            ts = int(_t.time() * 1000)
+            par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=5000'
+            sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
+            r = _rq.get(f'https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}',
+                        headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
+            actual_qty = 0
+            for p in r.json():
+                amt = float(p.get('positionAmt', 0))
+                if amt != 0:
+                    actual_qty = abs(amt)
+                    break
+
+            if actual_qty <= 0:
+                # No position found — already closed
+                logger.info(f"[Monitor] No position on Binance for {sym} — already closed")
+                return True
+
+            # Place market close for FULL actual qty
+            ccxt_sym = self._normalise_symbol(sym)
+            qty_r = self.connector._round_qty(ccxt_sym, actual_qty)
             order = self.connector.exchange.create_order(
                 ccxt_sym, 'market', close_side, qty_r,
                 params={'reduceOnly': True}
@@ -522,7 +541,7 @@ class PositionMonitor:
             err = str(e)
             if '-2015' in err or 'Invalid API-key' in err or 'IP' in err:
                 logger.warning(f"[Monitor] API IP-restricted, cannot place close order: {e}")
-                self._api_ok = False   # stop trying until reconnect
+                self._api_ok = False
             else:
                 logger.error(f"[Monitor] Market close error for {sym}: {e}")
             return False

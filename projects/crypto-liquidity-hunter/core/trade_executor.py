@@ -502,8 +502,14 @@ class TradeExecutor:
                 norm_sym2, mult2 = _normalise_k_contract(sym)
                 raw2 = norm_sym2.split('/')[0] + (norm_sym2.split('/')[1].split(':')[0] if '/' in norm_sym2 else '')
                 raw2 = raw2.replace('/', '')
-                exi2 = _get_exchange_info(raw2)
-                qty2 = _round_qty(raw2, notional / ep, exi2)
+                # Get ACTUAL position qty from Binance (not estimated)
+                pos = _get_position(self.connector.api_key, self.connector.api_secret, raw2)
+                if pos:
+                    qty2 = abs(float(pos['positionAmt']))
+                else:
+                    # Fallback to estimate if position check fails
+                    exi2 = _get_exchange_info(raw2)
+                    qty2 = _round_qty(raw2, notional / ep, exi2)
                 co = self.connector.exchange.create_order(
                     norm_sym2, 'market', close_side, qty2, params={'reduceOnly': True}
                 )
