@@ -2052,7 +2052,7 @@ def update_config():
     Body: { "param_name": value, ... }
     Supports dot-notation keys OR the flat keys returned by GET /api/config.
     """
-    from core.config_manager import config_mgr
+    from core.config_manager import cfg as config_mgr
     data = request.get_json() or {}
     if not data:
         return jsonify({'error': 'no data'}), 400

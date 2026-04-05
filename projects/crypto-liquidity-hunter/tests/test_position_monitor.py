@@ -3,7 +3,7 @@ Tests for position_monitor.py — catches orphan cleanup, close qty, direction b
 """
 import pytest
 from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from core.position_monitor import PositionMonitor
 
 
@@ -11,11 +11,13 @@ def _make_trade(id=1, pair='binance:SUI/USDT', direction='long',
                 entry_price=1.0, sl=0.95, tp=1.15,
                 notional_usd=50, commission_usd=0.05,
                 entry_time=None, account_id=2):
+    # Default to old entry time (>60s) so the grace period doesn't skip SL/TP checks
+    _et = entry_time or (datetime.now(timezone.utc) - timedelta(minutes=5))
     return {
         'id': id, 'pair': pair, 'direction': direction,
         'entry_price': entry_price, 'sl': sl, 'tp': tp,
         'notional_usd': notional_usd, 'commission_usd': commission_usd,
-        'entry_time': (entry_time or datetime.now(timezone.utc)).isoformat(),
+        'entry_time': _et.isoformat(),
         'account_id': account_id, 'mode': 'live', 'status': 'open',
     }
 

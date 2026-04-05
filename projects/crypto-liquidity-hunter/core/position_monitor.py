@@ -20,7 +20,7 @@ import logging
 import time
 import json
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -299,6 +299,44 @@ class PositionMonitor:
 
         if mark <= 0:
             return  # price not available
+
+        # ── ENTRY CANDLE GRACE PERIOD ───────────────────────────────────────
+        # The 1m candle's low/high includes price movement BEFORE the entry.
+        # If the entry candle's wick touched the SL, the monitor would immediately
+        # trigger a close — even though the trade only existed for 5 seconds.
+        # Solution: skip SL/TP checks until the entry candle completes (top of
+        # the next minute). After that, only FRESH candles are checked whose
+        # low/high can't pre-exist the entry.
+        entry_time_str = trade.get('entry_time', '')
+        if entry_time_str:
+            try:
+                from datetime import datetime as _dt
+                _et = _dt.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                _et_utc = _et.replace(tzinfo=timezone.utc) if _et.tzinfo is None else _et
+                _now = datetime.now(timezone.utc)
+
+                # Seconds elapsed since entry
+                _elapsed = (_now - _et_utc).total_seconds()
+
+                # When does the current 1m candle end? (top of next minute)
+                _candle_end = _now.replace(second=0, microsecond=0) + timedelta(minutes=1)
+                _secs_until_next_candle = (_candle_end - _now).total_seconds()
+
+                # If entry was within the same 1m candle that started BEFORE the entry,
+                # we can't trust this candle's low/high for SL/TP detection.
+                # Wait until the next candle starts.
+                _candle_start = _now.replace(second=0, microsecond=0)
+                _entry_in_this_candle = _et_utc >= _candle_start
+
+                if _entry_in_this_candle and _elapsed < 60:
+                    logger.debug(
+                        f"[Monitor] {sym} entry in current 1m candle "
+                        f"({_elapsed:.0f}s old, {_secs_until_next_candle:.0f}s until next candle) "
+                        f"— skipping SL/TP check"
+                    )
+                    return  # skip — wait for next candle
+            except Exception:
+                pass
 
         hit_sl = False
         hit_tp = False

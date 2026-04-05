@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Import config manager (direct file access — faster than HTTP for bot)
 try:
     sys.path.insert(0, str(PROJECT_ROOT))
-    from core.config_manager import config_mgr
+    from core.config_manager import cfg as config_mgr
 except ImportError:
     config_mgr = None
     logger.error("ConfigManager not available")
@@ -81,6 +81,7 @@ KEY_DOT_PATHS = {
     'risk_per_trade':         'signal_engine.risk_per_trade',
     'stop_buffer_pct':        'signal_engine.stop_buffer_pct',
     'target_buffer_pct':      'signal_engine.target_buffer_pct',
+    'retracement_levels':     'signal_engine.retracement_levels',
     'min_confidence':         'alerts.telegram.min_confidence',
     'alerts_enabled':         'alerts.telegram.enabled',
     'ohlcv_limit':            'data_fetch.ohlcv_limit',
@@ -96,6 +97,7 @@ KEY_DOT_PATHS = {
     'signal_execution_mode':  'signal_execution.mode',
     'auto_execute':           'signal_execution.auto_execute',
     'entry_tolerance_pct':    'signal_execution.entry_tolerance_pct',
+    'min_sl_gap_pct':         'signal_execution.min_sl_gap_pct',
     'equal_touch_tolerance':  'liquidity_mapper.equal_touch_tolerance',
     'swing_lookback':         'liquidity_mapper.swing_lookback',
     'round_tolerance':        'liquidity_mapper.round_tolerance',
@@ -165,6 +167,7 @@ HELP_TEXT = """<b>🎯 Liquidity Hunter Admin Bot</b>
 /set_execution_mode &lt;pending|auto&gt;
 /toggle_auto_execute
 /set_entry_tolerance &lt;0.1–5.0&gt;
+/set_min_sl_gap &lt;0.1–10.0&gt;
 
 <b>🗺️ Liquidity Mapper:</b>
 /set_touch_tolerance &lt;0.001–0.05&gt;
@@ -234,6 +237,7 @@ async def show_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
   mode: <b>{d.get('signal_execution_mode')}</b>
   auto_execute: {on(d.get('auto_execute'))}
   entry_tolerance: <b>{d.get('entry_tolerance_pct')}%</b>
+  min_sl_gap: <b>{d.get('min_sl_gap_pct')}%</b>
 
 <b>🗺️ Liquidity Mapper:</b>
   equal_touch_tolerance: <b>{d.get('equal_touch_tolerance')}</b>
@@ -285,25 +289,29 @@ async def restart_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update): await deny(update); return
     await update.message.reply_text("🔄 Restarting dashboard...")
     try:
-        subprocess.run(["systemctl","restart","liquidity-hunter-dashboard.service"],
+        subprocess.run(["/bin/systemctl","restart","--no-block","liquidity-hunter-dashboard.service"],
                        check=True, capture_output=True, text=True)
-        await update.message.reply_text("✅ Dashboard restarted.")
+        await update.message.reply_text("✅ Dashboard restart initiated.")
     except subprocess.CalledProcessError as e:
-        await update.message.reply_text(f"❌ Failed:\n<code>{e.stderr}</code>", parse_mode="HTML")
+        await update.message.reply_text(f"❌ Failed:\n<code>{e.stderr or e.stdout or str(e)}</code>", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Exception: {str(e)}")
 
 async def restart_admin_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update): await deny(update); return
     await update.message.reply_text("🔄 Restarting admin bot...")
     try:
-        subprocess.run(["systemctl","restart","liquidity-hunter-admin-bot.service"],
+        subprocess.run(["/bin/systemctl","restart","--no-block","liquidity-hunter-admin-bot.service"],
                        check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
-        await update.message.reply_text(f"❌ Failed:\n<code>{e.stderr}</code>", parse_mode="HTML")
+        await update.message.reply_text(f"❌ Failed:\n<code>{e.stderr or e.stdout or str(e)}</code>", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Exception: {str(e)}")
 
 async def dashboard_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update): await deny(update); return
     try:
-        res = subprocess.run(["systemctl","status","liquidity-hunter-dashboard.service","--no-pager"],
+        res = subprocess.run(["/bin/systemctl","status","liquidity-hunter-dashboard.service","--no-pager"],
                              capture_output=True, text=True, timeout=5)
         out = (res.stdout or res.stderr)[:4000]
         await update.message.reply_text(f"<pre>{out}</pre>", parse_mode="HTML")
@@ -372,9 +380,12 @@ async def apply_cron(update: Update, context: ContextTypes.DEFAULT_TYPE):
         r = subprocess.run(["/usr/bin/crontab","-l"], capture_output=True, text=True, timeout=5)
         lines = [l for l in (r.stdout.splitlines() if r.returncode==0 else []) if "run_scan_all" not in l]
         lines.append(line)
-        subprocess.run(["/usr/bin/crontab","-"], input="\n".join(lines).encode(), check=True, timeout=5)
+        subprocess.run(["/usr/bin/crontab","-"], input=("\n".join(lines) + "\n").encode(), check=True, timeout=5)
         await update.message.reply_text(f"✅ Cron set: every {interval} min")
-    except Exception as e: await update.message.reply_text(f"❌ {e}")
+    except subprocess.CalledProcessError as e:
+        await update.message.reply_text(f"❌ Cron error: {e.stderr or e.stdout or str(e)}")
+    except Exception as e:
+        await update.message.reply_text(f"❌ {e}")
 
 # ── Sweep Detector params ──────────────────────────────────────────────────────
 async def set_sweep_multiplier(update, context):
@@ -552,6 +563,12 @@ async def set_entry_tolerance(update, context):
     if not v: await update.message.reply_text("Usage: /set_entry_tolerance <0.1–5.0>"); return
     await _set(update, 'entry_tolerance_pct', v, 'Entry Tolerance', float, 0.1, 5.0, '%')
 
+async def set_min_sl_gap(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_min_sl_gap <0.1–10.0>"); return
+    await _set(update, 'min_sl_gap_pct', v, 'Min SL Gap', float, 0.1, 10.0, '%')
+
 # ── Liquidity Mapper params ────────────────────────────────────────────────────
 async def set_touch_tolerance(update, context):
     if not is_admin(update): await deny(update); return
@@ -649,6 +666,7 @@ def main():
     app.add_handler(CommandHandler("set_execution_mode",  set_execution_mode))
     app.add_handler(CommandHandler("toggle_auto_execute", toggle_auto_execute))
     app.add_handler(CommandHandler("set_entry_tolerance", set_entry_tolerance))
+    app.add_handler(CommandHandler("set_min_sl_gap",      set_min_sl_gap))
 
     # Liquidity Mapper
     app.add_handler(CommandHandler("set_touch_tolerance", set_touch_tolerance))
