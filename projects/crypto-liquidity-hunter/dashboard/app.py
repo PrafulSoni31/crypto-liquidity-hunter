@@ -105,8 +105,26 @@ def _auto_start_monitor():
             return
         store = DataStore()
         acct  = store.get_account(int(active_id))
-        if not acct or acct.get('mode', 'paper') == 'paper':
+        if not acct:
             return
+        is_paper = acct.get('mode', 'paper') == 'paper'
+
+        if is_paper:
+            # Paper mode: start monitor in price-watch-only mode (no Binance API needed)
+            from core.position_monitor import PositionMonitor, _monitors, _monitors_lock
+            try:
+                connector = _make_connector_from_account(acct, connect=False)
+            except Exception as ce:
+                logger.error(f"[Startup] Connector creation failed: {ce}")
+                connector = None
+            m = PositionMonitor(connector, store, account_id=int(active_id), interval=5)
+            m._api_ok = False   # skip API calls, use public price only
+            m.start()
+            with _monitors_lock:
+                _monitors[int(active_id)] = m
+            logger.info(f"[Startup] Position monitor started (paper mode, price-watch) for account {active_id}")
+            return
+
         connector = _make_connector_from_account(acct, connect=True)
         if connector and connector.connected:
             from core.position_monitor import start_monitor
@@ -136,22 +154,30 @@ def _on_first_request():
     if _monitor_started:
         return
     # Use a file-based lock so only ONE gunicorn worker starts the monitor
-    # (multiple workers share a filesystem, so only the first one creates the lock)
     import os, fcntl
     try:
-        lock_fd = open(_MONITOR_LOCK_FILE, 'w')
+        # Open in append/read mode so we don't truncate it before acquiring the lock
+        lock_fd = open(_MONITOR_LOCK_FILE, 'a+')
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         # Got the lock — we are the first worker
+        # Check if another worker already wrote a PID
+        lock_fd.seek(0)
+        content = lock_fd.read().strip()
+        if content:
+            # Already started by another worker that exited cleanly but left file?
+            # Actually, just assume we own it if we got the exclusive lock
+            pass
+        lock_fd.seek(0)
+        lock_fd.truncate()
         _monitor_started = True
         _auto_start_monitor()
         # Write PID to lock file
         lock_fd.write(str(os.getpid()))
         lock_fd.flush()
-        # Keep lock_fd open (releasing it would release the lock)
         app._monitor_lock_fd = lock_fd
     except (IOError, OSError):
         # Another worker already has the lock — skip
-        _monitor_started = True  # suppress future attempts in this worker
+        _monitor_started = True
 
 
 @app.route('/')
@@ -179,21 +205,33 @@ def scan_pair(pair):
     )
     detector = SweepDetector(
         sweep_multiplier=config['sweep_detector']['sweep_multiplier'],
-        volume_multiplier=config['sweep_detector']['volume_multiplier'],
-        confirmation_bars=config['sweep_detector']['confirmation_bars'],
-        wick_ratio=config['sweep_detector']['wick_ratio'],
-        min_sweep_pct=config['sweep_detector']['min_sweep_pct']
+        volume_multiplier=config['sweep_detector'].get('volume_multiplier', 2.5),
+        confirmation_bars=config['sweep_detector'].get('confirmation_bars', 5),
+        wick_ratio=config['sweep_detector'].get('wick_ratio', 0.5),
+        min_sweep_pct=config['sweep_detector']['min_sweep_pct'],
+        min_body_ratio=config['sweep_detector'].get('min_body_ratio', 0.4),
+        lookback_bars=config['sweep_detector'].get('lookback_bars', 24)
     )
-    paper_cfg = config.get('paper_trading', {})
+    # Use live_trading config when account is live, paper otherwise
+    _active_acct_id = config.get('active_account_id')
+    _acct_mode = 'paper'
+    if _active_acct_id:
+        try:
+            _acct = store.get_account(_active_acct_id)
+            _acct_mode = _acct.get('mode', 'paper') if _acct else 'paper'
+        except Exception:
+            pass
+    trade_cfg = config.get('live_trading' if _acct_mode == 'live' else 'paper_trading', {})
     engine = SignalEngine(
         risk_per_trade=config['signal_engine']['risk_per_trade'],
         retracement_levels=config['signal_engine']['retracement_levels'],
         stop_buffer_pct=config['signal_engine']['stop_buffer_pct'],
         min_risk_reward=config['signal_engine']['min_risk_reward'],
-        position_sizing=paper_cfg.get('position_sizing', 'risk_percent'),
-        fixed_notional_usd=paper_cfg.get('fixed_notional_usd', 50.0),
-        margin_leverage=paper_cfg.get('margin_leverage', 1.0),
-        commission_pct=paper_cfg.get('commission_per_trade', 0.001)
+        position_sizing=trade_cfg.get('position_sizing', 'fixed_notional'),
+        fixed_notional_usd=trade_cfg.get('fixed_notional_usd', 20.0),
+        margin_leverage=trade_cfg.get('margin_leverage', 10.0),
+        commission_pct=trade_cfg.get('commission_per_trade', 0.001),
+        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 1.0)
     )
 
     # Fetch data
@@ -663,6 +701,31 @@ def get_ohlcv(pair):
 @app.route('/health')
 def health():
     return jsonify({'status': 'ok', 'timestamp': datetime.utcnow().isoformat()})
+
+
+@app.route('/api/activity')
+def get_activity():
+    """Return recent activity log entries from the daily JSONL file."""
+    import glob
+    today = datetime.utcnow().strftime('%Y%m%d')
+    log_dir = os.path.join(PROJECT_ROOT, 'logs')
+    log_file = os.path.join(log_dir, f'activity_{today}.jsonl')
+    entries = []
+    limit = request.args.get('limit', 50, type=int)
+    try:
+        if os.path.exists(log_file):
+            with open(log_file, 'r') as f:
+                lines = f.readlines()
+            for line in lines[-limit:]:
+                line = line.strip()
+                if line:
+                    try:
+                        entries.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    return jsonify(entries)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1937,6 +2000,7 @@ def get_config():
             'risk_per_trade':      c.get('signal_engine', {}).get('risk_per_trade', 0.01),
             'stop_buffer_pct':     c.get('signal_engine', {}).get('stop_buffer_pct', 0.001),
             'target_buffer_pct':   c.get('signal_engine', {}).get('target_buffer_pct', 0.001),
+            'retracement_levels':  c.get('signal_engine', {}).get('retracement_levels', [0.5, 0.618, 0.786]),
             # ── Alerts ──
             'min_confidence':      c.get('alerts', {}).get('telegram', {}).get('min_confidence', 0.7),
             'alerts_enabled':      c.get('alerts', {}).get('telegram', {}).get('enabled', True),
@@ -1958,12 +2022,17 @@ def get_config():
             'signal_execution_mode':    c.get('signal_execution', {}).get('mode', 'pending'),
             'auto_execute':             c.get('signal_execution', {}).get('auto_execute', False),
             'entry_tolerance_pct':      c.get('signal_execution', {}).get('entry_tolerance_pct', 0.3),
-            'min_sl_gap_pct':           c.get('signal_execution', {}).get('min_sl_gap_pct', 1.0),
+            'min_sl_gap_pct':           c.get('signal_execution', {}).get('min_sl_gap_pct', 0.3),
             # ── Liquidity Mapper ──
             'equal_touch_tolerance':    c.get('liquidity_mapper', {}).get('equal_touch_tolerance', 0.001),
             'swing_lookback':           c.get('liquidity_mapper', {}).get('swing_lookback', 5),
             'round_tolerance':          c.get('liquidity_mapper', {}).get('round_tolerance', 0.005),
             'min_swing_strength':       c.get('liquidity_mapper', {}).get('min_swing_strength', 2),
+            # ── Backtester ──
+            'backtest_commission_pct':  c.get('backtester', {}).get('commission_pct', 0.001),
+            'backtest_max_concurrent':  c.get('backtester', {}).get('max_concurrent_trades', 3),
+            'backtest_slippage_pct':    c.get('backtester', {}).get('slippage_pct', 0.0005),
+            'backtest_timeout_bars':    c.get('backtester', {}).get('timeout_bars', 48),
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2011,10 +2080,15 @@ def update_config():
         'auto_execute':           'signal_execution.auto_execute',
         'entry_tolerance_pct':    'signal_execution.entry_tolerance_pct',
         'min_sl_gap_pct':         'signal_execution.min_sl_gap_pct',
+        'retracement_levels':     'signal_engine.retracement_levels',
         'equal_touch_tolerance':  'liquidity_mapper.equal_touch_tolerance',
         'swing_lookback':         'liquidity_mapper.swing_lookback',
         'round_tolerance':        'liquidity_mapper.round_tolerance',
         'min_swing_strength':     'liquidity_mapper.min_swing_strength',
+        'backtest_commission_pct':  'backtester.commission_pct',
+        'backtest_max_concurrent':  'backtester.max_concurrent_trades',
+        'backtest_slippage_pct':    'backtester.slippage_pct',
+        'backtest_timeout_bars':    'backtester.timeout_bars',
     }
 
     updated = {}

@@ -3,10 +3,10 @@ alerts:
     bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
     chat_id: '686482312'
     enabled: true
-    min_confidence: 0.8
+    min_confidence: 0.7
 backtester:
   commission_pct: 0.001
-  max_concurrent_trades: 3
+  max_concurrent_trades: 5
   slippage_pct: 0.0005
   timeout_bars: 48
 cron:
@@ -16,10 +16,11 @@ data_fetch:
   ohlcv_limit: 300
   timeframes:
   - 4h
+  - 2h
   - 1h
   - 15m
 liquidity_mapper:
-  equal_touch_tolerance: 0.001
+  equal_touch_tolerance: 0.005
   min_swing_strength: 2
   round_tolerance: 0.005
   swing_lookback: 5
@@ -32,7 +33,6 @@ pairs:
 - binance:1MBABYDOGE/USDT
 - binance:2Z/USDT
 - binance:A/USDT
-- binance:A2Z/USDT
 - binance:AAVE/USDT
 - binance:ACE/USDT
 - binance:ACH/USDT
@@ -179,7 +179,6 @@ pairs:
 - binance:FLUX/USDT
 - binance:FOGO/USDT
 - binance:FORM/USDT
-- binance:FORTH/USDT
 - binance:FRAX/USDT
 - binance:FTT/USDT
 - binance:FUN/USDT
@@ -207,14 +206,12 @@ pairs:
 - binance:HMSTR/USDT
 - binance:HOLO/USDT
 - binance:HOME/USDT
-- binance:HOOK/USDT
 - binance:HOT/USDT
 - binance:HUMA/USDT
 - binance:HYPER/USDT
 - binance:ICP/USDT
 - binance:ICX/USDT
 - binance:ID/USDT
-- binance:IDEX/USDT
 - binance:ILV/USDT
 - binance:IMX/USDT
 - binance:INIT/USDT
@@ -249,7 +246,6 @@ pairs:
 - binance:LISTA/USDT
 - binance:LPT/USDT
 - binance:LQTY/USDT
-- binance:LRC/USDT
 - binance:LSK/USDT
 - binance:LTC/USDT
 - binance:LUMIA/USDT
@@ -289,7 +285,6 @@ pairs:
 - binance:NMR/USDT
 - binance:NOM/USDT
 - binance:NOT/USDT
-- binance:NTRN/USDT
 - binance:NXPC/USDT
 - binance:OG/USDT
 - binance:OGN/USDT
@@ -337,7 +332,6 @@ pairs:
 - binance:RAD/USDT
 - binance:RARE/USDT
 - binance:RAY/USDT
-- binance:RDNT/USDT
 - binance:RED/USDT
 - binance:RENDER/USDT
 - binance:REQ/USDT
@@ -390,7 +384,6 @@ pairs:
 - binance:SUN/USDT
 - binance:SUPER/USDT
 - binance:SUSHI/USDT
-- binance:SXP/USDT
 - binance:SXT/USDT
 - binance:SYN/USDT
 - binance:SYRUP/USDT
@@ -471,42 +464,42 @@ pairs:
 - binance:ZRO/USDT
 - binance:ZRX/USDT
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
-paper_trading:
-  commission_per_trade: 0.001
-  fixed_notional_usd: 20
-  margin_leverage: 20
-  position_sizing: fixed_notional
+sweep_detector:
+  sweep_multiplier: 0.5
+  volume_multiplier: 2.5
+  wick_ratio: 0.4
+  min_sweep_pct: 0.2
+  confirmation_bars: 5
+  min_body_ratio: 0.4
+  lookback_bars: 24
 signal_engine:
   min_risk_reward: 3
   require_confluence: true
+  risk_per_trade: 0.1
+  stop_buffer_pct: 0.001
+  target_buffer_pct: 0.001
   retracement_levels:
   - 0.5
   - 0.618
   - 0.786
-  risk_per_trade: 0.01
-  stop_buffer_pct: 0.001
-  target_buffer_pct: 0.001
-sweep_detector:
-  confirmation_bars: 5
-  lookback_bars: 10
-  min_body_ratio: 0.4
-  min_sweep_pct: 0.1
-  sweep_multiplier: 0.5
-  volume_multiplier: 1.5
-  wick_ratio: 0.4
-trading:
-  api_key_env: BINANCE_TESTNET_API_KEY
-  api_secret_env: BINANCE_TESTNET_SECRET
-  enabled: false
-  exchange: binance
-  max_concurrent: 3
-  testnet: true
 volume_filter:
   enabled: true
-  min_24h_volume_usd: 1000000
-active_account_id: 2
+  min_24h_volume_usd: 2000000
+paper_trading:
+  fixed_notional_usd: 10
+  margin_leverage: 20
+  commission_per_trade: 0.001
+  position_sizing: fixed_notional
 signal_execution:
   mode: auto
-  entry_tolerance_pct: 0.3
   auto_execute: true
-  min_sl_gap_pct: 1.0   # Minimum % gap between entry and SL required to trigger entry (0 = disabled)
+  entry_tolerance_pct: 0.3
+  min_sl_gap_pct: 0.3
+live_trading:
+  fixed_notional_usd: 50.0
+  margin_leverage: 10.0
+  commission_per_trade: 0.001
+  position_sizing: fixed_notional
+  risk_percent: 1.0
+  max_notional_usd: 60.0
+active_account_id: 2

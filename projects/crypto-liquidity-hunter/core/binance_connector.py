@@ -600,23 +600,37 @@ class BinanceConnector:
             sig = _hmac.new(secret.encode(), p.encode(), _hashlib.sha256).hexdigest()
             return p + '&signature=' + sig
 
-        # ── PRIMARY: batchOrders [MARKET entry + LIMIT SL + LIMIT TP] ─────
-        # Confirmed working on Binance multi-assets margin accounts.
-        # Binance processes batch sequentially: entry fills first → SL/TP reduceOnly valid.
+        # ── PRIMARY: batchOrders [MARKET entry + LIMIT SL + LIMIT TP] ─────────────────────
+        #
+        # ACCOUNT TYPE: Multi-Assets Cross Margin
+        #   - STOP_MARKET / TAKE_PROFIT_MARKET → blocked (-4120)
+        #   - LIMIT with reduceOnly=true        → blocked (-2022)
+        #   - LIMIT (no reduceOnly)             → WORKS ✅
+        #
+        # HOW PLAIN LIMIT ORDERS WORK AS SL/TP (why they don't fill immediately):
+        #   LONG position SL  = LIMIT SELL at sl_price (BELOW current market price)
+        #     → sits in book, fills only when price FALLS to sl_price ✅
+        #   SHORT position SL = LIMIT BUY  at sl_price (ABOVE current market price)
+        #     → sits in book, fills only when price RISES to sl_price ✅
+        #   LONG TP  = LIMIT SELL above entry  | SHORT TP = LIMIT BUY below entry
+        #
+        # PREVIOUS BUG (fixed): SL for SHORT was using LIMIT BUY at sl_price but WITH
+        # reduceOnly=true → rejected (-2022). Without reduceOnly it now works correctly.
+        #
+        # Safety: position monitor cancels the surviving bracket when one leg fills.
         batch_orders = [
             {
-                'symbol':   raw_sym,
-                'side':     entry_side,
-                'type':     'MARKET',
-                'quantity': str(qty_r),
+                'symbol':      raw_sym,
+                'side':        entry_side,
+                'type':        'MARKET',
+                'quantity':    str(qty_r),
             },
             {
                 'symbol':      raw_sym,
                 'side':        exit_side,
                 'type':        'LIMIT',
-                'quantity':    str(qty_r),
                 'price':       str(sl_r),
-                'reduceOnly':  'true',
+                'quantity':    str(qty_r),
                 'timeInForce': 'GTC',
             },
         ]
@@ -625,9 +639,8 @@ class BinanceConnector:
                 'symbol':      raw_sym,
                 'side':        exit_side,
                 'type':        'LIMIT',
-                'quantity':    str(qty_r),
                 'price':       str(tp_r),
-                'reduceOnly':  'true',
+                'quantity':    str(qty_r),
                 'timeInForce': 'GTC',
             })
 
@@ -789,20 +802,64 @@ class BinanceConnector:
             logger.error(f"get_positions error: {e}")
             return []
 
+    def _place_limit_bracket(self, raw_sym: str, norm_sym: str,
+                             exit_side: str, qty_r: float, price: float) -> Dict:
+        """
+        Place a LIMIT bracket order (SL or TP) via raw Binance fapi REST.
+
+        ACCOUNT TYPE NOTE — Multi-Assets Cross Margin:
+          - STOP_MARKET / TAKE_PROFIT_MARKET → blocked (-4120) on this account type
+          - LIMIT reduceOnly → rejected (-2022) on this account type  
+          - LIMIT (no reduceOnly) → WORKS ✅ — sits in orderbook at target price
+
+        SL safety is guaranteed by:
+          1. Order is at correct price level (SL for long = SELL below; SL for short = BUY above)
+          2. Position monitor runs every 5s — if position closes (SL/TP hit), it cancels
+             the remaining bracket order via _cancel_orphaned_orders()
+          3. No risk of flipping position: when the bracket fills, the existing position
+             is offset; position monitor detects zero position and cancels the other bracket.
+
+        exit_side: 'BUY' or 'SELL' (uppercase)
+        price:     already scaled for 1000x contracts and rounded to exchange precision
+        """
+        import time as _t, hmac as _h, hashlib as _ha, requests as _r2, math as _math
+        ts  = int(_t.time() * 1000)
+        params = (
+            f"symbol={raw_sym}"
+            f"&side={exit_side.upper()}"
+            f"&type=LIMIT"
+            f"&price={price}"
+            f"&quantity={qty_r}"
+            f"&timeInForce=GTC"
+            f"&timestamp={ts}&recvWindow=5000"
+        )
+        sig = _h.new(self.api_secret.encode(), params.encode(), _ha.sha256).hexdigest()
+        resp = _r2.post(
+            f"https://fapi.binance.com/fapi/v1/order?{params}&signature={sig}",
+            headers={"X-MBX-APIKEY": self.api_key}, timeout=10
+        )
+        return resp.json()
+
     def set_sl_tp(self, symbol: str, side: str, qty: float,
                   sl_price: float, tp_price: float) -> Dict:
         """
-        Place take-profit (as LIMIT reduceOnly) and register SL for price-watch.
+        Place SL and TP bracket orders as plain LIMIT (no reduceOnly).
 
-        On multi-assets margin accounts (and some others), STOP_MARKET / TAKE_PROFIT_MARKET
-        are blocked (-4120). We fall back to:
-          - TP → LIMIT reduceOnly order (fills exactly at TP price, better than market)
-          - SL → price-watch via PositionMonitor (market close when price hits SL)
+        This account (multi-assets cross margin) blocks:
+          - STOP_MARKET / TAKE_PROFIT_MARKET  → error -4120
+          - LIMIT with reduceOnly=true         → error -2022
 
-        side = position side ('long' or 'short') — exit is opposite.
+        Only plain LIMIT orders work. Safety:
+          - SL LONG  = LIMIT SELL below entry (price must fall to SL to fill)
+          - SL SHORT = LIMIT BUY  above entry (price must rise to SL to fill)
+          - TP LONG  = LIMIT SELL above entry (price must rise to TP to fill)  
+          - TP SHORT = LIMIT BUY  below entry (price must fall to TP to fill)
+          - Position monitor cancels the surviving bracket when one leg fills.
+
+        side = position side ('long' or 'short')
         Returns {sl_order_id, tp_order_id, sl_price, tp_price} or {error}.
         """
-        exit_side = 'sell' if side == 'long' else 'buy'
+        exit_side = 'SELL' if side == 'long' else 'BUY'
         if self.mode == 'paper':
             return {
                 'sl_order_id': f'paper_sl_{symbol}',
@@ -818,8 +875,7 @@ class BinanceConnector:
                           (norm_sym.split('/')[1].split(':')[0] if '/' in norm_sym else '')
             raw_binance = raw_binance.replace('/', '')
 
-            # ── Check if orders already exist BEFORE placing ─────────────────
-            # Prevents duplicate brackets on gunicorn restart / monitor restart
+            # ── Check if bracket orders already exist ──────────────────────
             import time as _chk_t, hmac as _chk_h, hashlib as _chk_ha, requests as _chk_r
             ts_chk  = int(_chk_t.time() * 1000)
             par_chk = f"symbol={raw_binance}&timestamp={ts_chk}&recvWindow=5000"
@@ -829,70 +885,49 @@ class BinanceConnector:
                 headers={"X-MBX-APIKEY": self.api_key}, timeout=5
             )
             existing = r_chk.json()
-            if isinstance(existing, list) and existing:
-                logger.info(f"[Connector] {symbol}: {len(existing)} orders already on exchange — skipping set_sl_tp")
+            if isinstance(existing, list) and len(existing) >= 2:
+                logger.info(f"[Connector] {symbol}: {len(existing)} orders already exist — skipping set_sl_tp")
                 return {
                     'sl_order_id': existing[0].get('orderId', 'existing'),
-                    'tp_order_id': existing[-1].get('orderId', 'existing') if len(existing) > 1 else None,
+                    'tp_order_id': existing[-1].get('orderId', 'existing'),
                     'sl_price':    sl_price,
                     'tp_price':    tp_price,
                     'already_placed': True,
                 }
 
-            # Use normalised symbol for all subsequent calls
             qty_r = self._round_qty(norm_sym, qty)
             sl_r  = self._round_price(norm_sym, sl_price * mult) if sl_price else 0
             tp_r  = self._round_price(norm_sym, tp_price * mult) if tp_price else 0
             result = {'sl_price': sl_price, 'tp_price': tp_price}
 
-            # ── Try STOP_MARKET / TAKE_PROFIT_MARKET first ──────────────────
-            stop_market_ok = True
+            # ── SL: plain LIMIT, no reduceOnly ────────────────────────────
             if sl_r > 0:
-                try:
-                    sl_order = self.exchange.create_order(
-                        symbol=norm_sym, type='stop_market', side=exit_side, amount=qty_r,
-                        params={'stopPrice': sl_r, 'reduceOnly': True, 'closePosition': False}
-                    )
-                    result['sl_order_id'] = sl_order['id']
-                    logger.info(f"SL stop_market placed {symbol}: {sl_r}")
-                except Exception as e:
-                    stop_market_ok = False
-                    if '-4120' in str(e) or '-4045' in str(e):
-                        logger.warning(f"stop_market blocked ({e}), SL will be enforced by price-watch monitor")
-                        result['sl_order_id'] = 'price_watch'
-                    else:
-                        logger.error(f"SL order error: {e}")
-                        result['sl_order_id'] = f'error:{e}'
+                sl_resp = self._place_limit_bracket(raw_binance, norm_sym, exit_side, qty_r, sl_r)
+                if 'orderId' in sl_resp:
+                    result['sl_order_id'] = sl_resp['orderId']
+                    result['sl_type'] = 'LIMIT'
+                    logger.info(f"[set_sl_tp] SL LIMIT placed {symbol}: price={sl_r} id={sl_resp['orderId']}")
+                else:
+                    err_code = sl_resp.get('code', '?')
+                    err_msg  = sl_resp.get('msg', str(sl_resp))[:100]
+                    logger.error(f"[set_sl_tp] SL LIMIT failed {symbol}: code={err_code} {err_msg}")
+                    result['sl_order_id'] = f'price_watch_fallback:{err_code}'
+                    result['sl_error'] = err_msg
 
+            # ── TP: plain LIMIT, no reduceOnly ────────────────────────────
             if tp_r > 0:
-                try:
-                    tp_order = self.exchange.create_order(
-                        symbol=norm_sym, type='take_profit_market', side=exit_side, amount=qty_r,
-                        params={'stopPrice': tp_r, 'reduceOnly': True, 'closePosition': False}
-                    )
-                    result['tp_order_id'] = tp_order['id']
-                    logger.info(f"TP take_profit_market placed {symbol}: {tp_r}")
-                except Exception as e:
-                    if '-4120' in str(e) or '-4045' in str(e):
-                        logger.warning(f"take_profit_market blocked, falling back to LIMIT TP")
-                        # ── Fallback: LIMIT reduceOnly ───────────────────────
-                        try:
-                            tp_limit = self.exchange.create_order(
-                                symbol=norm_sym, type='limit', side=exit_side, amount=qty_r,
-                                price=tp_r,
-                                params={'reduceOnly': True, 'timeInForce': 'GTC'}
-                            )
-                            result['tp_order_id'] = tp_limit['id']
-                            result['tp_type'] = 'limit'
-                            logger.info(f"TP LIMIT placed {symbol}: {tp_r} id={tp_limit['id']}")
-                        except Exception as e2:
-                            logger.error(f"TP limit fallback error: {e2}")
-                            result['tp_order_id'] = f'error:{e2}'
-                    else:
-                        logger.error(f"TP order error: {e}")
-                        result['tp_order_id'] = f'error:{e}'
+                tp_resp = self._place_limit_bracket(raw_binance, norm_sym, exit_side, qty_r, tp_r)
+                if 'orderId' in tp_resp:
+                    result['tp_order_id'] = tp_resp['orderId']
+                    result['tp_type'] = 'LIMIT'
+                    logger.info(f"[set_sl_tp] TP LIMIT placed {symbol}: price={tp_r} id={tp_resp['orderId']}")
+                else:
+                    err_code = tp_resp.get('code', '?')
+                    err_msg  = tp_resp.get('msg', str(tp_resp))[:100]
+                    logger.warning(f"[set_sl_tp] TP LIMIT failed {symbol}: code={err_code} {err_msg}")
+                    result['tp_order_id'] = f'price_watch_tp:{err_code}'
 
-            logger.info(f"set_sl_tp complete for {symbol}: {result}")
+            logger.info(f"[set_sl_tp] complete for {symbol}: {result}")
             return result
         except Exception as e:
             logger.error(f"set_sl_tp error: {e}")

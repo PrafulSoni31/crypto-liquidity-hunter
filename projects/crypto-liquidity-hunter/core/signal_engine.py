@@ -61,7 +61,8 @@ class SignalEngine:
                  fixed_notional_usd:  float = 50.0,
                  margin_leverage:     float = 1.0,
                  commission_pct:      float = 0.001,
-                 require_confluence:  bool  = True):   # Phase 2: require OB or FVG
+                 require_confluence:  bool  = True,    # Phase 2: require OB or FVG
+                 min_sl_gap_pct:      float = 1.0):    # minimum SL-entry gap as % of entry
         self.risk_per_trade      = risk_per_trade
         self.retracement_levels  = retracement_levels or [0.5, 0.618, 0.786]
         self.stop_buffer         = stop_buffer_pct
@@ -72,6 +73,7 @@ class SignalEngine:
         self.margin_leverage     = margin_leverage
         self.commission_pct      = commission_pct
         self.require_confluence  = require_confluence
+        self.min_sl_gap_pct      = min_sl_gap_pct / 100.0  # store as decimal (1.0% → 0.01)
 
     def generate_signal(self,
                         sweep,
@@ -241,23 +243,48 @@ class SignalEngine:
             logger.debug(f"Risk too small: {risk_per_unit:.8f}")
             return None
 
+        # ── GATE 8: SL direction + gap validation ─────────────────────────
+        # CRITICAL: SL must be on the CORRECT side of entry for the direction
+        # LONG:  SL must be BELOW entry (price falls to SL → loss)
+        # SHORT: SL must be ABOVE entry (price rises to SL → loss)
+        sl_gap_pct = abs(stop_loss - entry_price) / entry_price * 100
+        if direction == 'long':
+            if stop_loss >= entry_price:
+                logger.debug(f"REJECT {pair} LONG: SL ({stop_loss:.6f}) must be below entry ({entry_price:.6f})")
+                return None
+        else:
+            if stop_loss <= entry_price:
+                logger.debug(f"REJECT {pair} SHORT: SL ({stop_loss:.6f}) must be above entry ({entry_price:.6f})")
+                return None
+
+        # Minimum gap between SL and entry (configurable, default 1%)
+        if sl_gap_pct < self.min_sl_gap_pct * 100:
+            logger.debug(f"REJECT {pair} {direction}: SL gap {sl_gap_pct:.2f}% < min {self.min_sl_gap_pct*100:.1f}%")
+            return None
+
         # ── Target: liquidity zone above (long) or below (short) ──────────
+        # Build candidate zones from liquidity mapper.
+        # NOTE: zone_type may be a merged string like "equal_low/round/swing_high"
+        # when the mapper clusters nearby zones. Use substring matching, not exact ==
+        def _zone_has_type(z, *types):
+            zt = z.zone_type
+            return any(t in zt for t in types)
+
         if direction == 'long':
             target_zones = [z for z in liquidity_zones
                             if z.price > entry_price
-                            and z.zone_type in ('equal_high', 'swing_high', 'round')]
+                            and _zone_has_type(z, 'equal_high', 'swing_high', 'round')]
             target_zones.sort(key=lambda z: z.price)
         else:
             target_zones = [z for z in liquidity_zones
                             if z.price < entry_price
-                            and z.zone_type in ('equal_low', 'swing_low', 'round')]
+                            and _zone_has_type(z, 'equal_low', 'swing_low', 'round')]
             target_zones.sort(key=lambda z: z.price, reverse=True)
 
         # Also consider FVGs as targets
         if fvgs:
             for fvg in fvgs:
                 if direction == 'long' and fvg.direction == 'bearish':
-                    # Bearish FVG above = first resistance = target
                     if fvg.bottom > entry_price:
                         target_zones = sorted(
                             target_zones + [type('Z', (), {'price': fvg.bottom,
@@ -272,19 +299,49 @@ class SignalEngine:
                             key=lambda z: z.price, reverse=True
                         )
 
-        target_price = None
-        target_type  = 'risk_multiple'
+        # ── Zone selection: find best zone that meets min R:R ─────────────
+        # PREVIOUS BUG: always took the nearest zone → R:R often exactly equals
+        # min_risk_reward (nearest zone may be too close) or a fallback 3×risk
+        # was used, producing a hardcoded 3.0 every time.
+        #
+        # NEW LOGIC:
+        #  1. Skip any zone that doesn't meet min_risk_reward threshold
+        #  2. Among qualifying zones, prefer by:
+        #     a. Highest strength (stronger liquidity = better target)
+        #     b. Nearest distance (more reachable = better probability)
+        #  3. If NO zone meets min R:R → use min_risk_reward as the multiplier
+        #     for the fallback (not hardcoded 3×) so it stays exactly at minimum,
+        #     not accidentally below or above.
+        target_price  = None
+        target_type   = 'risk_multiple'
         zone_strength = 0
 
-        if target_zones:
-            nearest       = target_zones[0]
-            target_price  = nearest.price
-            target_type   = getattr(nearest, 'zone_type', 'liquidity_zone')
-            zone_strength = getattr(nearest, 'strength', 1)
+        qualifying_zones = [
+            z for z in target_zones
+            if abs(z.price - entry_price) / risk_per_unit >= self.min_risk_reward
+        ]
+
+        if qualifying_zones:
+            # Sort by: strength DESC, then distance ASC (nearest strong zone first)
+            qualifying_zones.sort(
+                key=lambda z: (-getattr(z, 'strength', 1),
+                               abs(z.price - entry_price))
+            )
+            best           = qualifying_zones[0]
+            target_price   = best.price
+            target_type    = getattr(best, 'zone_type', 'liquidity_zone')
+            zone_strength  = getattr(best, 'strength', 1)
+            logger.debug(f"Target zone selected: {target_type} @ {target_price:.6f} "
+                         f"strength={zone_strength} "
+                         f"rr={abs(target_price-entry_price)/risk_per_unit:.2f}")
         else:
-            target_price = (entry_price + 3 * risk_per_unit
+            # No zone meets min R:R — use exact min_risk_reward multiplier as fallback
+            # This ensures the fallback always = min R:R, never accidentally below
+            target_price = (entry_price + self.min_risk_reward * risk_per_unit
                             if direction == 'long'
-                            else entry_price - 3 * risk_per_unit)
+                            else entry_price - self.min_risk_reward * risk_per_unit)
+            logger.debug(f"No qualifying target zone for {pair} {direction} — "
+                         f"using {self.min_risk_reward}× risk fallback: {target_price:.6f}")
 
         # Validate target direction
         if direction == 'long' and target_price <= entry_price:

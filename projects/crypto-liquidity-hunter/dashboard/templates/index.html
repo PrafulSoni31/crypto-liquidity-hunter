@@ -333,6 +333,50 @@
     .cfg-save-status { font-size: 11px; color: var(--muted); flex: 1; }
     .cfg-save-status.ok  { color: var(--green); }
     .cfg-save-status.err { color: var(--red); }
+
+    /* ── Dashboard Overview ── */
+    .overview-status-bar {
+      display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+      padding: 10px 16px; margin-bottom: 14px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+      font-size: 12px;
+    }
+    .overview-status-bar .status-item { display: flex; align-items: center; gap: 6px; }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+      background: var(--green); animation: pulse-dot 2s infinite;
+    }
+    .status-dot.warn { background: var(--yellow); }
+    .status-dot.err  { background: var(--red); animation: none; }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+    .overview-kpi { margin-bottom: 14px; }
+    .overview-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 0; }
+    .stat-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 6px 10px; background: var(--bg); border-radius: 5px;
+      font-size: 12px;
+    }
+    .stat-label { color: var(--muted); }
+    .stat-value { font-weight: 700; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.red   { color: var(--red); }
+    .stat-value.yellow { color: var(--yellow); }
+
+    /* Activity event badges */
+    .event-badge {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+    }
+    .event-badge.scan    { background: rgba(59,130,246,.15); color: var(--blue2); }
+    .event-badge.signal  { background: rgba(16,185,129,.15); color: var(--green); }
+    .event-badge.pending { background: rgba(139,92,246,.15); color: var(--purple); }
+    .event-badge.entry   { background: rgba(245,158,11,.15); color: var(--yellow); }
+    .event-badge.sl_hit  { background: rgba(239,68,68,.15); color: var(--red); }
+    .event-badge.tp_hit  { background: rgba(16,185,129,.15); color: var(--green); }
+    .event-badge.duplicate { background: rgba(107,114,128,.15); color: var(--muted); }
+    .event-badge.error   { background: rgba(239,68,68,.2); color: var(--red); }
   </style>
 </head>
 <body>
@@ -392,8 +436,10 @@
 </div>
 
 <div class="tabnav">
-  <div class="tabnav-item active" onclick="switchTab('scan',this)">📈 Live Scan</div>
+  <div class="tabnav-item active" onclick="switchTab('overview',this)">🏠 Overview</div>
+  <div class="tabnav-item"        onclick="switchTab('scan',this)">📈 Scanner</div>
   <div class="tabnav-item"        onclick="switchTab('signals',this)">⚡ Signals</div>
+  <div class="tabnav-item"        onclick="switchTab('activity',this)">📋 Activity</div>
   <div class="tabnav-item"        onclick="switchTab('perf',this)">📊 Performance</div>
   <div class="tabnav-item"        onclick="switchTab('trades',this)">💼 Trades</div>
   <div class="tabnav-item admin-tab" onclick="adminGate('trading',this,'loadTradingTab')">⚙️ Trading 🔒</div>
@@ -401,9 +447,174 @@
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════════
-     TAB 1 — LIVE SCAN
+     TAB 0 — DASHBOARD OVERVIEW (Landing Page)
 ═══════════════════════════════════════════════════════════════════════════ -->
-<div class="page active" id="tab-scan">
+<div class="page active" id="tab-overview">
+
+  <!-- System Status Bar -->
+  <div class="overview-status-bar">
+    <div class="status-item">
+      <span class="status-dot" id="ovBotStatus"></span>
+      <span id="ovBotStatusText">Checking…</span>
+    </div>
+    <div class="status-item">
+      <span style="color:var(--muted)">Last Scan:</span>
+      <span id="ovLastScan" style="font-weight:600">—</span>
+    </div>
+    <div class="status-item">
+      <span style="color:var(--muted)">Pairs:</span>
+      <span id="ovPairsCount" style="font-weight:600">—</span>
+    </div>
+    <div class="status-item">
+      <span style="color:var(--muted)">Scan Interval:</span>
+      <span id="ovScanInterval" style="font-weight:600">—</span>
+    </div>
+  </div>
+
+  <!-- KPI Strip -->
+  <div class="kpi-strip overview-kpi">
+    <div class="kpi blue">
+      <div class="kpi-label">Total P&L</div>
+      <div class="kpi-value" id="ovTotalPnl">—</div>
+      <div class="kpi-sub" id="ovTotalTrades">0 trades</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">Win Rate</div>
+      <div class="kpi-value" id="ovWinRate">—</div>
+      <div class="kpi-sub">closed trades</div>
+    </div>
+    <div class="kpi yellow">
+      <div class="kpi-label">Open Positions</div>
+      <div class="kpi-value" id="ovOpenPos">0</div>
+      <div class="kpi-sub" id="ovOpenPnl">no positions</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Pending Signals</div>
+      <div class="kpi-value" id="ovPendingSignals">0</div>
+      <div class="kpi-sub">waiting for entry</div>
+    </div>
+    <div class="kpi cyan">
+      <div class="kpi-label">Profit Factor</div>
+      <div class="kpi-value" id="ovProfitFactor">—</div>
+      <div class="kpi-sub">gross P / gross L</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-label">Max Drawdown</div>
+      <div class="kpi-value" id="ovMaxDD">—</div>
+      <div class="kpi-sub">peak to trough</div>
+    </div>
+  </div>
+
+  <!-- Main Grid: Open Positions + Recent Signals -->
+  <div class="g2">
+    <!-- Open Positions -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">📊 Open Positions</span>
+        <button class="btn btn-ghost" onclick="refreshAll()">🔄 Refresh</button>
+      </div>
+      <div class="tbl-wrap card-scroll" style="max-height:300px;">
+        <table>
+          <thead><tr>
+            <th>Symbol</th><th>Side</th><th>Entry</th><th>Mark</th>
+            <th>SL</th><th>TP</th><th>Unr. PnL</th>
+          </tr></thead>
+          <tbody id="ovPosTbody">
+            <tr><td colspan="7" style="padding:16px;text-align:center;color:var(--muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Recent Signals -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">⚡ Recent Signals</span>
+        <a href="#" onclick="switchTab('signals',document.querySelector('[onclick*=signals]'));return false" style="font-size:11px;color:var(--blue2)">View All →</a>
+      </div>
+      <div class="tbl-wrap card-scroll" style="max-height:300px;">
+        <table>
+          <thead><tr>
+            <th>Pair</th><th>Dir</th><th>TF</th><th>Entry</th>
+            <th>R:R</th><th>Conf</th>
+          </tr></thead>
+          <tbody id="ovSigsTbody">
+            <tr><td colspan="6" style="padding:16px;text-align:center;color:var(--muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Feed + Performance Mini -->
+  <div class="g2">
+    <!-- Activity Feed -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">📋 Activity Feed</span>
+        <a href="#" onclick="switchTab('activity',document.querySelector('[onclick*=activity]'));return false" style="font-size:11px;color:var(--blue2)">Full Log →</a>
+      </div>
+      <div class="tbl-wrap card-scroll" style="max-height:350px;">
+        <table>
+          <thead><tr>
+            <th>Time</th><th>Event</th><th>Details</th>
+          </tr></thead>
+          <tbody id="ovActivityTbody">
+            <tr><td colspan="3" style="padding:16px;text-align:center;color:var(--muted)">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-title">📈 Quick Stats</span>
+      </div>
+      <div class="card-body">
+        <div class="overview-stats-grid">
+          <div class="stat-row">
+            <span class="stat-label">Avg Win</span>
+            <span class="stat-value green" id="ovAvgWin">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Avg Loss</span>
+            <span class="stat-value red" id="ovAvgLoss">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Avg R:R</span>
+            <span class="stat-value" id="ovAvgRR">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Best Trade</span>
+            <span class="stat-value green" id="ovBestTrade">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Worst Trade</span>
+            <span class="stat-value red" id="ovWorstTrade">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Signals Today</span>
+            <span class="stat-value" id="ovSigsToday">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Scans Today</span>
+            <span class="stat-value" id="ovScansToday">—</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Duplicates Blocked</span>
+            <span class="stat-value yellow" id="ovDupesBlocked">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     TAB 1 — LIVE SCAN (renamed to Scanner)
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="tab-scan">
 
   <!-- KPI strip -->
   <div id="scanKpiStrip" class="kpi-strip">
@@ -624,6 +835,74 @@
           <th data-col="notional_usd">Notional</th>
         </tr></thead>
         <tbody id="sigTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     TAB — ACTIVITY FEED
+═══════════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="tab-activity">
+
+  <div class="kpi-strip">
+    <div class="kpi blue">
+      <div class="kpi-label">Total Events Today</div>
+      <div class="kpi-value" id="actTotal" style="color:var(--blue2)">—</div>
+      <div class="kpi-sub" id="actDate">—</div>
+    </div>
+    <div class="kpi green">
+      <div class="kpi-label">Signals Found</div>
+      <div class="kpi-value" id="actSignals" style="color:var(--green)">—</div>
+      <div class="kpi-sub">today</div>
+    </div>
+    <div class="kpi yellow">
+      <div class="kpi-label">Entries Placed</div>
+      <div class="kpi-value" id="actEntries" style="color:var(--yellow)">—</div>
+      <div class="kpi-sub">today</div>
+    </div>
+    <div class="kpi purple">
+      <div class="kpi-label">Scans Run</div>
+      <div class="kpi-value" id="actScans" style="color:var(--purple)">—</div>
+      <div class="kpi-sub">today</div>
+    </div>
+    <div class="kpi cyan">
+      <div class="kpi-label">Duplicates Blocked</div>
+      <div class="kpi-value" id="actDupes" style="color:var(--cyan)">—</div>
+      <div class="kpi-sub">today</div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">📋 Full Activity Log</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="actFilter" onchange="loadActivityFeed()" style="font-size:11px;padding:4px 8px;background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:5px">
+          <option value="">All Events</option>
+          <option value="SCAN_END">Scans</option>
+          <option value="SIGNAL_FOUND">Signals</option>
+          <option value="PENDING_CREATED">Pending</option>
+          <option value="ENTRY">Entries</option>
+          <option value="SL_HIT">SL Hits</option>
+          <option value="TP_HIT">TP Hits</option>
+          <option value="DUPLICATE_BLOCKED">Duplicates</option>
+          <option value="ERROR">Errors</option>
+        </select>
+        <button class="btn btn-ghost" onclick="loadActivityFeed()">🔄 Refresh</button>
+      </div>
+    </div>
+    <div class="tbl-wrap card-scroll" style="max-height:700px">
+      <table>
+        <thead><tr>
+          <th>Time (IST)</th>
+          <th>Event</th>
+          <th>Pair</th>
+          <th>Details</th>
+        </tr></thead>
+        <tbody id="actTbody">
+          <tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted)">Loading…</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -1015,9 +1294,11 @@ function switchTab(name, el) {
   document.querySelectorAll('.tabnav-item').forEach(t => t.classList.remove('active'));
   $('tab-' + name).classList.add('active');
   if (el) el.classList.add('active');
+  if (name === 'overview') loadOverview();
   if (name === 'perf')     loadPerf();
   if (name === 'trades')   loadTrades();
   if (name === 'signals')  { loadSigs(); loadPendingSignals(); }
+  if (name === 'activity') loadActivityFeed();
   if (name === 'settings') loadSettings();
   // Stop PnL refresh if leaving trading tab
   if (name !== 'trading')  stopLivePnlRefresh();
@@ -1619,7 +1900,9 @@ async function refreshAll() {
   const active = document.querySelector('.tabnav-item.active');
   if (!active) return;
   const label = active.textContent.trim();
+  if (label.includes('Overview'))   loadOverview();
   if (label.includes('Signal'))    { loadSigs(); loadPendingSignals(); }
+  if (label.includes('Activity'))   loadActivityFeed();
   if (label.includes('Perf'))      loadPerf();
   if (label.includes('Trade') || label.includes('Trades')) loadTrades();
   if (label.includes('Trading'))   { loadTradingTab(); }
@@ -1635,8 +1918,11 @@ document.addEventListener('DOMContentLoaded', () => {
   $('pairSel').addEventListener('change', () => { initChart(); loadChartData(); loadScanSignals(); });
   $('tfSel').addEventListener('change',   () => { initChart(); loadChartData(); loadScanSignals(); });
 
+  // Load overview first (it's the default landing page), then everything else
+  loadOverview();
+  loadActivityFeed();
   refreshAll();
-  loadPositionSettings();  // load saved position sizing on every page load
+  loadLeverageFromConfig();  // load leverage from live trading config (Settings page)
   setInterval(refreshAll, 60000);
 });
 </script>
@@ -1726,41 +2012,16 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
   </div>
 
-  <!-- ── Position Sizing ──────────────────────────────────────────────────── -->
-  <div class="card">
-    <div class="card-head">
-      <span class="card-title">📐 Position Sizing</span>
-      <div id="activeAccBadge" style="font-size:11px;padding:3px 10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--muted)">No active account</div>
-    </div>
-    <div class="card-body">
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px">
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Notional / Trade (USDT)</div>
-          <input id="psNotional" type="number" value="100" min="5" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;font-weight:700;box-sizing:border-box">
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Leverage (×)</div>
-          <input id="psLeverage" type="number" value="20" min="1" max="125" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;font-weight:700;box-sizing:border-box">
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Max Concurrent</div>
-          <input id="psMaxConc" type="number" value="3" min="1" max="10" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;font-weight:700;box-sizing:border-box">
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Risk / Trade (%)</div>
-          <input id="psRisk" type="number" value="1.0" min="0.1" max="5" step="0.1" style="width:100%;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px;font-size:13px;font-weight:700;box-sizing:border-box">
-        </div>
-      </div>
-      <button onclick="savePositionSettings()" style="background:var(--blue);color:#fff;border:none;border-radius:4px;padding:7px 16px;font-size:12px;cursor:pointer;font-weight:600">💾 Save Settings</button>
-      <span id="psSaveMsg" style="font-size:12px;color:var(--green);margin-left:10px"></span>
-    </div>
-  </div>
+  <!-- Position Sizing card removed — managed in Settings page (Live Trading / Paper Trading sections) -->
 
   <!-- ── Manual Trade ─────────────────────────────────────────────────────── -->
   <div class="card">
     <div class="card-head">
       <span class="card-title">✏️ Manual Trade</span>
-      <div id="mtAccBadge" style="font-size:11px;padding:3px 10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--muted)">Select account above</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="activeAccBadge" style="font-size:11px;padding:3px 10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--muted)">No active account</div>
+        <div id="mtAccBadge" style="font-size:11px;padding:3px 10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--muted)">Select account above</div>
+      </div>
     </div>
     <div class="card-body">
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">
@@ -2159,6 +2420,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <label class="cfg-label">Entry Tolerance % <small>How far from entry price to still execute</small></label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_entry_tolerance_pct" step="0.1" min="0.1" max="5.0">
         </div>
+        <div class="cfg-row">
+          <label class="cfg-label">Min SL Gap % <small>Minimum distance between entry and stop-loss (0.1–5.0)</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_min_sl_gap_pct" step="0.1" min="0.1" max="5.0">
+        </div>
       </div>
     </div>
 
@@ -2210,7 +2475,7 @@ let _pnlRefreshTimer   = null;
 function loadTradingTab() {
   loadAccounts();
   loadPositions();
-  loadPositionSettings();
+  loadLeverageFromConfig();
   loadAccountPerf();
   loadPendingSignals();
   // Auto-refresh PnL every 10 seconds
@@ -2297,17 +2562,21 @@ async function cancelPending(pid) {
   } catch(e) { alert('Error: ' + e); }
 }
 
-async function loadPositionSettings() {
+// ── Load leverage + notional from live trading config (Settings page is source of truth) ──
+let _cfgLeverage = 10;  // default, updated from config
+let _cfgNotional = 50;  // default, updated from config
+async function loadLeverageFromConfig() {
   try {
     const r = await fetch('/api/binance/get_settings');
     const d = await r.json();
     if (d.error) return;
-    document.getElementById('psNotional').value = d.notional_usd  ?? 100;
-    document.getElementById('psLeverage').value = d.leverage      ?? 20;
-    document.getElementById('psMaxConc').value  = d.max_concurrent ?? 3;
-    document.getElementById('psRisk').value     = d.risk_pct      ?? 1.0;
-    document.getElementById('mtNotional').value = d.notional_usd  ?? 100;
-  } catch(e) { console.warn('loadPositionSettings:', e); }
+    // Use live settings if available (live account active), else paper
+    _cfgLeverage = d.live_leverage   ?? d.leverage      ?? 10;
+    _cfgNotional = d.live_notional_usd ?? d.notional_usd ?? 50;
+    // Pre-fill manual trade notional from live config
+    const mtN = document.getElementById('mtNotional');
+    if (mtN) mtN.value = _cfgNotional;
+  } catch(e) { console.warn('loadLeverageFromConfig:', e); }
 }
 
 // ── Mode/Env sync ─────────────────────────────────────────────────────────────
@@ -2505,33 +2774,7 @@ async function refreshAccountStatus(id) {
   } catch(e) { alert('Error: ' + e); }
 }
 
-// ── Position Sizing ───────────────────────────────────────────────────────────
-async function savePositionSettings() {
-  const notional = parseFloat(document.getElementById('psNotional').value);
-  const body = {
-    notional_usd:   notional,
-    leverage:       parseFloat(document.getElementById('psLeverage').value),
-    max_concurrent: parseInt(document.getElementById('psMaxConc').value),
-    risk_pct:       parseFloat(document.getElementById('psRisk').value),
-  };
-  try {
-    const r = await fetch('/api/binance/save_settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-    const d = await r.json();
-    const msg = document.getElementById('psSaveMsg');
-    if (d.status === 'ok') {
-      msg.style.color = 'var(--green)';
-      msg.textContent = '✅ Saved — persisted across page refresh';
-      // Sync manual trade notional
-      document.getElementById('mtNotional').value = notional;
-    } else {
-      msg.style.color = 'var(--red)';
-      msg.textContent = `❌ ${d.error}`;
-    }
-    setTimeout(() => msg.textContent = '', 4000);
-  } catch(e) {
-    document.getElementById('psSaveMsg').textContent = '❌ ' + e;
-  }
-}
+// savePositionSettings removed — use Settings page (Live Trading / Paper Trading sections)
 
 // ── Lot Info ──────────────────────────────────────────────────────────────────
 let _lotTimer = null;
@@ -2542,8 +2785,8 @@ function fetchLotInfo() {
 async function _doFetchLot() {
   const symbol   = document.getElementById('mtSymbol').value.trim();
   const price    = parseFloat(document.getElementById('mtEntry').value) || 0;
-  const notional = parseFloat(document.getElementById('mtNotional').value) || 100;
-  const leverage = parseFloat(document.getElementById('psLeverage').value) || 20;
+  const notional = parseFloat(document.getElementById('mtNotional').value) || _cfgNotional || 50;
+  const leverage = _cfgLeverage || 10;  // from live trading config (Settings page)
   if (!symbol) return;
   const box = document.getElementById('lotInfoBox');
   box.style.display = 'block';
@@ -2567,8 +2810,8 @@ async function executeTrade(forceMode) {
   const entry    = parseFloat(document.getElementById('mtEntry').value) || 0;
   const sl       = parseFloat(document.getElementById('mtSL').value)    || 0;
   const tp       = parseFloat(document.getElementById('mtTP').value)    || 0;
-  const notional = parseFloat(document.getElementById('mtNotional').value) || 100;
-  const leverage = parseFloat(document.getElementById('psLeverage').value) || 20;
+  const notional = parseFloat(document.getElementById('mtNotional').value) || _cfgNotional || 50;
+  const leverage = _cfgLeverage || 10;  // from live trading config (Settings page)
   const msg      = document.getElementById('mtMsg');
 
   if (!symbol) { msg.textContent = '⚠️ Enter a symbol'; return; }
@@ -2917,6 +3160,7 @@ async function loadSettings() {
     sv('cfg_signal_execution_mode', d.signal_execution_mode);
     sv('cfg_auto_execute',          d.auto_execute);
     sv('cfg_entry_tolerance_pct',   d.entry_tolerance_pct);
+    sv('cfg_min_sl_gap_pct',        d.min_sl_gap_pct);
 
     // Liquidity Mapper
     sv('cfg_equal_touch_tolerance', d.equal_touch_tolerance);
@@ -2977,6 +3221,7 @@ async function saveSettings() {
       signal_execution_mode:  gv('cfg_signal_execution_mode'),
       auto_execute:           gb('cfg_auto_execute'),
       entry_tolerance_pct:    gf('cfg_entry_tolerance_pct'),
+      min_sl_gap_pct:         gf('cfg_min_sl_gap_pct'),
       // Liquidity Mapper
       equal_touch_tolerance:  gf('cfg_equal_touch_tolerance'),
       swing_lookback:         gi('cfg_swing_lookback'),
@@ -3162,6 +3407,236 @@ async function previewLiveLot() {
       details.innerHTML = 'Preview error: ' + e.message;
     }
   }, 600);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DASHBOARD OVERVIEW — loads all overview data
+// ════════════════════════════════════════════════════════════════════════════
+
+async function loadOverview() {
+  // Run all fetches in parallel for speed
+  const [perfRes, posRes, sigsRes, healthRes, configRes] = await Promise.allSettled([
+    fetch('/api/performance'),
+    fetch('/api/binance/positions'),
+    fetch('/api/signals'),
+    fetch('/health'),
+    fetch('/api/config'),
+  ]);
+
+  // ── System Status ──
+  try {
+    const health = healthRes.status === 'fulfilled' ? await healthRes.value.json() : {};
+    const dot = $('ovBotStatus');
+    const txt = $('ovBotStatusText');
+    if (health.status === 'ok') {
+      dot.className = 'status-dot';
+      txt.textContent = 'Online';
+      txt.style.color = 'var(--green)';
+    } else {
+      dot.className = 'status-dot err';
+      txt.textContent = 'Error';
+      txt.style.color = 'var(--red)';
+    }
+  } catch(e) {}
+
+  try {
+    const cfg = configRes.status === 'fulfilled' ? await configRes.value.json() : {};
+    const interval = cfg.scan_interval_minutes;
+    $('ovScanInterval').textContent = interval ? interval + ' min' : '—';
+    // Count pairs from health or config
+    if (cfg.timeframes) {
+      $('ovPairsCount').textContent = Array.isArray(cfg.timeframes) ? cfg.timeframes.join(', ') : cfg.timeframes;
+    }
+  } catch(e) {}
+
+  // ── Performance KPIs ──
+  try {
+    const perf = perfRes.status === 'fulfilled' ? await perfRes.value.json() : {};
+    const pnl = perf.total_pnl;
+    const wr = perf.win_rate;
+    const pf = perf.profit_factor;
+    const mdd = perf.max_drawdown;
+    const tt = perf.total_trades;
+
+    $('ovTotalPnl').textContent = pnl != null ? (pnl >= 0 ? '+' : '') + '$' + pnl.toFixed(2) : '—';
+    $('ovTotalPnl').style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+    $('ovTotalTrades').textContent = (tt || 0) + ' trades';
+    $('ovWinRate').textContent = wr != null ? wr + '%' : '—';
+    $('ovWinRate').style.color = wr >= 50 ? 'var(--green)' : 'var(--red)';
+    $('ovProfitFactor').textContent = pf ?? '—';
+    $('ovMaxDD').textContent = mdd != null ? '$' + mdd.toFixed(2) : '—';
+
+    // Quick stats
+    $('ovAvgWin').textContent = perf.avg_win != null ? '$' + perf.avg_win.toFixed(2) : '—';
+    $('ovAvgLoss').textContent = perf.avg_loss != null ? '$' + perf.avg_loss.toFixed(2) : '—';
+    $('ovAvgRR').textContent = perf.avg_risk_reward ?? '—';
+    $('ovBestTrade').textContent = perf.largest_win != null ? '$' + perf.largest_win.toFixed(2) : '—';
+    $('ovWorstTrade').textContent = perf.largest_loss != null ? '$' + perf.largest_loss.toFixed(2) : '—';
+  } catch(e) {
+    console.error('Overview perf error:', e);
+  }
+
+  // ── Open Positions ──
+  try {
+    const posData = posRes.status === 'fulfilled' ? await posRes.value.json() : [];
+    const positions = posData.positions || posData || [];
+    const tbody = $('ovPosTbody');
+    if (!positions.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="padding:16px;text-align:center;color:var(--muted)">No open positions</td></tr>';
+      $('ovOpenPos').textContent = '0';
+      $('ovOpenPnl').textContent = 'no positions';
+    } else {
+      $('ovOpenPos').textContent = positions.length;
+      let totalUnrlPnl = 0;
+      tbody.innerHTML = positions.map(p => {
+        const sym = p.symbol || '?';
+        const side = p.side || '?';
+        const sideColor = side === 'long' ? 'var(--green)' : 'var(--red)';
+        const ep = p.entry_price || 0;
+        const mark = p.mark_price || 0;
+        const sl = p.sl_price || 0;
+        const tp = p.tp_price || 0;
+        const upnl = p.unrealized_pnl || 0;
+        totalUnrlPnl += upnl;
+        const pnlColor = upnl >= 0 ? 'var(--green)' : 'var(--red)';
+        const pnlSign = upnl >= 0 ? '+' : '';
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 8px;font-weight:700;color:var(--blue2)">${sym}</td>
+          <td style="padding:5px 8px;color:${sideColor};font-weight:700">${side.toUpperCase()}</td>
+          <td style="padding:5px 8px;text-align:right;font-weight:600">$${ep.toFixed(4)}</td>
+          <td style="padding:5px 8px;text-align:right">$${mark.toFixed(4)}</td>
+          <td style="padding:5px 8px;text-align:right;color:var(--red)">${sl > 0 ? '$'+sl.toFixed(4) : '⚠️'}</td>
+          <td style="padding:5px 8px;text-align:right;color:var(--green)">${tp > 0 ? '$'+tp.toFixed(4) : '—'}</td>
+          <td style="padding:5px 8px;text-align:right;font-weight:700;color:${pnlColor}">${pnlSign}$${upnl.toFixed(2)}</td>
+        </tr>`;
+      }).join('');
+      $('ovOpenPnl').textContent = (totalUnrlPnl >= 0 ? '+' : '') + '$' + totalUnrlPnl.toFixed(2) + ' unrealized';
+      $('ovOpenPnl').style.color = totalUnrlPnl >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+  } catch(e) {
+    console.error('Overview positions error:', e);
+  }
+
+  // ── Recent Signals ──
+  try {
+    const sigData = sigsRes.status === 'fulfilled' ? await sigsRes.value.json() : [];
+    const signals = Array.isArray(sigData) ? sigData : (sigData.signals || []);
+    const tbody = $('ovSigsTbody');
+    if (!signals.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--muted)">No signals yet</td></tr>';
+    } else {
+      const recent = signals.slice(-12).reverse();
+      tbody.innerHTML = recent.map(s => {
+        const dir = s.direction || '?';
+        const dirColor = dir === 'long' ? 'var(--green)' : 'var(--red)';
+        const conf = s.confidence ? s.confidence.toFixed(0) + '%' : '—';
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 8px;font-weight:700">${s.pair || '?'}</td>
+          <td style="padding:5px 8px;color:${dirColor};font-weight:700">${dir.toUpperCase()}</td>
+          <td style="padding:5px 8px">${s.timeframe || '—'}</td>
+          <td style="padding:5px 8px;text-align:right">$${(s.entry_price || 0).toFixed(4)}</td>
+          <td style="padding:5px 8px;text-align:right;font-weight:600;color:var(--yellow)">${s.risk_reward ?? '—'}</td>
+          <td style="padding:5px 8px;text-align:right">${conf}</td>
+        </tr>`;
+      }).join('');
+    }
+    // Count pending
+    const pending = signals.filter(s => s.status === 'pending_entry' || s.status === 'pending');
+    $('ovPendingSignals').textContent = pending.length;
+  } catch(e) {
+    console.error('Overview signals error:', e);
+  }
+
+  // ── Activity Feed (mini) ──
+  try {
+    const actRes = await fetch('/api/activity?limit=15');
+    const entries = await actRes.json();
+    const tbody = $('ovActivityTbody');
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="3" style="padding:16px;text-align:center;color:var(--muted)">No activity yet — waiting for first scan</td></tr>';
+    } else {
+      tbody.innerHTML = entries.reverse().map(e => {
+        const ts = e.ts ? new Date(e.ts).toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata', hour12:false}) : (e.timestamp ? new Date(e.timestamp).toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata', hour12:false}) : '?');
+        const evt = e.event || e.type || '?';
+        const pair = e.pair || e.symbol || '—';
+        return `<tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:5px 8px;font-size:11px;color:var(--muted);white-space:nowrap">${ts}</td>
+          <td style="padding:5px 8px"><span class="event-badge ${evt.toLowerCase()}">${evt.replace(/_/g,' ')}</span></td>
+          <td style="padding:5px 8px;font-size:11px">${pair}</td>
+        </tr>`;
+      }).join('');
+    }
+    // Count today's stats
+    const scans = entries.filter(e => (e.event || e.type) === 'SCAN' || (e.event || e.type) === 'SCAN_END').length;
+    const sigs = entries.filter(e => (e.event || e.type) === 'SIGNAL' || (e.event || e.type) === 'SIGNAL_FOUND').length;
+    const entries2 = entries.filter(e => (e.event || e.type) === 'ENTRY').length;
+    const dupes = entries.filter(e => (e.event || e.type) === 'DUPLICATE' || (e.event || e.type) === 'DUPLICATE_BLOCKED').length;
+    $('ovScansToday').textContent = scans;
+    $('ovSigsToday').textContent = sigs;
+    $('ovDupesBlocked').textContent = dupes;
+  } catch(e) {
+    console.error('Overview activity error:', e);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ACTIVITY FEED — full page with filters
+// ════════════════════════════════════════════════════════════════════════════
+
+async function loadActivityFeed() {
+  const filter = document.getElementById('actFilter')?.value || '';
+  const tbody = $('actTbody');
+  tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted)">Loading…</td></tr>';
+
+  try {
+    const r = await fetch('/api/activity?limit=200');
+    let entries = await r.json();
+
+    if (!entries.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--muted)">No activity recorded yet — waiting for first scan</td></tr>';
+      $('actTotal').textContent = '0';
+      $('actSignals').textContent = '0';
+      $('actEntries').textContent = '0';
+      $('actScans').textContent = '0';
+      $('actDupes').textContent = '0';
+      return;
+    }
+
+    // Filter by event type if selected
+    if (filter) {
+      entries = entries.filter(e => (e.event || e.type) === filter);
+    }
+
+    // Reverse to show newest first
+    entries = entries.reverse();
+
+    // Count stats from ALL entries (not filtered)
+    const allRes = await fetch('/api/activity?limit=200');
+    const allEntries = await allRes.json();
+    $('actTotal').textContent = allEntries.length;
+    $('actSignals').textContent = allEntries.filter(e => (e.event||e.type) === 'SIGNAL' || (e.event||e.type) === 'SIGNAL_FOUND').length;
+    $('actEntries').textContent = allEntries.filter(e => (e.event||e.type) === 'ENTRY').length;
+    $('actScans').textContent = allEntries.filter(e => (e.event||e.type) === 'SCAN' || (e.event||e.type) === 'SCAN_END').length;
+    $('actDupes').textContent = allEntries.filter(e => (e.event||e.type) === 'DUPLICATE' || (e.event||e.type) === 'DUPLICATE_BLOCKED').length;
+    $('actDate').textContent = new Date().toLocaleDateString('en-IN');
+
+    // Render entries
+    tbody.innerHTML = entries.slice(0, 200).map(e => {
+      const ts = e.ts ? new Date(e.ts).toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata', hour12:false}) : (e.timestamp ? new Date(e.timestamp).toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata', hour12:false}) : '?');
+      const evt = e.event || e.type || '?';
+      const pair = e.pair || e.symbol || '—';
+      const details = e.message || e.reason || e.direction || (e.price ? '$'+e.price : '') || (e.rr ? 'R:R '+e.rr : '') || '—';
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 8px;font-size:11px;color:var(--muted);white-space:nowrap">${ts}</td>
+        <td style="padding:6px 8px"><span class="event-badge ${evt.toLowerCase()}">${evt.replace(/_/g,' ')}</span></td>
+        <td style="padding:6px 8px;font-weight:600;color:var(--blue2)">${pair}</td>
+        <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${details}</td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--red)">Error: ${e.message}</td></tr>`;
+  }
 }
 </script>
 

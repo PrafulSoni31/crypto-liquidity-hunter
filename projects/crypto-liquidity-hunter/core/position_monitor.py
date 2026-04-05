@@ -92,7 +92,9 @@ class PositionMonitor:
                 return
 
             # Find symbols with open orders but no position
-            order_syms = {o['symbol'] for o in all_orders if o.get('reduceOnly')}
+            # Note: our bracket orders do NOT use reduceOnly (blocked on this account type)
+            # so we check ALL open orders, not just reduceOnly ones
+            order_syms = {o['symbol'] for o in all_orders}
             orphan_syms = order_syms - active_syms
             if orphan_syms:
                 logger.info(f"[Monitor] Found orphaned orders for: {orphan_syms}")
@@ -126,17 +128,18 @@ class PositionMonitor:
             self._stop_event.wait(timeout=self.interval)
 
     def _sync(self):
-        if not self.connector or self.connector.mode == 'paper':
-            return
+        # Paper trades: skip Binance position reconciliation but STILL check SL/TP
+        is_paper = self.connector and self.connector.mode == 'paper'
 
         db_trades = self._get_open_trades()
         if not db_trades:
             return
 
         # Fetch live positions from Binance (uses v2/positionRisk — works on multi-assets accounts)
+        # SKIP for paper trades — no live positions exist on exchange
         live_positions = {}
         binance_fetch_ok = False
-        if self._api_ok:
+        if not is_paper and self._api_ok:
             try:
                 pos_list = self.connector.get_positions()
                 binance_fetch_ok = True   # fetch succeeded (even if empty = 0 positions)
@@ -148,12 +151,18 @@ class PositionMonitor:
                 logger.warning(f"[Monitor] get_positions failed: {e}")
                 binance_fetch_ok = False
 
-        # Fetch current prices from Binance public API (no auth needed)
+        # Fetch current klines to catch wicks for paper trades (and live backups)
         symbols_binance = []
         for t in db_trades:
             sym = t['pair'].split(':', 1)[1] if ':' in t['pair'] else t['pair']
             symbols_binance.append(sym.replace('/', ''))
+        kline_map = self._fetch_public_klines(symbols_binance)
+        # Fallback to ticker price if klines fail
         price_map = self._fetch_public_prices(symbols_binance)
+        
+        # Merge them so price_map has dicts
+        for s, k_data in kline_map.items():
+            price_map[s] = k_data
 
         for trade in db_trades:
             if trade['id'] in self._closed_trades:
@@ -278,36 +287,58 @@ class PositionMonitor:
         tp        = float(trade.get('tp') or 0)
         ep        = float(trade.get('entry_price') or 0)
 
-        mark = price_map.get(binance_sym, 0.0)
+        price_info = price_map.get(binance_sym, 0.0)
+        if isinstance(price_info, dict):
+            mark = price_info.get('mark', 0.0)
+            high = price_info.get('high', mark)
+            low  = price_info.get('low', mark)
+        else:
+            mark = price_info
+            high = mark
+            low  = mark
+
         if mark <= 0:
             return  # price not available
 
         hit_sl = False
         hit_tp = False
 
-        # STRICT exit logic — no tolerance buffer on real-time price check
-        # LONG:  price must fall TO or BELOW SL to trigger SL exit
-        #        price must rise TO or ABOVE TP to trigger TP exit
-        # SHORT: price must rise TO or ABOVE SL to trigger SL exit
-        #        price must fall TO or BELOW TP to trigger TP exit
+        # STRICT exit logic — checks 1m high/low to catch fast wicks for paper trades!
         if direction == 'long':
-            if sl > 0 and mark <= sl:
+            if sl > 0 and low <= sl:
                 hit_sl = True
-                logger.warning(f"[Monitor] SL hit: {sym} mark={mark:.6g} <= sl={sl:.6g} (LONG)")
-            if tp > 0 and mark >= tp:
+                mark = sl  # closed exactly at SL
+                logger.warning(f"[Monitor] SL hit (wick): {sym} low={low:.6g} <= sl={sl:.6g} (LONG)")
+            elif tp > 0 and high >= tp:
                 hit_tp = True
-                logger.info(f"[Monitor] TP hit: {sym} mark={mark:.6g} >= tp={tp:.6g} (LONG)")
+                mark = tp  # closed exactly at TP
+                logger.info(f"[Monitor] TP hit (wick): {sym} high={high:.6g} >= tp={tp:.6g} (LONG)")
         else:  # short
-            if sl > 0 and mark >= sl:
+            if sl > 0 and high >= sl:
                 hit_sl = True
-                logger.warning(f"[Monitor] SL hit: {sym} mark={mark:.6g} >= sl={sl:.6g} (SHORT)")
-            if tp > 0 and mark <= tp:
+                mark = sl  # closed exactly at SL
+                logger.warning(f"[Monitor] SL hit (wick): {sym} high={high:.6g} >= sl={sl:.6g} (SHORT)")
+            elif tp > 0 and low <= tp:
                 hit_tp = True
-                logger.info(f"[Monitor] TP hit: {sym} mark={mark:.6g} <= tp={tp:.6g} (SHORT)")
+                mark = tp  # closed exactly at TP
+                logger.info(f"[Monitor] TP hit (wick): {sym} low={low:.6g} <= tp={tp:.6g} (SHORT)")
 
         if hit_tp or hit_sl:
             status = 'target_hit' if hit_tp else 'stop_loss'
             exit_price = mark
+
+            # ── ACTUALLY CLOSE THE POSITION ON BINANCE ────────────────────
+            # Previously this only updated the DB — position stayed open on exchange!
+            # Now we place a market close order to ensure the position is closed.
+            if self._api_ok and self.connector and self.connector.mode != 'paper':
+                closed = self._place_market_close(binance_sym, direction, trade, exit_price)
+                if closed:
+                    logger.info(f"[Monitor] Market close order placed for {sym} at {exit_price:.6g}")
+                else:
+                    logger.warning(f"[Monitor] Market close FAILED for {sym} — updating DB anyway")
+                    # Cancel SL/TP orders and try close via bracket cancellation
+                    self._cancel_orphaned_orders(binance_sym)
+
             self._close_trade_now(trade, exit_price, status, sym)
 
     def _verify_entry_filled(self, sym: str, entry_price: float) -> bool:
@@ -511,7 +542,7 @@ class PositionMonitor:
             )
             orders = resp.json()
             if isinstance(orders, list):
-                return len([o for o in orders if o.get('reduceOnly')])
+                return len(orders)  # count ALL orders (our brackets are not reduceOnly)
         except Exception:
             pass
         return -1  # -1 = couldn't check
@@ -581,9 +612,6 @@ class PositionMonitor:
         for t in all_open:
             if t['id'] in self._closed_trades:
                 continue
-            # Include live trades (not paper) for this account
-            if t.get('mode', 'paper') == 'paper':
-                continue
             if self.account_id is not None and t.get('account_id') != self.account_id:
                 continue
             result.append(t)
@@ -603,7 +631,7 @@ class PositionMonitor:
         """
         try:
             with urllib.request.urlopen(
-                'https://api.binance.com/api/v3/ticker/price', timeout=5
+                'https://fapi.binance.com/fapi/v1/ticker/price', timeout=5
             ) as resp:
                 data = json.loads(resp.read())
             price_map = {item['symbol']: float(item['price']) for item in data}
@@ -611,6 +639,29 @@ class PositionMonitor:
         except Exception as e:
             logger.warning(f"[Monitor] Public price fetch error: {e}")
             return {}
+
+    def _fetch_public_klines(self, binance_symbols: List[str]) -> Dict[str, Dict]:
+        """
+        Fetch current 1m kline for better paper trade wick detection.
+        Returns {BINANCESYM: {'mark': close, 'high': high, 'low': low}}
+        """
+        result = {}
+        for sym in binance_symbols:
+            try:
+                with urllib.request.urlopen(
+                    f'https://fapi.binance.com/fapi/v1/klines?symbol={sym}&interval=1m&limit=1', timeout=2
+                ) as resp:
+                    data = json.loads(resp.read())
+                    if data and len(data) > 0:
+                        # [OpenTime, Open, High, Low, Close, ...]
+                        result[sym] = {
+                            'mark': float(data[0][4]),
+                            'high': float(data[0][2]),
+                            'low': float(data[0][3])
+                        }
+            except Exception:
+                pass
+        return result
 
     def _get_exit_details(self, symbol: str, trade: Dict) -> Tuple[float, str]:
         """Try to find exit price from order history. Fallback to last ticker price."""

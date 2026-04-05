@@ -91,7 +91,8 @@ def cmd_scan(args):
             position_sizing=paper_cfg.get('position_sizing', 'risk_percent'),
             fixed_notional_usd=paper_cfg.get('fixed_notional_usd', 50.0),
             margin_leverage=paper_cfg.get('margin_leverage', 1.0),
-            commission_pct=paper_cfg.get('commission_per_trade', 0.001)
+            commission_pct=paper_cfg.get('commission_per_trade', 0.001),
+            min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 1.0)
         )
         latest_price = df.iloc[-1]['close']
         tf_max_age = {'15m': 4, '1h': 12, '4h': 24, '1d': 72}
@@ -213,7 +214,8 @@ def cmd_backtest(args):
         risk_per_trade=config['signal_engine']['risk_per_trade'],
         retracement_levels=config['signal_engine']['retracement_levels'],
         stop_buffer_pct=config['signal_engine']['stop_buffer_pct'],
-        min_risk_reward=config['signal_engine']['min_risk_reward']
+        min_risk_reward=config['signal_engine']['min_risk_reward'],
+        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 1.0)
     )
 
     backtester = Backtester(
@@ -262,10 +264,17 @@ def cmd_scan_all(args):
     if vol_cfg.get('enabled', False):
         min_vol = vol_cfg.get('min_24h_volume_usd', 0)
         if min_vol > 0:
+            # Determine exchange from first pair (assume all pairs use same exchange)
+            first_pair = pairs[0] if pairs else 'binance:BTC/USDT'
+            exchange_str = first_pair.split(':', 1)[0] if ':' in first_pair else 'binance'
+            # Use futures exchange for volume check
+            if exchange_str == 'binance':
+                exchange_str = 'binanceusdm'
+            
             # Batch-fetch all tickers in ONE API call (much faster than per-pair loop)
-            fetcher = MarketDataFetcher('binance')
+            fetcher = MarketDataFetcher(exchange_str)
             active_pairs = []
-            logger.info(f"Volume filter: fetching all tickers in one call...")
+            logger.info(f"Volume filter: fetching all tickers in one call from {exchange_str}...")
             try:
                 all_tickers = fetcher.exchange.fetch_tickers()  # single batch call
                 vol_map = {}
@@ -275,8 +284,16 @@ def cmd_scan_all(args):
 
                 before = len(pairs)
                 for pair in pairs:
-                    _, symbol = pair.split(':', 1) if ':' in pair else ('binance', pair)
-                    vol = vol_map.get(symbol, 0)
+                    exchange_str, symbol = pair.split(':', 1) if ':' in pair else ('binance', pair)
+                    # For futures, symbol format is like BTC/USDT:USDT
+                    # Try multiple formats
+                    vol = vol_map.get(symbol, 0)  # Try as-is (spot format)
+                    if vol == 0:
+                        # Try futures format: add :USDT suffix
+                        vol = vol_map.get(symbol + ':USDT', 0)
+                    if vol == 0:
+                        # Try with USDC suffix for USDC pairs
+                        vol = vol_map.get(symbol + ':USDC', 0)
                     if vol >= min_vol:
                         active_pairs.append(pair)
                     else:
@@ -312,7 +329,34 @@ def cmd_scan_all(args):
     exec_mode       = exec_cfg.get('mode', 'pending')          # 'pending' or 'immediate'
     entry_tol       = float(exec_cfg.get('entry_tolerance_pct', 0.3)) / 100
     auto_exec       = exec_cfg.get('auto_execute', True)
-    min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 1.0)) / 100  # e.g. 1.0% → 0.01
+    min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 0.3)) / 100
+
+    # ── Per-symbol entry cooldown (persisted to file) ────────────────────────
+    # Prevents re-entering the same pair within 10 minutes of a previous entry.
+    # Persisted to JSON file so it survives cron restarts (each scan is a fresh process).
+    import time as _time_mod
+    import json as _json_mod
+    _COOLDOWN_FILE = os.path.join(PROJECT_ROOT, 'data', 'entry_cooldown.json')
+    _ENTRY_COOLDOWN_SECS = 600   # 10 minutes
+
+    def _load_cooldown() -> dict:
+        try:
+            with open(_COOLDOWN_FILE, 'r') as f:
+                cd = _json_mod.load(f)
+            # Prune expired entries
+            now = _time_mod.time()
+            return {k: v for k, v in cd.items() if now - v < _ENTRY_COOLDOWN_SECS}
+        except Exception:
+            return {}
+
+    def _save_cooldown(cd: dict):
+        try:
+            with open(_COOLDOWN_FILE, 'w') as f:
+                _json_mod.dump(cd, f)
+        except Exception:
+            pass
+
+    _entry_cooldown = _load_cooldown()
 
     if active_account_id:
         try:
@@ -332,17 +376,32 @@ def cmd_scan_all(args):
 
     # Build shared components (reuse per pair to save memory)
     sig_cfg   = config['signal_engine']
-    paper_cfg = config.get('paper_trading', {})
+
+    # ── Use LIVE trading config when account is live, paper otherwise ─────────
+    # FIX: was always using paper_trading values even when account mode = 'live'
+    _acct_mode = 'paper'
+    if active_account_id:
+        try:
+            _acct = store.get_account(active_account_id)
+            _acct_mode = _acct.get('mode', 'paper') if _acct else 'paper'
+        except Exception:
+            pass
+    trade_cfg = config.get('live_trading' if _acct_mode == 'live' else 'paper_trading', {})
+    logger.info(f"[scan-all] Using {'LIVE' if _acct_mode == 'live' else 'PAPER'} trading config "
+                f"for signal sizing: notional=${trade_cfg.get('fixed_notional_usd')} "
+                f"lev={trade_cfg.get('margin_leverage')}x")
+
     engine = SignalEngine(
         risk_per_trade=sig_cfg['risk_per_trade'],
         retracement_levels=sig_cfg['retracement_levels'],
         stop_buffer_pct=sig_cfg['stop_buffer_pct'],
         min_risk_reward=sig_cfg['min_risk_reward'],
-        position_sizing=paper_cfg.get('position_sizing', 'risk_percent'),
-        fixed_notional_usd=paper_cfg.get('fixed_notional_usd', 50.0),
-        margin_leverage=paper_cfg.get('margin_leverage', 1.0),
-        commission_pct=paper_cfg.get('commission_per_trade', 0.001),
-        require_confluence=config.get('signal_engine', {}).get('require_confluence', True)
+        position_sizing=trade_cfg.get('position_sizing', 'fixed_notional'),
+        fixed_notional_usd=trade_cfg.get('fixed_notional_usd', 20.0),
+        margin_leverage=trade_cfg.get('margin_leverage', 10.0),
+        commission_pct=trade_cfg.get('commission_per_trade', 0.001),
+        require_confluence=config.get('signal_engine', {}).get('require_confluence', True),
+        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 0.3)
     )
     mapper = LiquidityMapper(
         equal_touch_tolerance=config['liquidity_mapper']['equal_touch_tolerance'],
@@ -356,7 +415,8 @@ def cmd_scan_all(args):
         confirmation_bars=config['sweep_detector'].get('confirmation_bars', 5),
         wick_ratio=config['sweep_detector'].get('wick_ratio', 0.5),
         min_sweep_pct=config['sweep_detector']['min_sweep_pct'],
-        min_body_ratio=config['sweep_detector'].get('min_body_ratio', 0.4)
+        min_body_ratio=config['sweep_detector'].get('min_body_ratio', 0.4),
+        lookback_bars=config['sweep_detector'].get('lookback_bars', 24)
     )
 
     # Timeframe-aware sweep age limits
@@ -364,6 +424,9 @@ def cmd_scan_all(args):
 
     for pair in pairs:
         exchange_str, symbol = pair.split(':', 1) if ':' in pair else ('binance', pair)
+        # For futures, use binanceusdm exchange
+        if exchange_str == 'binance':
+            exchange_str = 'binanceusdm'
         for tf in timeframes:
             try:
                 fetcher = MarketDataFetcher(exchange_str)
@@ -383,7 +446,8 @@ def cmd_scan_all(args):
                     try:
                         df_htf   = fetcher.fetch_ohlcv(symbol, timeframe='4h', limit=100)
                         htf_bias = detector.get_htf_bias(df_htf)
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(f"HTF bias fetch failed for {symbol}: {e}")
                         htf_bias = 'neutral'
 
                 latest_price = df.iloc[-1]['close']
@@ -403,6 +467,19 @@ def cmd_scan_all(args):
                         fvgs=fvgs
                     )
                     if signal:
+                        # ── CONFIDENCE THRESHOLD CHECK ──────────────────────────────────────
+                        # Read min_confidence from config (alerts.telegram.min_confidence)
+                        _min_conf = float(
+                            config.get('alerts', {}).get('telegram', {}).get('min_confidence', 0.7)
+                        )
+                        if signal.confidence < _min_conf:
+                            logger.info(f"Signal {pair} {signal.direction} REJECTED: "
+                                        f"confidence {signal.confidence:.0%} < threshold {_min_conf:.0%}")
+                            _log('DUPLICATE_BLOCKED', pair=pair, tf=tf,
+                                 direction=signal.direction,
+                                 reason=f'confidence_{signal.confidence:.2f}_below_threshold_{_min_conf:.2f}')
+                            continue
+
                         # Save signal to DB
                         signal_id = store.save_signal(pair, tf, signal)
                         _log('SIGNAL_FOUND', pair=pair, tf=tf,
@@ -526,6 +603,20 @@ def cmd_scan_all(args):
                                      direction=ps['direction'], reason='open_trade_exists',
                                      existing_trade_id=existing_open[0]['id'])
                                 continue
+
+                            # ── COOLDOWN CHECK: block re-entry within 10min of last entry ──
+                            # Prevents rapid re-entry loop when trades close before 90s SL delay.
+                            _cooldown_key = f"{pair}:{ps['direction']}"
+                            _last_entry   = _entry_cooldown.get(_cooldown_key, 0)
+                            _now_ts       = _time_mod.time()
+                            if _now_ts - _last_entry < _ENTRY_COOLDOWN_SECS:
+                                _remaining = int(_ENTRY_COOLDOWN_SECS - (_now_ts - _last_entry))
+                                logger.info(f"Pending #{ps['id']} COOLDOWN: {pair} {ps['direction']} "
+                                            f"— {_remaining}s remaining before next entry allowed")
+                                _log('DUPLICATE_BLOCKED', pair=pair, pending_id=ps['id'],
+                                     direction=ps['direction'], reason=f'cooldown_{_remaining}s_remaining')
+                                continue
+
                             try:
                                 result = trade_executor.execute_signal(
                                     {'direction': ps['direction'], 'entry_price': 0,
@@ -536,6 +627,9 @@ def cmd_scan_all(args):
                                 )
                                 if 'error' not in result:
                                     store.trigger_pending_signal(ps['id'], result.get('trade_id'))
+                                    # Record cooldown timestamp — blocks re-entry for 10min (persisted)
+                                    _entry_cooldown[f"{pair}:{ps['direction']}"] = _time_mod.time()
+                                    _save_cooldown(_entry_cooldown)
                                     logger.info(f"Triggered pending #{ps['id']}: {pair} {ps['direction']} "
                                                 f"@ {cur:.6g} (entry was {ep:.6g}) "
                                                 f"trade_id={result.get('trade_id')} mode={result.get('mode')}")
