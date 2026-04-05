@@ -232,7 +232,7 @@ def scan_pair(pair):
         fixed_notional_usd=trade_cfg.get('fixed_notional_usd', 20.0),
         margin_leverage=trade_cfg.get('margin_leverage', 10.0),
         commission_pct=trade_cfg.get('commission_per_trade', 0.001),
-        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 1.0)
+        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 0.5)
     )
 
     # Fetch data

@@ -92,7 +92,7 @@ def cmd_scan(args):
             fixed_notional_usd=paper_cfg.get('fixed_notional_usd', 50.0),
             margin_leverage=paper_cfg.get('margin_leverage', 1.0),
             commission_pct=paper_cfg.get('commission_per_trade', 0.001),
-            min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 1.0)
+            min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 0.5)
         )
         latest_price = df.iloc[-1]['close']
         tf_max_age = {'15m': 4, '1h': 12, '4h': 24, '1d': 72}
@@ -215,7 +215,7 @@ def cmd_backtest(args):
         retracement_levels=config['signal_engine']['retracement_levels'],
         stop_buffer_pct=config['signal_engine']['stop_buffer_pct'],
         min_risk_reward=config['signal_engine']['min_risk_reward'],
-        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 1.0)
+        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 0.5)
     )
 
     backtester = Backtester(
@@ -329,7 +329,7 @@ def cmd_scan_all(args):
     exec_mode       = exec_cfg.get('mode', 'pending')          # 'pending' or 'immediate'
     entry_tol       = float(exec_cfg.get('entry_tolerance_pct', 0.3)) / 100
     auto_exec       = exec_cfg.get('auto_execute', True)
-    min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 0.3)) / 100
+    min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 0.5)) / 100
 
     # ── Per-symbol entry cooldown (persisted to file) ────────────────────────
     # Prevents re-entering the same pair within 10 minutes of a previous entry.
@@ -401,7 +401,7 @@ def cmd_scan_all(args):
         margin_leverage=trade_cfg.get('margin_leverage', 10.0),
         commission_pct=trade_cfg.get('commission_per_trade', 0.001),
         require_confluence=config.get('signal_engine', {}).get('require_confluence', True),
-        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 0.3)
+        min_sl_gap_pct=config.get('signal_execution', {}).get('min_sl_gap_pct', 0.5)
     )
     mapper = LiquidityMapper(
         equal_touch_tolerance=config['liquidity_mapper']['equal_touch_tolerance'],
