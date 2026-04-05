@@ -341,22 +341,25 @@ class PositionMonitor:
         hit_sl = False
         hit_tp = False
 
+        # Tolerance for decimal precision mismatches (Binance tick vs stored price)
+        _TOL = 0.002  # 0.2% tolerance
+
         # STRICT exit logic — checks 1m high/low to catch fast wicks for paper trades!
         if direction == 'long':
-            if sl > 0 and low <= sl:
+            if sl > 0 and low <= sl * (1 + _TOL):
                 hit_sl = True
                 mark = sl  # closed exactly at SL
                 logger.warning(f"[Monitor] SL hit (wick): {sym} low={low:.6g} <= sl={sl:.6g} (LONG)")
-            elif tp > 0 and high >= tp:
+            elif tp > 0 and high >= tp * (1 - _TOL):
                 hit_tp = True
                 mark = tp  # closed exactly at TP
                 logger.info(f"[Monitor] TP hit (wick): {sym} high={high:.6g} >= tp={tp:.6g} (LONG)")
         else:  # short
-            if sl > 0 and high >= sl:
+            if sl > 0 and high >= sl * (1 - _TOL):
                 hit_sl = True
                 mark = sl  # closed exactly at SL
                 logger.warning(f"[Monitor] SL hit (wick): {sym} high={high:.6g} >= sl={sl:.6g} (SHORT)")
-            elif tp > 0 and low <= tp:
+            elif tp > 0 and low <= tp * (1 + _TOL):
                 hit_tp = True
                 mark = tp  # closed exactly at TP
                 logger.info(f"[Monitor] TP hit (wick): {sym} low={low:.6g} <= tp={tp:.6g} (SHORT)")
@@ -366,18 +369,35 @@ class PositionMonitor:
             exit_price = mark
 
             # ── ACTUALLY CLOSE THE POSITION ON BINANCE ────────────────────
-            # Previously this only updated the DB — position stayed open on exchange!
-            # Now we place a market close order to ensure the position is closed.
             if self._api_ok and self.connector and self.connector.mode != 'paper':
                 closed = self._place_market_close(binance_sym, direction, trade, exit_price)
                 if closed:
-                    logger.info(f"[Monitor] Market close order placed for {sym} at {exit_price:.6g}")
-                else:
-                    logger.warning(f"[Monitor] Market close FAILED for {sym} — updating DB anyway")
-                    # Cancel SL/TP orders and try close via bracket cancellation
-                    self._cancel_orphaned_orders(binance_sym)
+                    # Post-close verification: confirm position is actually gone
+                    time.sleep(1)
+                    pos_amt = self._get_position_amt(binance_sym)
+                    if abs(pos_amt) > 0.001:
+                        logger.warning(
+                            f"[Monitor] Close order placed but position still exists "
+                            f"({sym} {pos_amt}) — retrying"
+                        )
+                        # Position may have been flipped by LIMIT SL overfill
+                        actual_dir = 'long' if pos_amt > 0 else 'short'
+                        self._place_market_close(binance_sym, actual_dir, trade, exit_price)
 
-            self._close_trade_now(trade, exit_price, status, sym)
+                    logger.info(f"[Monitor] Market close confirmed for {sym} at {exit_price:.6g}")
+                    self._close_trade_now(trade, exit_price, status, sym)
+                    self._cancel_orphaned_orders(binance_sym)
+                else:
+                    # Close FAILED — do NOT update DB, let monitor retry next cycle
+                    logger.error(
+                        f"[Monitor] Market close FAILED for {sym} — "
+                        f"will retry next monitor cycle"
+                    )
+                    self._cancel_orphaned_orders(binance_sym)
+                    return  # DON'T update DB — trade stays "open"
+            else:
+                # Paper mode or API restricted — just update DB
+                self._close_trade_now(trade, exit_price, status, sym)
 
     def _verify_entry_filled(self, sym: str, entry_price: float) -> bool:
         """
@@ -550,52 +570,95 @@ class PositionMonitor:
         except Exception as e:
             logger.warning(f"[Monitor] _cancel_orphaned_orders error for {raw_sym}: {e}")
 
-    def _place_market_close(self, sym: str, direction: str, trade: Dict,
-                            exit_price: float) -> bool:
-        """Place a reduceOnly market order to close FULL position. Returns success."""
+    def _get_position_amt(self, raw_sym: str) -> float:
+        """Get current position amount from Binance. Returns signed qty (positive=long, negative=short)."""
         try:
-            close_side = 'sell' if direction == 'long' else 'buy'
-
-            # ── Get ACTUAL position qty from Binance (not estimated from notional) ──
-            # Using notional/price gives wrong qty due to rounding/dust.
-            # Binance positionRisk returns the exact amt we need to close.
             import time as _t, hmac as _h, hashlib as _ha, requests as _rq
-            raw_sym = sym.replace('/', '')
             ts = int(_t.time() * 1000)
             par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=5000'
             sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
             r = _rq.get(f'https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}',
                         headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
-            actual_qty = 0
             for p in r.json():
                 amt = float(p.get('positionAmt', 0))
                 if amt != 0:
-                    actual_qty = abs(amt)
-                    break
-
-            if actual_qty <= 0:
-                # No position found — already closed
-                logger.info(f"[Monitor] No position on Binance for {sym} — already closed")
-                return True
-
-            # Place market close for FULL actual qty
-            ccxt_sym = self._normalise_symbol(sym)
-            qty_r = self.connector._round_qty(ccxt_sym, actual_qty)
-            order = self.connector.exchange.create_order(
-                ccxt_sym, 'market', close_side, qty_r,
-                params={'reduceOnly': True}
-            )
-            actual_exit = float(order.get('average') or order.get('price') or exit_price)
-            logger.info(f"[Monitor] Market close placed: {close_side} {qty_r} {ccxt_sym} @ {actual_exit}")
-            return True
+                    return amt
         except Exception as e:
-            err = str(e)
-            if '-2015' in err or 'Invalid API-key' in err or 'IP' in err:
-                logger.warning(f"[Monitor] API IP-restricted, cannot place close order: {e}")
-                self._api_ok = False
-            else:
-                logger.error(f"[Monitor] Market close error for {sym}: {e}")
-            return False
+            logger.debug(f"[Monitor] _get_position_amt error for {raw_sym}: {e}")
+        return 0.0
+
+    def _place_market_close(self, sym: str, direction: str, trade: Dict,
+                            exit_price: float) -> bool:
+        """Place a reduceOnly market order to close FULL position. Returns success."""
+        import time as _t, hmac as _h, hashlib as _ha, requests as _rq
+        raw_sym = sym.replace('/', '')
+
+        for attempt in range(3):
+            try:
+                close_side = 'sell' if direction == 'long' else 'buy'
+
+                # ── Get ACTUAL position qty from Binance ──
+                ts = int(_t.time() * 1000)
+                par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=5000'
+                sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
+                r = _rq.get(f'https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}',
+                            headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
+                actual_qty = 0
+                actual_direction = direction
+                for p in r.json():
+                    amt = float(p.get('positionAmt', 0))
+                    if amt != 0:
+                        actual_qty = abs(amt)
+                        actual_direction = 'long' if amt > 0 else 'short'
+                        break
+
+                if actual_qty <= 0:
+                    logger.info(f"[Monitor] No position on Binance for {sym} — already closed")
+                    return True
+
+                # Detect direction flip (LIMIT SL overfilled → position flipped)
+                if actual_direction != direction:
+                    logger.warning(
+                        f"[Monitor] Direction flip detected: {sym} expected {direction}, "
+                        f"got {actual_direction} (amt={actual_qty}) — closing flipped position"
+                    )
+                    close_side = 'sell' if actual_direction == 'long' else 'buy'
+
+                # ── Place market close for FULL actual qty ──
+                ccxt_sym = self._normalise_symbol(sym)
+                qty_r = self.connector._round_qty(ccxt_sym, actual_qty)
+                order = self.connector.exchange.create_order(
+                    ccxt_sym, 'market', close_side, qty_r,
+                    params={'reduceOnly': True}
+                )
+                actual_exit = float(order.get('average') or order.get('price') or exit_price)
+                filled = float(order.get('filled', 0) or 0)
+                avg = float(order.get('average', 0) or 0)
+
+                if filled > 0 or avg > 0:
+                    logger.info(
+                        f"[Monitor] Market close filled (attempt {attempt+1}): "
+                        f"{close_side} {filled or qty_r} {ccxt_sym} @ {actual_exit}"
+                    )
+                    return True
+                else:
+                    logger.warning(f"[Monitor] Market close placed but 0 filled (attempt {attempt+1})")
+
+            except Exception as e:
+                err = str(e)
+                if '-2015' in err or 'Invalid API-key' in err or 'IP' in err:
+                    logger.warning(f"[Monitor] API IP-restricted, cannot place close order: {e}")
+                    self._api_ok = False
+                    return False  # don't retry auth errors
+                if '-2022' in err or 'reduce' in err.lower():
+                    logger.error(f"[Monitor] reduceOnly rejected for {sym}: {e}")
+                    return False  # can't retry reduceOnly rejection
+                logger.warning(f"[Monitor] Market close error for {sym} (attempt {attempt+1}/3): {e}")
+                if attempt < 2:
+                    _t.sleep(1)
+
+        logger.error(f"[Monitor] Market close FAILED after 3 attempts for {sym}")
+        return False
 
     # ── Bracket order placement ────────────────────────────────────────────────
 

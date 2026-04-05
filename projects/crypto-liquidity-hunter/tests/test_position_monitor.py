@@ -88,6 +88,35 @@ class TestMarketCloseQty:
         assert qty_used == 417.7, f"Expected actual qty 417.7, got {qty_used}"
 
 
+class TestCloseFailureBehavior:
+    """When market close FAILS, DB must NOT be updated — trade stays open for retry."""
+
+    def test_db_not_updated_when_close_fails(self):
+        """CRITICAL: if _place_market_close returns False, _close_trade_now must NOT be called."""
+        conn = MagicMock()
+        conn.mode = 'live'
+        conn.api_key = 'k'
+        conn.api_secret = 's'
+
+        store = MagicMock()
+        monitor = PositionMonitor(conn, store, account_id=2)
+        trade = _make_trade(pair='binance:THE/USDT', direction='short',
+                            entry_price=0.12, sl=0.123, tp=0.115)
+
+        # Mock _place_market_close to FAIL and _close_trade_now to track calls
+        monitor._place_market_close = MagicMock(return_value=False)
+        monitor._close_trade_now = MagicMock()
+        monitor._cancel_orphaned_orders = MagicMock()
+
+        # Trigger SL detection (price above SL for short)
+        price_map = {'THEUSDT': {'mark': 0.124, 'high': 0.125, 'low': 0.122}}
+        monitor._check_trade(trade, price_map)
+
+        # _close_trade_now must NOT be called — trade stays open for retry
+        monitor._close_trade_now.assert_not_called()
+        monitor._cancel_orphaned_orders.assert_called_once()
+
+
 # ─── SL/TP price-check logic ────────────────────────────────────────────────
 
 class TestPriceCheck:

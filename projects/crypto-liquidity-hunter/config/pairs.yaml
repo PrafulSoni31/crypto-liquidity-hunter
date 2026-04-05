@@ -13,7 +13,7 @@ cron:
   scan_interval_minutes: 5
 data_fetch:
   atr_period: 14
-  ohlcv_limit: 300
+  ohlcv_limit: 200
   timeframes:
   - 4h
   - 2h
@@ -21,7 +21,7 @@ data_fetch:
   - 15m
 liquidity_mapper:
   equal_touch_tolerance: 0.005
-  min_swing_strength: 3
+  min_swing_strength: 4
   round_tolerance: 0.005
   swing_lookback: 4
 pairs:
@@ -467,7 +467,7 @@ pairs:
 sweep_detector:
   sweep_multiplier: 0.5
   volume_multiplier: 3
-  wick_ratio: 0.4
+  wick_ratio: 0.3
   min_sweep_pct: 0.2
   confirmation_bars: 5
   min_body_ratio: 0.4
@@ -475,7 +475,7 @@ sweep_detector:
 signal_engine:
   min_risk_reward: 3
   require_confluence: true
-  risk_per_trade: 0.05
+  risk_per_trade: 0.01
   stop_buffer_pct: 0.001
   target_buffer_pct: 0.001
   retracement_levels:
@@ -484,9 +484,9 @@ signal_engine:
   - 0.786
 volume_filter:
   enabled: true
-  min_24h_volume_usd: 2000000
+  min_24h_volume_usd: 5000000
 paper_trading:
-  fixed_notional_usd: 10
+  fixed_notional_usd: 20
   margin_leverage: 20
   commission_per_trade: 0.001
   position_sizing: fixed_notional
@@ -494,8 +494,8 @@ signal_execution:
   mode: pending
   auto_execute: true
   entry_tolerance_pct: 0.3
-  min_sl_gap_pct: 1.5
-  sl_tp_mode: binance_bracket
+  min_sl_gap_pct: 1
+  sl_tp_mode: monitor_only
   sl_tp_delay_sec: 3
   monitor_interval_sec: 5
 live_trading:
