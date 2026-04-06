@@ -1,29 +1,58 @@
+sweep_detector:
+  volume_multiplier: 3
+  wick_ratio: 0.1
+  min_sweep_pct: 0.2
+  confirmation_bars: 5
+  min_body_ratio: 0.1
+  lookback_bars: 50
+  sweep_multiplier: 0.5
+signal_engine:
+  min_risk_reward: 3
+  require_confluence: true
+  risk_per_trade: 0.01
+  stop_buffer_pct: 0.001
+  target_buffer_pct: 0.001
+  retracement_levels:
+  - 0.5
+  - 0.618
+  - 0.786
 alerts:
   telegram:
     bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
     chat_id: '686482312'
     enabled: true
     min_confidence: 0.7
-backtester:
-  commission_pct: 0.001
-  max_concurrent_trades: 5
-  slippage_pct: 0.0005
-  timeout_bars: 48
-cron:
-  scan_interval_minutes: 5
+volume_filter:
+  enabled: true
+  min_24h_volume_usd: 2500000
 data_fetch:
-  atr_period: 14
   ohlcv_limit: 200
+  atr_period: 14
   timeframes:
   - 4h
   - 2h
   - 1h
   - 15m
+cron:
+  scan_interval_minutes: 5
+paper_trading:
+  fixed_notional_usd: 20
+  margin_leverage: 20
+  commission_per_trade: 0.001
+  position_sizing: fixed_notional
+signal_execution:
+  mode: pending
+  auto_execute: true
+  entry_tolerance_pct: 0.3
+  min_sl_gap_pct: 1
+  sl_tp_mode: monitor_only
+  sl_tp_delay_sec: 3
+  monitor_interval_sec: 5
 liquidity_mapper:
   equal_touch_tolerance: 0.005
-  min_swing_strength: 4
-  round_tolerance: 0.005
-  swing_lookback: 4
+  swing_lookback: 3
+  round_tolerance: 0.0005
+  min_swing_strength: 3
 pairs:
 - binance:0G/USDT
 - binance:1000CAT/USDT
@@ -464,45 +493,3 @@ pairs:
 - binance:ZRO/USDT
 - binance:ZRX/USDT
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
-sweep_detector:
-  sweep_multiplier: 0.5
-  volume_multiplier: 3
-  wick_ratio: 0.3
-  min_sweep_pct: 0.2
-  confirmation_bars: 5
-  min_body_ratio: 0.4
-  lookback_bars: 24
-signal_engine:
-  min_risk_reward: 3
-  require_confluence: true
-  risk_per_trade: 0.01
-  stop_buffer_pct: 0.001
-  target_buffer_pct: 0.001
-  retracement_levels:
-  - 0.5
-  - 0.618
-  - 0.786
-volume_filter:
-  enabled: true
-  min_24h_volume_usd: 5000000
-paper_trading:
-  fixed_notional_usd: 20
-  margin_leverage: 20
-  commission_per_trade: 0.001
-  position_sizing: fixed_notional
-signal_execution:
-  mode: pending
-  auto_execute: true
-  entry_tolerance_pct: 0.3
-  min_sl_gap_pct: 1
-  sl_tp_mode: monitor_only
-  sl_tp_delay_sec: 3
-  monitor_interval_sec: 5
-live_trading:
-  fixed_notional_usd: 100.0
-  margin_leverage: 20.0
-  commission_per_trade: 0.001
-  position_sizing: fixed_notional
-  risk_percent: 1.0
-  max_notional_usd: 110.0
-active_account_id: 2

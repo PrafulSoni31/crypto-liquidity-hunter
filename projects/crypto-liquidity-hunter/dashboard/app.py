@@ -1856,6 +1856,24 @@ def signal_checklist():
     min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 1.0))
     min_zone_str    = 1  # minimum zone strength to be tradable
 
+    # Volume filter config
+    vol_cfg = config.get('volume_filter', {})
+    vol_filter_enabled = vol_cfg.get('enabled', False)
+    min_volume = float(vol_cfg.get('min_24h_volume_usd', 0))
+
+    # Batch-fetch all 24h volumes in ONE API call (cached for this request)
+    import requests as _req
+    _volume_map = {}
+    try:
+        if vol_filter_enabled and min_volume > 0:
+            _tick_r = _req.get('https://fapi.binance.com/fapi/v1/ticker/24hr', timeout=10)
+            for _t in _tick_r.json():
+                _sym = _t.get('symbol', '')
+                _qv = float(_t.get('quoteVolume', 0))
+                _volume_map[_sym] = _qv
+    except Exception:
+        pass
+
     def _evaluate_signal(sig):
         """Evaluate a signal against all checklist criteria."""
         entry    = float(sig.get('entry_price', sig.get('entry', 0)) or 0)
@@ -2004,12 +2022,50 @@ def signal_checklist():
                 'rule': 'Price in valid range'
             }
 
+        # 9. 24h Volume (from volume_filter config)
+        #     This is the EXACT filter used by main.py scanning loop.
+        #     Pairs below this volume are SKIPPED entirely — no entry ever fires.
+        if vol_filter_enabled and min_volume > 0:
+            # Extract raw symbol from pair (e.g. "binance:SNX/USDT" → "SNXUSDT")
+            raw_pair = sig.get('pair', '')
+            if ':' in raw_pair:
+                _, sym_part = raw_pair.split(':', 1)
+            else:
+                sym_part = raw_pair
+            raw_sym = sym_part.replace('/', '').replace(':USDT', '')
+            vol_24h = _volume_map.get(raw_sym, 0)
+            vol_ok = vol_24h >= min_volume
+            if vol_24h > 0:
+                checks['volume_24h'] = {
+                    'pass': vol_ok,
+                    'label': '24h Volume',
+                    'detail': f'${vol_24h:,.0f} {"≥" if vol_ok else "<"} ${min_volume:,.0f}',
+                    'rule': f'≥ ${min_volume:,.0f}'
+                }
+            else:
+                checks['volume_24h'] = {
+                    'pass': False,
+                    'label': '24h Volume',
+                    'detail': 'Volume data unavailable',
+                    'rule': f'≥ ${min_volume:,.0f}'
+                }
+        else:
+            checks['volume_24h'] = {
+                'pass': None,
+                'label': '24h Volume',
+                'detail': 'Filter disabled',
+                'rule': 'N/A'
+            }
+
         # Overall verdict — only check criteria that have real data
         critical = [checks['sl_direction']['pass'], checks['sl_gap']['pass'],
                     checks['risk_reward']['pass']]
         # Confidence is critical only when available (>0)
         if conf > 0:
             critical.append(checks['confidence']['pass'])
+        # Volume is critical when filter is enabled — below threshold = bot skips pair entirely
+        if vol_filter_enabled and min_volume > 0:
+            critical.append(checks.get('volume_24h', {}).get('pass'))
         all_pass = all(c is True for c in critical)
         # Entry tolerance is CRITICAL — this is the actual gate used by main.py
         if cur is not None:
