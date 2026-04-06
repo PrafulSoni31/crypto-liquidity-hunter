@@ -134,7 +134,7 @@ def build_report(events: list, db: dict) -> str:
         '📊 <b>ALL-TIME LIVE STATS</b>',
         f'  Trades: {total_closed} | Wins: {wins} | Losses: {losses}',
         f'  Win Rate: {win_rate:.1f}%',
-        f'  Total P&amp;L: <b>${total_pnl:+.2f}</b>',
+        f'  Total P&amp;L: <b>${(total_pnl or 0):+.2f}</b>',
         '',
         '🕐 <b>LAST 6 HOURS</b>',
         f'  Scans run: {counts.get("SCAN_END", 0)}',

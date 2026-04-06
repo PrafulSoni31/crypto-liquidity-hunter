@@ -99,6 +99,12 @@ class ConfigManager:
             return {}
 
     def save(self):
+        # Safety: refuse to write config if pairs list is missing
+        if 'pairs' not in self._config or not self._config['pairs']:
+            import logging
+            logging.getLogger(__name__).error(
+                "SAFETY BLOCK: ConfigManager.save() — config missing pairs, refusing to write")
+            return
         with open(CONFIG_PATH, 'w') as f:
             yaml.dump(self._config, f, default_flow_style=False, sort_keys=False)
 

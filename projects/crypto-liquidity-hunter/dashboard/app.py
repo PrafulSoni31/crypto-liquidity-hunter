@@ -748,6 +748,10 @@ def _set_active_account_id(account_id: int):
         import yaml
         cfg = load_config()
         cfg['active_account_id'] = account_id
+        # Safety: refuse to write config if pairs list is missing
+        if 'pairs' not in cfg or not cfg['pairs']:
+            logger.error("SAFETY BLOCK: _set_active_account_id — config missing pairs, refusing to write")
+            return
         with open(CONFIG_PATH, 'w') as f:
             yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
     except Exception as e:
@@ -1475,6 +1479,11 @@ def binance_save_settings():
 
         config['paper_trading'] = paper_cfg
         config['live_trading']  = live_cfg
+        # Safety: refuse to write config if pairs list is missing (prevents data loss)
+        if 'pairs' not in config or not config['pairs']:
+            logger.error("SAFETY BLOCK: config missing 'pairs' — refusing to write. "
+                         f"Keys present: {list(config.keys())}")
+            return jsonify({'error': 'Config missing pairs list — write blocked for safety'}), 500
         with open(CONFIG_PATH, 'w') as f:
             _yaml.dump(config, f, default_flow_style=False, sort_keys=False)
         return jsonify({'status': 'ok', 'message': 'Settings saved for paper + live'})

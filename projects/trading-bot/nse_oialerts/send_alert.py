@@ -205,30 +205,66 @@ def build_message(data: Dict, trade_type: str) -> str:
 
 
 def send_telegram(message: str) -> bool:
-    """Send message directly via Telegram Bot API."""
+    """Send message directly via Telegram Bot API. Splits if too long (>4096 chars)."""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id":    CHARLIE_ID,
-        "text":       message,
-        "parse_mode": "Markdown"
-    }
-    try:
-        r = requests.post(url, json=payload, timeout=15)
-        if r.status_code == 200:
-            print(f"✅ Telegram alert delivered to Charlie")
-            return True
-        else:
-            print(f"❌ Telegram error {r.status_code}: {r.text[:200]}")
-            # Try plain text fallback (strip markdown)
-            payload["parse_mode"] = ""
-            r2 = requests.post(url, json=payload, timeout=15)
-            if r2.status_code == 200:
-                print(f"✅ Delivered (plain text fallback)")
-                return True
-            return False
-    except Exception as e:
-        print(f"❌ Telegram send failed: {e}")
-        return False
+    MAX_LEN = 4000  # safe margin below Telegram's 4096 limit
+
+    # Split into chunks at signal boundaries if needed
+    if len(message) <= MAX_LEN:
+        chunks = [message]
+    else:
+        # Split on signal separator lines
+        parts = message.split("\n`━━━━━━━━━━━━━━━━━━━━━`\n")
+        chunks = []
+        current = ""
+        for i, part in enumerate(parts):
+            sep = "\n`━━━━━━━━━━━━━━━━━━━━━`\n" if i < len(parts) - 1 else ""
+            candidate = current + part + sep
+            if len(candidate) > MAX_LEN and current:
+                chunks.append(current.rstrip())
+                current = part + sep
+            else:
+                current = candidate
+        if current.strip():
+            chunks.append(current.strip())
+        # If still too large (e.g. single block), hard-split
+        final_chunks = []
+        for chunk in chunks:
+            while len(chunk) > MAX_LEN:
+                split_at = chunk.rfind("\n", 0, MAX_LEN)
+                if split_at == -1:
+                    split_at = MAX_LEN
+                final_chunks.append(chunk[:split_at])
+                chunk = chunk[split_at:].lstrip("\n")
+            if chunk.strip():
+                final_chunks.append(chunk)
+        chunks = final_chunks
+
+    success = True
+    for i, chunk in enumerate(chunks):
+        part_label = f" (part {i+1}/{len(chunks)})" if len(chunks) > 1 else ""
+        payload = {
+            "chat_id":    CHARLIE_ID,
+            "text":       chunk,
+            "parse_mode": "Markdown"
+        }
+        try:
+            r = requests.post(url, json=payload, timeout=15)
+            if r.status_code == 200:
+                print(f"✅ Telegram alert delivered to Charlie{part_label}")
+            else:
+                print(f"❌ Telegram error {r.status_code}{part_label}: {r.text[:200]}")
+                # Try plain text fallback
+                payload["parse_mode"] = ""
+                r2 = requests.post(url, json=payload, timeout=15)
+                if r2.status_code == 200:
+                    print(f"✅ Delivered (plain text fallback){part_label}")
+                else:
+                    success = False
+        except Exception as e:
+            print(f"❌ Telegram send failed{part_label}: {e}")
+            success = False
+    return success
 
 
 def save_alert(message: str, trade_type: str):

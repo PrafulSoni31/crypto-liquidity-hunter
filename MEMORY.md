@@ -142,6 +142,24 @@ When spawning subagents, always pass these instructions:
 - **Order book imbalance detection** not yet implemented
 - **Backtest optimizer** for parameter tuning not yet implemented
 
+### Critical Bug Fixes (April 5, 2026)
+- **Settings save crash (500):** config_mgr→cfg rename broke imports in app.py and admin_bot.py. Fixed: `from core.config_manager import cfg as config_mgr`
+- **Entry candle wick SL trigger:** Monitor reads current 1m candle's low for SL detection — this candle started BEFORE entry, so its wick already touched SL → instant close in 15-20s. Fix: skip SL/TP checks until entry candle completes (top of next minute)
+- **Config applied:** Execution Mode=Pending, SL/TP Mode=Binance Bracket, Min SL Gap=1.5%
+- 40/40 tests passing
+
+### Critical Bug: `active_account_id` Missing from Config (April 6, 2026)
+- **Effect:** Pending signals NEVER execute. Bot creates them but never checks for entry.
+- **Root cause:** `active_account_id` NOT in `config/pairs.yaml` → `trade_executor` stays None → pending check at line 556 (`if auto_exec and trade_executor:`) always False
+- **Account ID:** `2` = "Liquiddbot1" (Charlie's live Binance Futures account)
+- **Also:** `bot_token` + `chat_id` missing from config → every cron scan crashed for ~30 min (fixed same session)
+- **Also:** `retracement_levels` missing from signal_engine section (restored from git)
+- **Impact:** All 8 pending signals stuck unexecuted. CELO #15 was entered before this bug.
+- **Signal Checklist:** Added `/api/signal_checklist` endpoint showing per-criterion pass/fail for pending signals and recent trades. 9 criteria including Entry Tolerance (actual gate, 0.3%) and 24h Volume.
+- **Config values to NEVER lose:** active_account_id, bot_token, chat_id, retracement_levels
+- **Git:** 11+ commits pushed. Token cleaned from remote URL. Token exposed in history — Charlie should rotate via BotFather.
+- **41 tests passing** (2 pre-existing config integration failures)
+
 ### Important Notes
 
 **MEMORY HABIT:** Always check memory (MEMORY.md + memory_search) before answering questions about prior work, decisions, or conversations. Charlie emphasized this.

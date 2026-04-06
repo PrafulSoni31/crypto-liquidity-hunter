@@ -80,3 +80,39 @@ SystemExit: 1
 [2026-03-29 09:33:40 +0000] [776718] [ERROR] Connection in use: ('0.0.0.0', 5000)
 [2026-03-29 09:33:40 +0000] [776718] [ERROR] connection to ('0.0.0.0', 5000) failed: [Errno 98] Address already in use
 [2026-03-29 09:33:41 +0000] [776718] [ERROR] Can't connect to ('0.0.0.0', 5000)
+[2026-04-05 01:20:34 +0000] [962933] [INFO] Starting gunicorn 25.1.0
+[2026-04-05 01:20:34 +0000] [962933] [INFO] Listening at: http://0.0.0.0:5000 (962933)
+[2026-04-05 01:20:34 +0000] [962933] [INFO] Using worker: sync
+[2026-04-05 01:20:34 +0000] [962933] [INFO] Control socket listening at /root/.openclaw/workspace/projects/crypto-liquidity-hunter/gunicorn.ctl
+[2026-04-05 01:20:34 +0000] [962936] [INFO] Booting worker with pid: 962936
+[2026-04-05 01:20:34 +0000] [962937] [INFO] Booting worker with pid: 962937
+[2026-04-05 01:20:34 +0000] [962938] [INFO] Booting worker with pid: 962938
+[2026-04-05 01:24:42 +0000] [962933] [INFO] Handling signal: hup
+[2026-04-05 01:24:42 +0000] [962933] [INFO] Hang up: Master
+[2026-04-05 01:24:42 +0000] [963294] [INFO] Booting worker with pid: 963294
+[2026-04-05 01:24:42 +0000] [963295] [INFO] Booting worker with pid: 963295
+[2026-04-05 01:24:42 +0000] [963296] [INFO] Booting worker with pid: 963296
+[2026-04-05 01:24:42 +0000] [962937] [INFO] Worker exiting (pid: 962937)
+[2026-04-05 01:24:42 +0000] [962936] [INFO] Worker exiting (pid: 962936)
+[2026-04-05 01:24:42 +0000] [962938] [INFO] Worker exiting (pid: 962938)
+[2026-04-05 01:43:27 +0000] [962933] [INFO] Handling signal: hup
+[2026-04-05 01:43:27 +0000] [962933] [INFO] Hang up: Master
+[2026-04-05 01:43:27 +0000] [964038] [INFO] Booting worker with pid: 964038
+[2026-04-05 01:43:27 +0000] [964039] [INFO] Booting worker with pid: 964039
+[2026-04-05 01:43:27 +0000] [964040] [INFO] Booting worker with pid: 964040
+[2026-04-05 01:43:27 +0000] [963294] [INFO] Worker exiting (pid: 963294)
+[2026-04-05 01:43:27 +0000] [963295] [INFO] Worker exiting (pid: 963295)
+[2026-04-05 01:43:27 +0000] [963296] [INFO] Worker exiting (pid: 963296)
+[2026-04-05 02:44:38 +0000] [962933] [INFO] Handling signal: hup
+[2026-04-05 02:44:38 +0000] [962933] [INFO] Hang up: Master
+[2026-04-05 02:44:38 +0000] [965790] [INFO] Booting worker with pid: 965790
+[2026-04-05 02:44:38 +0000] [965792] [INFO] Booting worker with pid: 965792
+[2026-04-05 02:44:38 +0000] [964040] [INFO] Worker exiting (pid: 964040)
+[2026-04-05 02:44:38 +0000] [964039] [INFO] Worker exiting (pid: 964039)
+[2026-04-05 02:44:38 +0000] [965791] [INFO] Booting worker with pid: 965791
+[2026-04-05 02:44:38 +0000] [964038] [INFO] Worker exiting (pid: 964038)
+[2026-04-05 03:05:25 +0000] [962933] [INFO] Handling signal: term
+[2026-04-05 03:05:25 +0000] [965791] [INFO] Worker exiting (pid: 965791)
+[2026-04-05 03:05:25 +0000] [965790] [INFO] Worker exiting (pid: 965790)
+[2026-04-05 03:05:25 +0000] [965792] [INFO] Worker exiting (pid: 965792)
+[2026-04-05 03:05:26 +0000] [962933] [INFO] Shutting down: Master

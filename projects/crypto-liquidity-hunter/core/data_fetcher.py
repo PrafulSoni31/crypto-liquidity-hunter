@@ -22,6 +22,13 @@ class MarketDataFetcher:
         self.exchange_class = getattr(ccxt, exchange_id)
         self.exchange = self.exchange_class(config or {})
         self.markets = None
+        # For futures, the symbol format is different (e.g., BTC/USDT:USDT)
+        # Load markets to get proper symbol mapping
+        try:
+            self.markets = self.exchange.load_markets()
+        except Exception as e:
+            logger.warning(f"Failed to load markets for {exchange_id}: {e}")
+            self.markets = {}
 
     def load_markets(self):
         """Load available markets."""
@@ -36,11 +43,29 @@ class MarketDataFetcher:
         """
         Fetch OHLCV data and return as DataFrame.
         Columns: timestamp, open, high, low, close, volume, (quote_volume)
+        
+        For futures (binanceusdm), symbols need :USDT or :USDC suffix.
         """
         try:
             since_ts = None
             if since:
                 since_ts = int(since.timestamp() * 1000)
+
+            # For futures exchange, try to find the correct symbol format
+            if self.exchange_id in ['binanceusdm', 'binancecoinm']:
+                # Try the symbol as-is first
+                if symbol not in self.markets:
+                    # Try adding :USDT suffix
+                    if symbol + ':USDT' in self.markets:
+                        symbol = symbol + ':USDT'
+                    elif symbol + ':USDC' in self.markets:
+                        symbol = symbol + ':USDC'
+                    else:
+                        # Try to find any matching market
+                        for market_sym in self.markets:
+                            if symbol in market_sym:
+                                symbol = market_sym
+                                break
 
             ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, since=since_ts, limit=limit)
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -49,7 +74,7 @@ class MarketDataFetcher:
             df.sort_index(inplace=True)
             return df
         except Exception as e:
-            logger.error(f"Fetch OHLCV failed: {e}")
+            logger.error(f"Fetch OHLCV failed for {symbol}: {e}")
             raise
 
     def get_24h_volume(self, symbol: str) -> float:
