@@ -1938,7 +1938,33 @@ def signal_checklist():
                 'rule': f'≥ {min_zone_str}'
             }
 
-        # 6. Entry Reachable (live price check)
+        # 6a. Entry Tolerance — the ACTUAL gate used by main.py entry logic
+        #     entry_tolerance_pct from config (default 0.3%). This is the real check
+        #     that determines whether the bot will actually fire a pending signal.
+        entry_tol = 0.3
+        try:
+            exec_cfg = cfg.get('signal_execution', {})
+            entry_tol = float(exec_cfg.get('entry_tolerance_pct', 0.3))
+        except Exception:
+            pass
+        if cur is not None and entry > 0:
+            dist_pct = abs(cur - entry) / entry * 100
+            tol_ok = dist_pct <= entry_tol
+            checks['entry_tolerance'] = {
+                'pass': tol_ok,
+                'label': 'Entry Tolerance',
+                'detail': f'{dist_pct:.2f}% {"≤" if tol_ok else ">"} {entry_tol}%',
+                'rule': f'≤ {entry_tol}% (actual entry gate)'
+            }
+        else:
+            checks['entry_tolerance'] = {
+                'pass': None,
+                'label': 'Entry Tolerance',
+                'detail': 'N/A (no live price)',
+                'rule': f'≤ {entry_tol}% (actual entry gate)'
+            }
+
+        # 6b. Entry Reachable (loose proximity — informational)
         if cur is not None and entry > 0:
             dist_pct = abs(cur - entry) / entry * 100
             reachable = dist_pct <= 3.0  # within 3% of entry
@@ -1985,8 +2011,9 @@ def signal_checklist():
         if conf > 0:
             critical.append(checks['confidence']['pass'])
         all_pass = all(c is True for c in critical)
+        # Entry tolerance is CRITICAL — this is the actual gate used by main.py
         if cur is not None:
-            all_pass = all_pass and checks['entry_reachable']['pass'] is True
+            all_pass = all_pass and checks['entry_tolerance']['pass'] is True
 
         return {
             'checks': checks,
