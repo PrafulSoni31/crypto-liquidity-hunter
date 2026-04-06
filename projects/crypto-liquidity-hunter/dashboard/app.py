@@ -1839,6 +1839,237 @@ def get_pending_signals():
     return jsonify(results)
 
 
+@app.route('/api/signal_checklist')
+def signal_checklist():
+    """
+    Signal checklist — shows which validation criteria each pending/recent signal meets.
+    Derived from settings page thresholds.
+    """
+    store  = DataStore()
+    config = load_config()
+    sig_cfg    = config.get('signal_engine', {})
+    alert_cfg  = config.get('alerts', {}).get('telegram', {})
+    exec_cfg   = config.get('signal_execution', {})
+
+    min_rr          = float(sig_cfg.get('min_risk_reward', 3))
+    min_confidence  = float(alert_cfg.get('min_confidence', 0.7))
+    min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 1.0))
+    min_zone_str    = 1  # minimum zone strength to be tradable
+
+    def _evaluate_signal(sig):
+        """Evaluate a signal against all checklist criteria."""
+        entry    = float(sig.get('entry_price', sig.get('entry', 0)) or 0)
+        sl       = float(sig.get('stop_loss', sig.get('sl', 0)) or 0)
+        tp       = float(sig.get('target', sig.get('tp', 0)) or 0)
+        direction = sig.get('direction', 'long')
+        conf     = float(sig.get('confidence', 0) or 0)
+        rr       = float(sig.get('risk_reward', 0) or 0)
+        zstr     = int(sig.get('zone_strength', sig.get('zone_str', 0)) or 0)
+        cur      = sig.get('current_price')
+
+        # Calculate R:R if not provided
+        if rr == 0 and entry > 0 and sl > 0 and tp > 0:
+            risk = abs(entry - sl)
+            reward = abs(tp - entry)
+            rr = reward / risk if risk > 0 else 0
+
+        checks = {}
+
+        # 1. SL Direction
+        if direction == 'long':
+            sl_ok = sl < entry if sl > 0 else False
+            checks['sl_direction'] = {
+                'pass': sl_ok,
+                'label': 'SL Direction',
+                'detail': f'SL {"below" if sl_ok else "ABOVE"} entry (LONG)',
+                'rule': 'SL must be below entry'
+            }
+        else:
+            sl_ok = sl > entry if sl > 0 else False
+            checks['sl_direction'] = {
+                'pass': sl_ok,
+                'label': 'SL Direction',
+                'detail': f'SL {"above" if sl_ok else "BELOW"} entry (SHORT)',
+                'rule': 'SL must be above entry'
+            }
+
+        # 2. SL Gap %
+        sl_gap_pct = abs(sl - entry) / entry * 100 if entry > 0 and sl > 0 else 0
+        sl_gap_ok  = sl_gap_pct >= min_sl_gap_pct
+        checks['sl_gap'] = {
+            'pass': sl_gap_ok,
+            'label': 'SL Gap %',
+            'detail': f'{sl_gap_pct:.2f}% {"≥" if sl_gap_ok else "<"} {min_sl_gap_pct:.1f}%',
+            'rule': f'≥ {min_sl_gap_pct:.1f}%'
+        }
+
+        # 3. Risk:Reward
+        rr_ok = rr >= min_rr
+        checks['risk_reward'] = {
+            'pass': rr_ok,
+            'label': 'Risk:Reward',
+            'detail': f'{rr:.2f} {"≥" if rr_ok else "<"} {min_rr:.1f}',
+            'rule': f'≥ {min_rr:.1f}'
+        }
+
+        # 4. Confidence
+        conf_ok = conf >= min_confidence
+        checks['confidence'] = {
+            'pass': conf_ok,
+            'label': 'Confidence',
+            'detail': f'{conf:.0%} {"≥" if conf_ok else "<"} {min_confidence:.0%}',
+            'rule': f'≥ {min_confidence:.0%}'
+        }
+
+        # 5. Zone Strength (non-critical — show N/A if not stored)
+        if zstr > 0:
+            zstr_ok = zstr >= min_zone_str
+            checks['zone_strength'] = {
+                'pass': zstr_ok,
+                'label': 'Zone Strength',
+                'detail': f'{zstr} {"≥" if zstr_ok else "<"} {min_zone_str}',
+                'rule': f'≥ {min_zone_str}'
+            }
+        else:
+            checks['zone_strength'] = {
+                'pass': None,
+                'label': 'Zone Strength',
+                'detail': 'N/A (not stored)',
+                'rule': f'≥ {min_zone_str}'
+            }
+
+        # 6. Entry Reachable (live price check)
+        if cur is not None and entry > 0:
+            dist_pct = abs(cur - entry) / entry * 100
+            reachable = dist_pct <= 3.0  # within 3% of entry
+            checks['entry_reachable'] = {
+                'pass': reachable,
+                'label': 'Entry Reachable',
+                'detail': f'Price ${cur:.6g} — {dist_pct:.1f}% from entry',
+                'rule': 'Within ±3% of entry'
+            }
+        else:
+            checks['entry_reachable'] = {
+                'pass': None,
+                'label': 'Entry Reachable',
+                'detail': 'Price unavailable',
+                'rule': 'Within ±3% of entry'
+            }
+
+        # 7. Entry Direction Valid
+        if cur is not None and entry > 0:
+            if direction == 'long':
+                # For long, price should be at or below entry (need to dip to buy)
+                dir_valid = cur >= entry * 0.97  # price not too far below
+            else:
+                # For short, price should be at or above entry (need to rally to sell)
+                dir_valid = cur <= entry * 1.03  # price not too far above
+            checks['entry_direction'] = {
+                'pass': dir_valid,
+                'label': 'Entry Setup Valid',
+                'detail': f'{"Long" if direction == "long" else "Short"}: price {"in" if dir_valid else "out of"} range',
+                'rule': 'Price in valid range for direction'
+            }
+        else:
+            checks['entry_direction'] = {
+                'pass': None,
+                'label': 'Entry Setup Valid',
+                'detail': 'N/A',
+                'rule': 'Price in valid range'
+            }
+
+        # Overall verdict — only check criteria that have real data
+        critical = [checks['sl_direction']['pass'], checks['sl_gap']['pass'],
+                    checks['risk_reward']['pass']]
+        # Confidence is critical only when available (>0)
+        if conf > 0:
+            critical.append(checks['confidence']['pass'])
+        all_pass = all(c is True for c in critical)
+        if cur is not None:
+            all_pass = all_pass and checks['entry_reachable']['pass'] is True
+
+        return {
+            'checks': checks,
+            'all_pass': all_pass,
+            'pass_count': sum(1 for c in checks.values() if c['pass'] is True),
+            'total_count': sum(1 for c in checks.values() if c['pass'] is not None)
+        }
+
+    # --- Pending signals ---
+    pending_items = store.get_pending_signals(status='pending')
+    pending_results = []
+    for p in pending_items:
+        try:
+            pair = p['pair']
+            exch, sym = pair.split(':', 1) if ':' in pair else ('binance', pair)
+            from core.data_fetcher import MarketDataFetcher
+            fetcher = MarketDataFetcher(exch)
+            df = fetcher.fetch_ohlcv(sym, timeframe='1m', limit=2)
+            cur_price = float(df.iloc[-1]['close'])
+            p['current_price'] = cur_price
+        except Exception:
+            p['current_price'] = None
+        result = _evaluate_signal(p)
+        result['id']       = p.get('id')
+        result['pair']     = p.get('pair', '').replace('binance:', '')
+        result['direction'] = p.get('direction', '')
+        result['entry_price'] = p.get('entry_price', 0)
+        result['current_price'] = p.get('current_price')
+        result['confidence'] = p.get('confidence', 0)
+        result['risk_reward'] = p.get('risk_reward', 0)
+        result['created_at'] = p.get('created_at', '')
+        pending_results.append(result)
+
+    # --- Recent signals (recently closed trades) ---
+    recent_trades = []
+    try:
+        closed = store.get_closed_trades(limit=10)
+        for t in (closed or []):
+            rr_val = 0
+            ep = float(t.get('entry_price', 0) or 0)
+            sl = float(t.get('sl', 0) or 0)
+            tp = float(t.get('tp', 0) or 0)
+            if ep > 0 and sl > 0:
+                risk = abs(ep - sl)
+                reward = abs(tp - ep)
+                rr_val = reward / risk if risk > 0 else 0
+
+            t_sig = {
+                'entry_price': ep,
+                'stop_loss': sl,
+                'target': tp,
+                'direction': t.get('direction', 'long'),
+                'confidence': t.get('confidence', 0),
+                'risk_reward': rr_val,
+                'zone_strength': t.get('zone_strength', 0),
+                'current_price': t.get('exit_price'),
+            }
+            result = _evaluate_signal(t_sig)
+            result['id']        = t.get('id')
+            result['pair']      = t.get('pair', '').replace('binance:', '')
+            result['direction'] = t.get('direction', '')
+            result['entry_price'] = ep
+            result['exit_price'] = t.get('exit_price')
+            result['status']    = t.get('status', '')
+            result['pnl_usd']   = t.get('pnl_usd', 0)
+            result['entry_time'] = t.get('entry_time', '')
+            result['exit_time'] = t.get('exit_time', '')
+            recent_trades.append(result)
+    except Exception as e:
+        logger.error(f"signal_checklist recent trades error: {e}")
+
+    return jsonify({
+        'settings': {
+            'min_risk_reward': min_rr,
+            'min_confidence': min_confidence,
+            'min_sl_gap_pct': min_sl_gap_pct,
+            'min_zone_strength': min_zone_str,
+        },
+        'pending': pending_results,
+        'recent': recent_trades,
+    })
+
+
 @app.route('/api/pending/<int:pid>/cancel', methods=['POST'])
 def cancel_pending_signal(pid):
     """Cancel a pending signal."""

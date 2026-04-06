@@ -778,6 +778,71 @@
     </div>
   </div>
 
+  <!-- ── Signal Checklist ─────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">📋 Signal Checklist — Pending Signals</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="font-size:10px;color:var(--muted)">
+          Criteria: R:R ≥ <span id="chkMinRR">3</span> · Conf ≥ <span id="chkMinConf">70</span>% · SL Gap ≥ <span id="chkMinGap">1.0</span>%
+        </span>
+        <button onclick="loadSignalChecklist()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer">🔄 Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg2)">
+            <th style="padding:6px 8px;text-align:left">Pair</th>
+            <th style="padding:6px 8px;text-align:left">Dir</th>
+            <th style="padding:6px 8px;text-align:right">Entry</th>
+            <th style="padding:6px 8px;text-align:right">Cur Price</th>
+            <th style="padding:6px 8px;text-align:center" title="SL on correct side of entry?">SL Dir</th>
+            <th style="padding:6px 8px;text-align:center" title="SL gap ≥ minimum?">SL Gap</th>
+            <th style="padding:6px 8px;text-align:center" title="Risk:Reward ≥ minimum?">R:R</th>
+            <th style="padding:6px 8px;text-align:center" title="Confidence ≥ 70%?">Conf</th>
+            <th style="padding:6px 8px;text-align:center" title="Zone strength ≥ 1?">Zone</th>
+            <th style="padding:6px 8px;text-align:center" title="Current price within 3% of entry?">Reachable</th>
+            <th style="padding:6px 8px;text-align:center" title="Entry direction valid vs current price?">Setup</th>
+            <th style="padding:6px 8px;text-align:center;font-weight:700">Verdict</th>
+          </tr>
+        </thead>
+        <tbody id="checklistPendingBody">
+          <tr><td colspan="12" style="padding:16px;text-align:center;color:var(--muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent Signals Checklist -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">📋 Signal Checklist — Recent Trades</span>
+      <span style="font-size:10px;color:var(--muted)">Last 10 closed trades — did they meet criteria?</span>
+    </div>
+    <div class="card-body" style="padding:0;overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg2)">
+            <th style="padding:6px 8px;text-align:left">#</th>
+            <th style="padding:6px 8px;text-align:left">Pair</th>
+            <th style="padding:6px 8px;text-align:left">Dir</th>
+            <th style="padding:6px 8px;text-align:center">Status</th>
+            <th style="padding:6px 8px;text-align:right">PnL</th>
+            <th style="padding:6px 8px;text-align:center" title="SL on correct side of entry?">SL Dir</th>
+            <th style="padding:6px 8px;text-align:center" title="SL gap ≥ minimum?">SL Gap</th>
+            <th style="padding:6px 8px;text-align:center" title="Risk:Reward ≥ minimum?">R:R</th>
+            <th style="padding:6px 8px;text-align:center" title="Zone strength ≥ 1?">Zone</th>
+            <th style="padding:6px 8px;text-align:center;font-weight:700">Met</th>
+          </tr>
+        </thead>
+        <tbody id="checklistRecentBody">
+          <tr><td colspan="10" style="padding:16px;text-align:center;color:var(--muted)">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- KPI row -->
   <div class="g4">
     <div class="kpi blue">
@@ -1297,7 +1362,7 @@ function switchTab(name, el) {
   if (name === 'overview') loadOverview();
   if (name === 'perf')     loadPerf();
   if (name === 'trades')   loadTrades();
-  if (name === 'signals')  { loadSigs(); loadPendingSignals(); }
+  if (name === 'signals')  { loadSigs(); loadPendingSignals(); loadSignalChecklist(); }
   if (name === 'activity') loadActivityFeed();
   if (name === 'settings') loadSettings();
   // Stop PnL refresh if leaving trading tab
@@ -2575,6 +2640,95 @@ async function cancelPending(pid) {
     await fetch(`/api/pending/${pid}/cancel`, {method:'POST'});
     loadPendingSignals();
   } catch(e) { alert('Error: ' + e); }
+}
+
+// ── Signal Checklist ─────────────────────────────────────────────────────────
+async function loadSignalChecklist() {
+  try {
+    const r = await fetch('/api/signal_checklist');
+    const d = await r.json();
+    // Update settings display
+    if (d.settings) {
+      const el = id => document.getElementById(id);
+      if (el('chkMinRR'))   el('chkMinRR').textContent = d.settings.min_risk_reward;
+      if (el('chkMinConf')) el('chkMinConf').textContent = Math.round(d.settings.min_confidence * 100);
+      if (el('chkMinGap'))  el('chkMinGap').textContent = d.settings.min_sl_gap_pct;
+    }
+    // Render pending checklist
+    renderPendingChecklist(d.pending || []);
+    renderRecentChecklist(d.recent || []);
+  } catch(e) {
+    console.error('loadSignalChecklist:', e);
+  }
+}
+
+function _chkIcon(passed) {
+  if (passed === true)  return '<span style="color:var(--green);font-weight:700">✅</span>';
+  if (passed === false) return '<span style="color:var(--red);font-weight:700">❌</span>';
+  return '<span style="color:var(--muted)">—</span>';
+}
+
+function _verdictIcon(allPass, passCount, totalCount) {
+  if (allPass) return `<span style="color:var(--green);font-weight:700">✅ GO</span>`;
+  const pct = totalCount > 0 ? Math.round(passCount / totalCount * 100) : 0;
+  if (pct >= 75) return `<span style="color:var(--yellow);font-weight:700">⚠️ ${passCount}/${totalCount}</span>`;
+  return `<span style="color:var(--red);font-weight:700">❌ ${passCount}/${totalCount}</span>`;
+}
+
+function renderPendingChecklist(items) {
+  const tbody = document.getElementById('checklistPendingBody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:16px;text-align:center;color:var(--muted)">No pending signals</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(s => {
+    const sideColor = s.direction === 'long' ? 'var(--green)' : 'var(--red)';
+    const c = s.checks || {};
+    const cp = s.current_price;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px;font-weight:600">${s.pair}</td>
+      <td style="padding:6px 8px;color:${sideColor};font-weight:700">${(s.direction||'').toUpperCase()}</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:600">${s.entry_price ? '$'+parseFloat(s.entry_price).toFixed(6) : '—'}</td>
+      <td style="padding:6px 8px;text-align:right">${cp ? '$'+parseFloat(cp).toFixed(6) : '—'}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.sl_direction?.detail||''}">${_chkIcon(c.sl_direction?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.sl_gap?.detail||''}">${_chkIcon(c.sl_gap?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.risk_reward?.detail||''}">${_chkIcon(c.risk_reward?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.confidence?.detail||''}">${_chkIcon(c.confidence?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.zone_strength?.detail||''}">${_chkIcon(c.zone_strength?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.entry_reachable?.detail||''}">${_chkIcon(c.entry_reachable?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.entry_direction?.detail||''}">${_chkIcon(c.entry_direction?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center">${_verdictIcon(s.all_pass, s.pass_count, s.total_count)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRecentChecklist(items) {
+  const tbody = document.getElementById('checklistRecentBody');
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="padding:16px;text-align:center;color:var(--muted)">No recent trades</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.map(s => {
+    const sideColor = s.direction === 'long' ? 'var(--green)' : 'var(--red)';
+    const c = s.checks || {};
+    const pnlColor = (s.pnl_usd || 0) >= 0 ? 'var(--green)' : 'var(--red)';
+    const statusBadge = s.status === 'stop_loss' ? '🔴 SL'
+      : s.status === 'target_hit' ? '🟢 TP'
+      : s.status === 'closed_on_exchange' ? '⚠️ Closed'
+      : s.status;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px;color:var(--muted)">#${s.id}</td>
+      <td style="padding:6px 8px;font-weight:600">${s.pair}</td>
+      <td style="padding:6px 8px;color:${sideColor};font-weight:700">${(s.direction||'').toUpperCase()}</td>
+      <td style="padding:6px 8px;text-align:center">${statusBadge}</td>
+      <td style="padding:6px 8px;text-align:right;color:${pnlColor};font-weight:600">${(s.pnl_usd||0) >= 0 ? '+' : ''}${(s.pnl_usd||0).toFixed(2)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.sl_direction?.detail||''}">${_chkIcon(c.sl_direction?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.sl_gap?.detail||''}">${_chkIcon(c.sl_gap?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.risk_reward?.detail||''}">${_chkIcon(c.risk_reward?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center" title="${c.zone_strength?.detail||''}">${_chkIcon(c.zone_strength?.pass)}</td>
+      <td style="padding:6px 8px;text-align:center">${_verdictIcon(s.all_pass, s.pass_count, s.total_count)}</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Load leverage + notional from live trading config (Settings page is source of truth) ──
