@@ -28,8 +28,12 @@ def _load_config() -> Dict:
 
 
 def _save_config(cfg: Dict):
-    with open(CONFIG_PATH, 'w') as f:
+    import tempfile, os, yaml
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(CONFIG_PATH), prefix="pairs_tmp_")
+    with os.fdopen(fd, 'w') as f:
         yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+    os.replace(tmp_path, CONFIG_PATH)
+
 
 
 # ─── Raw Binance REST helpers (bypass ccxt, always work) ──────────────────────

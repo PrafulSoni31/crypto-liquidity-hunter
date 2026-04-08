@@ -105,8 +105,23 @@ class ConfigManager:
             logging.getLogger(__name__).error(
                 "SAFETY BLOCK: ConfigManager.save() — config missing pairs, refusing to write")
             return
-        with open(CONFIG_PATH, 'w') as f:
-            yaml.dump(self._config, f, default_flow_style=False, sort_keys=False)
+            
+        import tempfile
+        import os
+        import yaml
+        
+        try:
+            # Atomic write directly to a tempfile to prevent IO race conditions from crashing scanners
+            fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(CONFIG_PATH), prefix="pairs_tmp_")
+            with os.fdopen(fd, 'w') as f:
+                yaml.dump(self._config, f, default_flow_style=False, sort_keys=False)
+                
+            # Atomically replace live file so readers never grab 0 bytes mid-save
+            os.replace(tmp_path, CONFIG_PATH)
+            
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Atomic save failed: {e}")
 
     def get(self, key_path: str, default=None):
         """

@@ -341,25 +341,41 @@ class PositionMonitor:
         hit_sl = False
         hit_tp = False
 
-        # Tolerance for decimal precision mismatches (Binance tick vs stored price)
-        _TOL = 0.002  # 0.2% tolerance
+        # STRICT exit logic — checks 1m high/low to catch fast wicks
+        # Use a dynamic tick-size aware tolerance instead of a flat percentage (0.2%)
+        # For micro-cap pairs like DENT, 0.2% massively inflates the SL triggering instant closures.
+        
+        # Base tolerance on value scales (1e-5 for decimals, standardizing minimum tick collision)
+        if sl > 0 and sl < 0.01:
+            _TOL = 0.0000001 # Absolute unit tick
+        else:
+            _TOL = 0.0002    # Minimal generic (0.02%)
+            
+        def _hit_sl(long_mode: bool):
+            if not sl: return False
+            if long_mode: return low <= sl + _TOL
+            return high >= sl - _TOL
+            
+        def _hit_tp(long_mode: bool):
+            if not tp: return False
+            if long_mode: return high >= tp - _TOL
+            return low <= tp + _TOL
 
-        # STRICT exit logic — checks 1m high/low to catch fast wicks for paper trades!
         if direction == 'long':
-            if sl > 0 and low <= sl * (1 + _TOL):
+            if _hit_sl(True):
                 hit_sl = True
                 mark = sl  # closed exactly at SL
                 logger.warning(f"[Monitor] SL hit (wick): {sym} low={low:.6g} <= sl={sl:.6g} (LONG)")
-            elif tp > 0 and high >= tp * (1 - _TOL):
+            elif _hit_tp(True):
                 hit_tp = True
                 mark = tp  # closed exactly at TP
                 logger.info(f"[Monitor] TP hit (wick): {sym} high={high:.6g} >= tp={tp:.6g} (LONG)")
         else:  # short
-            if sl > 0 and high >= sl * (1 - _TOL):
+            if _hit_sl(False):
                 hit_sl = True
                 mark = sl  # closed exactly at SL
                 logger.warning(f"[Monitor] SL hit (wick): {sym} high={high:.6g} >= sl={sl:.6g} (SHORT)")
-            elif tp > 0 and low <= tp * (1 + _TOL):
+            elif _hit_tp(False):
                 hit_tp = True
                 mark = tp  # closed exactly at TP
                 logger.info(f"[Monitor] TP hit (wick): {sym} low={low:.6g} <= tp={tp:.6g} (SHORT)")

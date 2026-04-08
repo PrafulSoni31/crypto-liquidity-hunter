@@ -743,17 +743,11 @@ def _get_active_account_id() -> int:
         return None
 
 def _set_active_account_id(account_id: int):
-    """Persist the active account id to config."""
+    """Persist the active account id to config using central config_manager."""
     try:
-        import yaml
-        cfg = load_config()
-        cfg['active_account_id'] = account_id
-        # Safety: refuse to write config if pairs list is missing
-        if 'pairs' not in cfg or not cfg['pairs']:
-            logger.error("SAFETY BLOCK: _set_active_account_id — config missing pairs, refusing to write")
-            return
-        with open(CONFIG_PATH, 'w') as f:
-            yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
+        from core.config_manager import cfg as config_mgr
+        config_mgr.reload()
+        config_mgr.set('active_account_id', account_id)
     except Exception as e:
         logger.error(f"_set_active_account_id error: {e}")
 
@@ -1452,40 +1446,29 @@ def binance_get_settings():
 
 @app.route('/api/binance/save_settings', methods=['POST'])
 def binance_save_settings():
-    """Save position-sizing settings for paper AND live modes to pairs.yaml."""
+    """Save position-sizing settings for paper AND live modes to pairs.yaml using central config_manager."""
     data = request.get_json() or {}
     try:
-        import yaml as _yaml
-        config    = load_config()
-        paper_cfg = config.get('paper_trading', {})
-        live_cfg  = config.get('live_trading', {})
+        from core.config_manager import cfg as config_mgr
+        config_mgr.reload()
 
         # Paper settings
-        if 'notional_usd'    in data: paper_cfg['fixed_notional_usd']   = float(data['notional_usd'])
-        if 'leverage'        in data: paper_cfg['margin_leverage']       = float(data['leverage'])
-        if 'commission'      in data: paper_cfg['commission_per_trade']  = float(data['commission'])
-        if 'position_sizing' in data: paper_cfg['position_sizing']       = data['position_sizing']
+        if 'notional_usd'    in data: config_mgr.set('paper_trading.fixed_notional_usd',   float(data['notional_usd']))
+        if 'leverage'        in data: config_mgr.set('paper_trading.margin_leverage',      float(data['leverage']))
+        if 'commission'      in data: config_mgr.set('paper_trading.commission_per_trade', float(data['commission']))
+        if 'position_sizing' in data: config_mgr.set('paper_trading.position_sizing',      data['position_sizing'])
 
         # Live settings
-        if 'live_notional_usd'     in data: live_cfg['fixed_notional_usd']   = float(data['live_notional_usd'])
-        if 'live_leverage'         in data: live_cfg['margin_leverage']       = float(data['live_leverage'])
-        if 'live_commission'       in data: live_cfg['commission_per_trade']  = float(data['live_commission'])
-        if 'live_position_sizing'  in data: live_cfg['position_sizing']       = data['live_position_sizing']
-        if 'live_risk_percent'     in data: live_cfg['risk_percent']           = float(data['live_risk_percent'])
-        if 'live_max_notional'     in data: live_cfg['max_notional_usd']      = float(data['live_max_notional'])
+        if 'live_notional_usd'     in data: config_mgr.set('live_trading.fixed_notional_usd',   float(data['live_notional_usd']))
+        if 'live_leverage'         in data: config_mgr.set('live_trading.margin_leverage',      float(data['live_leverage']))
+        if 'live_commission'       in data: config_mgr.set('live_trading.commission_per_trade', float(data['live_commission']))
+        if 'live_position_sizing'  in data: config_mgr.set('live_trading.position_sizing',      data['live_position_sizing'])
+        if 'live_risk_percent'     in data: config_mgr.set('live_trading.risk_percent',         float(data['live_risk_percent']))
+        if 'live_max_notional'     in data: config_mgr.set('live_trading.max_notional_usd',     float(data['live_max_notional']))
 
         if 'max_concurrent' in data:
-            config.setdefault('backtester', {})['max_concurrent_trades'] = int(data['max_concurrent'])
+            config_mgr.set('backtester.max_concurrent_trades', int(data['max_concurrent']))
 
-        config['paper_trading'] = paper_cfg
-        config['live_trading']  = live_cfg
-        # Safety: refuse to write config if pairs list is missing (prevents data loss)
-        if 'pairs' not in config or not config['pairs']:
-            logger.error("SAFETY BLOCK: config missing 'pairs' — refusing to write. "
-                         f"Keys present: {list(config.keys())}")
-            return jsonify({'error': 'Config missing pairs list — write blocked for safety'}), 500
-        with open(CONFIG_PATH, 'w') as f:
-            _yaml.dump(config, f, default_flow_style=False, sort_keys=False)
         return jsonify({'status': 'ok', 'message': 'Settings saved for paper + live'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
