@@ -20,6 +20,7 @@ import logging
 import time
 import json
 import urllib.request
+import requests
 from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional, Tuple
 
@@ -223,7 +224,8 @@ class PositionMonitor:
                         self._cancel_orphaned_orders(raw_sym)
                         continue
 
-                    mark = price_map.get(raw_sym, 0.0)
+                    _pm_val = price_map.get(raw_sym, 0.0)
+                    mark = _pm_val.get('mark', 0.0) if isinstance(_pm_val, dict) else float(_pm_val or 0)
                     exit_price = self._get_actual_exit_price(sym, float(trade.get('entry_price', 0)))
                     if exit_price <= 0:
                         exit_price = mark or float(trade.get('entry_price', 0))
@@ -258,7 +260,12 @@ class PositionMonitor:
                 # Update unrealised PnL
                 mark = float(live_p.get('mark_price', 0))
                 if mark > 0:
-                    price_map[raw_sym] = mark
+                    existing = price_map.get(raw_sym, {})
+                    if isinstance(existing, dict):
+                        existing['mark'] = mark
+                        price_map[raw_sym] = existing
+                    else:
+                        price_map[raw_sym] = {'mark': mark}
 
             # ── Price-based SL/TP check (always runs as safety net) ──────────
             self._check_trade(trade, price_map)
@@ -283,7 +290,7 @@ class PositionMonitor:
           - 45-second Binance propagation guard (don't close if trade is brand new)
           - Kill-switch: abort if live ticker contradicts the SL breach
         """
-        import requests as _req
+        import requests as _req  # local alias used below in kill-switch
         from datetime import datetime, timezone, timedelta
 
         trade_id  = trade['id']
