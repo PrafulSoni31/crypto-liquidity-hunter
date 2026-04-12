@@ -352,6 +352,11 @@ class TradeExecutor:
             api_key = self.connector.api_key
             api_secret = self.connector.api_secret
 
+            # Pre-entry: cancel any stale bracket orders for this symbol.
+            # Prevents leftover LIMIT orders from previous sessions from closing the new position.
+            logger.info(f'[Executor] Pre-entry: cancelling any stale orders for {raw_sym}')
+            _cancel_all_orders(api_key, api_secret, raw_sym)
+
             # STEP 1 — Market entry
             logger.info(f'[Executor] ENTRY: {direction.upper()} {symbol} qty={qty} notional=${notional}')
             order_result = self.connector.place_market_order(symbol, side, qty)
@@ -401,14 +406,16 @@ class TradeExecutor:
             actual_dir = 'short' if float(pos['positionAmt']) < 0 else 'long'
 
             if actual_dir != direction:
+                close_side = 'sell' if actual_dir == 'long' else 'buy'
+                qty_r = _round_qty(raw_sym, actual_qty, exi)
                 logger.error(
-                    f'[Executor] DIRECTION MISMATCH: intended={direction} actual={actual_dir} '
-                    f'for {symbol}. Closing inverted position immediately.'
+                    f'[Executor] *** DIRECTION MISMATCH FIRING *** '
+                    f'intended={direction} actual={actual_dir} '
+                    f'positionAmt={pos.get("positionAmt")} for {symbol}. '
+                    f'About to place {close_side.upper()} MARKET reduceOnly=true qty={qty_r}'
                 )
                 _cancel_all_orders(api_key, api_secret, raw_sym)
-                close_side = 'sell' if actual_dir == 'long' else 'buy'
                 try:
-                    qty_r = _round_qty(raw_sym, actual_qty, exi)
                     close_par = _sign(api_secret,
                                       f'symbol={raw_sym}&side={close_side.upper()}'
                                       f'&type=MARKET&quantity={qty_r}&reduceOnly=true')

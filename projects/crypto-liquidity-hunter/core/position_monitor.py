@@ -624,6 +624,10 @@ class PositionMonitor:
     def _place_market_close(self, sym: str, direction: str, trade: Dict,
                             exit_price: float) -> bool:
         """Place a reduceOnly market order to close FULL position. Returns success."""
+        logger.warning(
+            f'[Monitor] *** MARKET CLOSE FIRING *** sym={sym} direction={direction} '
+            f'trade_id={trade.get("id")} sl={trade.get("sl")} tp={trade.get("tp")}'
+        )
         import time as _t, hmac as _h, hashlib as _ha, requests as _rq
         raw_sym = sym.replace('/', '')
 
