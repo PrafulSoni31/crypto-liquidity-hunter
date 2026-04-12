@@ -273,147 +273,142 @@ class PositionMonitor:
 
     # ── Price-based SL/TP enforcement ─────────────────────────────────────────
 
-    def _check_trade(self, trade: Dict, price_map: Dict):
+    def _check_trade(self, trade: dict, price_map: dict):
         """
         Check if current price has hit SL or TP.
-        If yes → place market close order (or update DB if API restricted).
+        Uses consensus of 3 price feeds + a final kill-switch check to prevent
+        false closures from bad API data.
+        Includes:
+          - 60-second entry-candle grace period (ignore history wicks)
+          - 45-second Binance propagation guard (don't close if trade is brand new)
+          - Kill-switch: abort if live ticker contradicts the SL breach
         """
+        import requests as _req
+        from datetime import datetime, timezone, timedelta
+
         trade_id  = trade['id']
         pair      = trade['pair']
         sym       = pair.split(':', 1)[1] if ':' in pair else pair
-        binance_sym = sym.replace('/', '')
+        binance_sym = sym.replace('/', '').replace(':USDT', 'USDT')
         direction = trade.get('direction', 'long')
         sl        = float(trade.get('sl') or 0)
         tp        = float(trade.get('tp') or 0)
-        ep        = float(trade.get('entry_price') or 0)
 
-        price_info = price_map.get(binance_sym, 0.0)
-        if isinstance(price_info, dict):
-            mark = price_info.get('mark', 0.0)
-            high = price_info.get('high', mark)
-            low  = price_info.get('low', mark)
-        else:
-            mark = price_info
-            high = mark
-            low  = mark
-
-        if mark <= 0:
-            return  # price not available
-
-        # ── ENTRY CANDLE GRACE PERIOD ───────────────────────────────────────
-        # The 1m candle's low/high includes price movement BEFORE the entry.
-        # If the entry candle's wick touched the SL, the monitor would immediately
-        # trigger a close — even though the trade only existed for 5 seconds.
-        # Solution: skip SL/TP checks until the entry candle completes (top of
-        # the next minute). After that, only FRESH candles are checked whose
-        # low/high can't pre-exist the entry.
+        # ── 45-second Binance propagation guard ───────────────────────────
+        # Binance positionRisk API sometimes shows nothing for ~30s after fill.
+        # If trade is <45s old, skip close entirely to avoid false "entry_failed".
         entry_time_str = trade.get('entry_time', '')
         if entry_time_str:
             try:
-                from datetime import datetime as _dt
-                _et = _dt.fromisoformat(entry_time_str.replace('Z', '+00:00'))
-                _et_utc = _et.replace(tzinfo=timezone.utc) if _et.tzinfo is None else _et
-                _now = datetime.now(timezone.utc)
-
-                # Seconds elapsed since entry
-                _elapsed = (_now - _et_utc).total_seconds()
-
-                # When does the current 1m candle end? (top of next minute)
-                _candle_end = _now.replace(second=0, microsecond=0) + timedelta(minutes=1)
-                _secs_until_next_candle = (_candle_end - _now).total_seconds()
-
-                # If entry was within the same 1m candle that started BEFORE the entry,
-                # we can't trust this candle's low/high for SL/TP detection.
-                # Wait until the next candle starts.
-                _candle_start = _now.replace(second=0, microsecond=0)
-                _entry_in_this_candle = _et_utc >= _candle_start
-
-                if _entry_in_this_candle and _elapsed < 60:
-                    logger.debug(
-                        f"[Monitor] {sym} entry in current 1m candle "
-                        f"({_elapsed:.0f}s old, {_secs_until_next_candle:.0f}s until next candle) "
-                        f"— skipping SL/TP check"
-                    )
-                    return  # skip — wait for next candle
+                et = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                age_s = (datetime.now(timezone.utc) - et).total_seconds()
+                if age_s < 45:
+                    logger.debug(f"[Monitor] {sym} trade {trade_id} is only {age_s:.0f}s old — skipping check (propagation guard)")
+                    return
             except Exception:
                 pass
+
+        # ── Price data from consensus of 3 feeds ──────────────────────────
+        price_info = price_map.get(binance_sym, {})
+        kline_low  = float(price_info.get('low', 0) or 0)
+        kline_high = float(price_info.get('high', 0) or 0)
+        mark_price = float(price_info.get('mark', 0) or 0)
+        last_price = float(price_info.get('last', mark_price) or mark_price)
+
+        # ── 60-second entry-candle grace period ───────────────────────────
+        # During the first 60s, the kline includes pre-entry price history (wicks).
+        # Override kline high/low with mark price only to prevent wick-triggered exits.
+        if entry_time_str:
+            try:
+                et = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                age_s = (datetime.now(timezone.utc) - et).total_seconds()
+                if age_s < 60:
+                    logger.debug(f"[Monitor] {sym} in 60s grace period ({age_s:.0f}s) — using mark price only")
+                    kline_low  = mark_price
+                    kline_high = mark_price
+            except Exception:
+                pass
+
+        logger.info(
+            f"[CheckTrade] #{trade_id} {sym} {direction.upper()} | "
+            f"SL={sl:.6g} TP={tp:.6g} | "
+            f"low={kline_low:.6g} high={kline_high:.6g} mark={mark_price:.6g} last={last_price:.6g}"
+        )
+
+        if not any([kline_low, kline_high, mark_price, last_price]):
+            logger.warning(f"[Monitor] No price data for {sym} — skipping")
+            return
+
+        # Consensus: safest low / highest high across all feeds
+        candidates_low  = [p for p in [kline_low, mark_price, last_price] if p > 0]
+        candidates_high = [p for p in [kline_high, mark_price, last_price] if p > 0]
+        safe_low  = min(candidates_low)
+        safe_high = max(candidates_high)
 
         hit_sl = False
         hit_tp = False
 
-        # STRICT exit logic — checks 1m high/low to catch fast wicks
-        # Use a dynamic tick-size aware tolerance instead of a flat percentage (0.2%)
-        # For micro-cap pairs like DENT, 0.2% massively inflates the SL triggering instant closures.
-        
-        # Base tolerance on value scales (1e-5 for decimals, standardizing minimum tick collision)
-        if sl > 0 and sl < 0.01:
-            _TOL = 0.0000001 # Absolute unit tick
-        else:
-            _TOL = 0.0002    # Minimal generic (0.02%)
-            
-        def _hit_sl(long_mode: bool):
-            if not sl: return False
-            if long_mode: return low <= sl + _TOL
-            return high >= sl - _TOL
-            
-        def _hit_tp(long_mode: bool):
-            if not tp: return False
-            if long_mode: return high >= tp - _TOL
-            return low <= tp + _TOL
-
         if direction == 'long':
-            if _hit_sl(True):
+            if sl > 0 and safe_low <= sl:
                 hit_sl = True
-                mark = sl  # closed exactly at SL
-                logger.warning(f"[Monitor] SL hit (wick): {sym} low={low:.6g} <= sl={sl:.6g} (LONG)")
-            elif _hit_tp(True):
+            elif tp > 0 and safe_high >= tp:
                 hit_tp = True
-                mark = tp  # closed exactly at TP
-                logger.info(f"[Monitor] TP hit (wick): {sym} high={high:.6g} >= tp={tp:.6g} (LONG)")
         else:  # short
-            if _hit_sl(False):
+            if sl > 0 and safe_high >= sl:
                 hit_sl = True
-                mark = sl  # closed exactly at SL
-                logger.warning(f"[Monitor] SL hit (wick): {sym} high={high:.6g} >= sl={sl:.6g} (SHORT)")
-            elif _hit_tp(False):
+            elif tp > 0 and safe_low <= tp:
                 hit_tp = True
-                mark = tp  # closed exactly at TP
-                logger.info(f"[Monitor] TP hit (wick): {sym} low={low:.6g} <= tp={tp:.6g} (SHORT)")
 
-        if hit_tp or hit_sl:
-            status = 'target_hit' if hit_tp else 'stop_loss'
-            exit_price = mark
+        if not (hit_sl or hit_tp):
+            return
 
-            # ── ACTUALLY CLOSE THE POSITION ON BINANCE ────────────────────
-            if self._api_ok and self.connector and self.connector.mode != 'paper':
-                closed = self._place_market_close(binance_sym, direction, trade, exit_price)
-                if closed:
-                    # Post-close verification: confirm position is actually gone
-                    time.sleep(1)
-                    pos_amt = self._get_position_amt(binance_sym)
-                    if abs(pos_amt) > 0.001:
-                        logger.warning(
-                            f"[Monitor] Close order placed but position still exists "
-                            f"({sym} {pos_amt}) — retrying"
-                        )
-                        # Position may have been flipped by LIMIT SL overfill
-                        actual_dir = 'long' if pos_amt > 0 else 'short'
-                        self._place_market_close(binance_sym, actual_dir, trade, exit_price)
-
-                    logger.info(f"[Monitor] Market close confirmed for {sym} at {exit_price:.6g}")
-                    self._close_trade_now(trade, exit_price, status, sym)
-                    self._cancel_orphaned_orders(binance_sym)
-                else:
-                    # Close FAILED — do NOT update DB, let monitor retry next cycle
-                    logger.error(
-                        f"[Monitor] Market close FAILED for {sym} — "
-                        f"will retry next monitor cycle"
+        # ── Kill-switch: final live-ticker confirmation ────────────────────
+        # Even if consensus feeds say SL is hit, abort if live ticker disagrees.
+        if hit_sl:
+            try:
+                r = _req.get(
+                    f'https://fapi.binance.com/fapi/v1/ticker/price?symbol={binance_sym}',
+                    timeout=3
+                )
+                live_price = float(r.json()['price'])
+                long_sl_breach  = (direction == 'long'  and live_price <= sl)
+                short_sl_breach = (direction == 'short' and live_price >= sl)
+                if not (long_sl_breach or short_sl_breach):
+                    logger.warning(
+                        f"[KILL SWITCH] {sym} SL breach by consensus (low={safe_low:.6g}) "
+                        f"ABORTED — live ticker={live_price:.6g} is safe. Not closing."
                     )
-                    self._cancel_orphaned_orders(binance_sym)
-                    return  # DON'T update DB — trade stays "open"
-            else:
-                # Paper mode or API restricted — just update DB
+                    return
+            except Exception as e:
+                logger.error(f"[KILL SWITCH] Live ticker check failed for {sym}: {e} — proceeding with close")
+
+        status     = 'target_hit' if hit_tp else 'stop_loss'
+        exit_price = tp if hit_tp else sl
+        logger.warning(
+            f"[Monitor] {status.upper()} confirmed: {sym} {direction.upper()} | "
+            f"safe_low={safe_low:.6g} safe_high={safe_high:.6g} SL={sl:.6g} TP={tp:.6g}"
+        )
+
+        # ── Execute close on Binance ───────────────────────────────────────
+        if self._api_ok and self.connector and self.connector.mode != 'paper':
+            closed = self._place_market_close(binance_sym, direction, trade, exit_price)
+            if closed:
+                import time as _time
+                _time.sleep(1)
+                pos_amt = self._get_position_amt(binance_sym)
+                if abs(pos_amt) > 0.001:
+                    logger.warning(f"[Monitor] Position still open after close ({sym} {pos_amt}) — retrying")
+                    actual_dir = 'long' if pos_amt > 0 else 'short'
+                    self._place_market_close(binance_sym, actual_dir, trade, exit_price)
+                logger.info(f"[Monitor] Close confirmed: {sym} @ {exit_price:.6g}")
                 self._close_trade_now(trade, exit_price, status, sym)
+                self._cancel_orphaned_orders(binance_sym)
+            else:
+                logger.error(f"[Monitor] Close FAILED for {sym} — will retry next cycle")
+                self._cancel_orphaned_orders(binance_sym)
+        else:
+            # Paper mode — just update DB
+            self._close_trade_now(trade, exit_price, status, sym)
 
     def _verify_entry_filled(self, sym: str, entry_price: float) -> bool:
         """
@@ -773,21 +768,37 @@ class PositionMonitor:
             return f"{base}/{quote}:{quote}"
         return symbol
 
-    def _fetch_public_prices(self, binance_symbols: List[str]) -> Dict[str, float]:
+    def _fetch_public_prices(self, binance_symbols: List[str]) -> Dict[str, Dict]:
         """
-        Fetch current prices from Binance public REST (no auth, no IP restriction).
-        Returns {BINANCESYM: price} e.g. {'BTCUSDT': 66500.0}
+        Fetch multiple price points (mark, last, premium) for robust checking.
+        Returns {SYMBOL: {'mark': float, 'last': float, 'index': float}}
         """
-        try:
-            with urllib.request.urlopen(
-                'https://fapi.binance.com/fapi/v1/ticker/price', timeout=5
-            ) as resp:
-                data = json.loads(resp.read())
-            price_map = {item['symbol']: float(item['price']) for item in data}
-            return price_map
+        prices = {}
+        try: # Premium Index (includes mark and last)
+            r = requests.get('https://fapi.binance.com/fapi/v1/premiumIndex', timeout=5)
+            for item in r.json():
+                sym = item['symbol']
+                if sym in binance_symbols:
+                    prices[sym] = {
+                        'mark': float(item.get('markPrice', 0)),
+                        'last': float(item.get('lastFundingRate', 0)), # Not last price, but useful
+                        'index': float(item.get('indexPrice', 0))
+                    }
         except Exception as e:
-            logger.warning(f"[Monitor] Public price fetch error: {e}")
-            return {}
+            logger.warning(f"[Monitor] Premium Index fetch failed: {e}")
+
+        try: # Ticker Price (last price)
+            r = requests.get('https://fapi.binance.com/fapi/v1/ticker/price', timeout=5)
+            for item in r.json():
+                sym = item['symbol']
+                if sym in binance_symbols:
+                    if sym not in prices: prices[sym] = {}
+                    prices[sym]['last'] = float(item.get('price', 0))
+        except Exception as e:
+            logger.warning(f"[Monitor] Ticker Price fetch failed: {e}")
+            
+        return prices
+
 
     def _fetch_public_klines(self, binance_symbols: List[str]) -> Dict[str, Dict]:
         """

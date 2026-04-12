@@ -325,6 +325,19 @@ class TradeExecutor:
         raw_sym = raw_sym.replace('/', '')
         exi = _get_exchange_info(raw_sym)
         qty = _round_qty(raw_sym, notional / entry_price, exi)
+        
+        # Check minimum precision limits before placing order
+        try:
+            if exi:
+                # the exi dict we fetched usually contains the raw precision mapping
+                step = float(exi.get('step', 0.001))
+                if getattr(qty, 'real', 0) < step:
+                    qty = step
+                    import logging
+                    logging.warning(f"Adjusted {symbol} qty to min precision: {qty}")
+        except Exception as e:
+            pass
+
         side = 'buy' if direction == 'long' else 'sell'
 
         order_result = {}
@@ -354,35 +367,6 @@ class TradeExecutor:
             if actual_fill > 0:
                 entry_price = actual_fill
             logger.info(f'[Executor] Filled: {symbol} @ {entry_price} order={order_result.get("id")}')
-
-            # ── Post-fill SL gap check (actual fill may differ from signal entry) ──
-            # Signal entry=1.241 passes 0.5% gap filter, but fill=1.239 may not.
-            # If actual fill is too close to SL, abort — the trade would stop out
-            # immediately from normal price noise.
-            exec_cfg = _cfg.get('signal_execution', {})
-            min_sl_gap = float(exec_cfg.get('min_sl_gap_pct', 0.5)) / 100
-            if stop_loss > 0 and entry_price > 0 and min_sl_gap > 0:
-                actual_sl_gap = abs(entry_price - stop_loss) / entry_price
-                if actual_sl_gap < min_sl_gap:
-                    logger.warning(f'[Executor] POST-FILL SL gap too tight: '
-                                   f'{symbol} fill={entry_price} sl={stop_loss} '
-                                   f'gap={actual_sl_gap*100:.3f}% < min {min_sl_gap*100:.1f}%. '
-                                   f'Closing position immediately.')
-                    # Close the position right away
-                    close_par = _sign(api_secret,
-                                      f'symbol={raw_sym}&side={"SELL" if direction=="long" else "BUY"}'
-                                      f'&type=MARKET&quantity={qty}&reduceOnly=true')
-                    requests.post(f'https://fapi.binance.com/fapi/v1/order?{close_par}',
-                                  headers={'X-MBX-APIKEY': api_key}, timeout=10)
-                    try:
-                        from core.trade_validator import alert_problem
-                        alert_problem(symbol,
-                                      f"⚠️ Entry aborted: SL gap too tight after fill\n"
-                                      f"Fill: {entry_price:.6g}, SL: {stop_loss:.6g}, "
-                                      f"Gap: {actual_sl_gap*100:.3f}% (min {min_sl_gap*100:.1f}%)")
-                    except Exception:
-                        pass
-                    return {'error': f'Post-fill SL gap {actual_sl_gap*100:.3f}% < min {min_sl_gap*100:.1f}% for {symbol}'}
 
             # ── Read SL/TP mode from config ─────────────────────────────────
             sl_tp_mode = exec_cfg.get('sl_tp_mode', 'binance_bracket')
