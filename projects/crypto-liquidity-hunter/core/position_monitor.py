@@ -304,16 +304,25 @@ class PositionMonitor:
         # ── 45-second Binance propagation guard ───────────────────────────
         # Binance positionRisk API sometimes shows nothing for ~30s after fill.
         # If trade is <45s old, skip close entirely to avoid false "entry_failed".
+        # FAIL-SAFE: if entry_time cannot be parsed, SKIP (assume trade is new).
         entry_time_str = trade.get('entry_time', '')
-        if entry_time_str:
-            try:
+        if not entry_time_str:
+            logger.debug(f"[Monitor] {sym} trade {trade_id} has no entry_time — skipping (fail-safe)")
+            return
+        try:
+            if isinstance(entry_time_str, str):
                 et = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
-                age_s = (datetime.now(timezone.utc) - et).total_seconds()
-                if age_s < 45:
-                    logger.debug(f"[Monitor] {sym} trade {trade_id} is only {age_s:.0f}s old — skipping check (propagation guard)")
-                    return
-            except Exception:
-                pass
+            else:
+                et = entry_time_str  # already a datetime object
+            if et.tzinfo is None:
+                et = et.replace(tzinfo=timezone.utc)
+            age_s = (datetime.now(timezone.utc) - et).total_seconds()
+            if age_s < 45:
+                logger.debug(f"[Monitor] {sym} trade {trade_id} is only {age_s:.0f}s old — skipping (propagation guard)")
+                return
+        except Exception as e:
+            logger.warning(f"[Monitor] {sym} trade {trade_id} entry_time parse error: {e} — skipping (fail-safe)")
+            return  # FAIL-SAFE: cannot determine age → assume new → skip
 
         # ── Price data from consensus of 3 feeds ──────────────────────────
         price_info = price_map.get(binance_sym, {})
@@ -325,16 +334,23 @@ class PositionMonitor:
         # ── 60-second entry-candle grace period ───────────────────────────
         # During the first 60s, the kline includes pre-entry price history (wicks).
         # Override kline high/low with mark price only to prevent wick-triggered exits.
-        if entry_time_str:
-            try:
-                et = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
-                age_s = (datetime.now(timezone.utc) - et).total_seconds()
-                if age_s < 60:
-                    logger.debug(f"[Monitor] {sym} in 60s grace period ({age_s:.0f}s) — using mark price only")
-                    kline_low  = mark_price
-                    kline_high = mark_price
-            except Exception:
-                pass
+        # FAIL-SAFE: if parse fails, use mark price only (safest option).
+        try:
+            if isinstance(entry_time_str, str):
+                et2 = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+            else:
+                et2 = entry_time_str
+            if et2.tzinfo is None:
+                et2 = et2.replace(tzinfo=timezone.utc)
+            age_s2 = (datetime.now(timezone.utc) - et2).total_seconds()
+            if age_s2 < 60:
+                logger.debug(f"[Monitor] {sym} in 60s grace period ({age_s2:.0f}s) — using mark price only")
+                kline_low  = mark_price
+                kline_high = mark_price
+        except Exception as e:
+            logger.warning(f"[Monitor] {sym} 60s grace parse error: {e} — using mark price only (fail-safe)")
+            kline_low  = mark_price
+            kline_high = mark_price
 
         logger.info(
             f"[CheckTrade] #{trade_id} {sym} {direction.upper()} | "

@@ -565,6 +565,16 @@ def cmd_scan_all(args):
                             continue
                         dist = abs(cur - ep) / ep
                         if dist <= entry_tol:
+                            # ── DUPLICATE GUARD: skip if open trade already exists for this pair ─
+                            # Prevents 2+ simultaneous scanner processes from both entering.
+                            existing_open = [t for t in store.get_open_trades()
+                                             if t['pair'] == pair and t['status'] == 'open']
+                            if existing_open:
+                                logger.info(f"[Pending] {pair} already has open trade #{existing_open[0]['id']} — skipping entry")
+                                _log('DUPLICATE_BLOCKED', pair=pair, tf=tf,
+                                     direction=ps.get('direction'), reason='open_trade_exists')
+                                continue
+
                             # ── MIN SL GAP FILTER ────────────────────────────────────────────────
                             # Skip entries where the gap between entry and SL is too tight.
                             # Tight SL = poor risk management; these get stopped out immediately
