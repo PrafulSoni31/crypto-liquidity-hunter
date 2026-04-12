@@ -33,7 +33,7 @@ data_fetch:
   - 1h
   - 15m
 cron:
-  scan_interval_minutes: 5
+  scan_interval_minutes: 10
 paper_trading:
   fixed_notional_usd: 20
   margin_leverage: 20
@@ -497,9 +497,9 @@ pairs:
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
 active_account_id: 5
 live_trading:
-  fixed_notional_usd: 50.0
-  margin_leverage: 10.0
+  fixed_notional_usd: 100.0
+  margin_leverage: 20.0
   commission_per_trade: 0.001
   position_sizing: fixed_notional
   risk_percent: 1.0
-  max_notional_usd: 60.0
+  max_notional_usd: 120.0

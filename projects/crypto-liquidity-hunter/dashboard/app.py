@@ -146,7 +146,7 @@ def _auto_start_monitor():
 
 
 # Auto-start monitor when gunicorn worker first handles a request
-_monitor_started = False
+_monitor_started = True  # Disabled: monitor runs as standalone systemd service (clh-monitor)
 _MONITOR_LOCK_FILE = '/tmp/clh_monitor.lock'
 
 @app.before_request
@@ -2050,8 +2050,12 @@ def signal_checklist():
             }
 
         # Overall verdict — only check criteria that have real data
-        critical = [checks['sl_direction']['pass'], checks['sl_gap']['pass'],
-                    checks['risk_reward']['pass']]
+        critical = [
+            checks['sl_direction']['pass'],
+            checks['sl_gap']['pass'],
+            checks['risk_reward']['pass'],
+            checks.get('zone_strength', {}).get('pass', False) # Force it to fail if None
+        ]
         # Confidence is critical only when available (>0)
         if conf > 0:
             critical.append(checks['confidence']['pass'])
@@ -2432,3 +2436,7 @@ def update_config():
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     app.run(host='0.0.0.0', port=5000, debug=False)
+
+@app.route('/api/toggle_status')
+def toggle_status():
+    return 'ok'

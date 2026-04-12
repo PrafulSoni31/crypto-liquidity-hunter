@@ -307,9 +307,13 @@ class DataStore:
             return dict(row) if row else None
 
     def delete_account(self, account_id: int) -> bool:
-        """Soft-delete account (set enabled=0)."""
+        """Hard-delete account and safely nullify associated trades/signals."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("UPDATE accounts SET enabled=0 WHERE id=?", (account_id,))
+            # Setting associated trades to NULL or orphan them before deleting the parent account constraint
+            conn.execute("UPDATE trades SET account_id = NULL WHERE account_id = ?", (account_id,))
+            conn.execute("UPDATE pending_signals SET account_id = NULL WHERE account_id = ?", (account_id,))
+            # Hard delete
+            conn.execute("DELETE FROM accounts WHERE id=?", (account_id,))
             conn.commit()
         return True
 

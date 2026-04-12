@@ -88,6 +88,7 @@ class BinanceConnector:
         self._connected   = False
         self.last_error   = None   # human-readable last error
         self.account_type = None   # 'paper' / 'spot' / 'futures'
+        self.time_offset  = 0
 
     # ─── Connection ────────────────────────────────────────────────────────────
 
