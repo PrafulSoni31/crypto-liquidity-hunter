@@ -369,7 +369,8 @@ class TradeExecutor:
             logger.info(f'[Executor] Filled: {symbol} @ {entry_price} order={order_result.get("id")}')
 
             # ── Read SL/TP mode from config ─────────────────────────────────
-            sl_tp_mode = exec_cfg.get('sl_tp_mode', 'binance_bracket')
+            exec_cfg   = _cfg.get('signal_execution', {})
+            sl_tp_mode = exec_cfg.get('sl_tp_mode', 'monitor_only')
             sl_tp_delay = int(exec_cfg.get('sl_tp_delay_sec', 3))
 
             # STEP 2 — Wait for position to register on Binance
