@@ -53,6 +53,22 @@ def main():
 
     connector = BinanceConnector(api_key=api_key, api_secret=api_secret, mode=mode)
 
+    # Detect hedge mode (dualSidePosition) without a full CCXT connect()
+    try:
+        import hmac as _hm, hashlib as _hs, requests as _rq2
+        _ts = int(time.time() * 1000)
+        _par = f"timestamp={_ts}&recvWindow=5000"
+        _sig = _hm.new(api_secret.encode(), _par.encode(), _hs.sha256).hexdigest()
+        _r = _rq2.get(
+            f"https://fapi.binance.com/fapi/v1/positionSide/dual?{_par}&signature={_sig}",
+            headers={"X-MBX-APIKEY": api_key}, timeout=5
+        )
+        connector.hedge_mode = _r.json().get('dualSidePosition', False)
+        logger.info(f"Position mode: {'HEDGE (dualSidePosition=True)' if connector.hedge_mode else 'ONE-WAY'}")
+    except Exception as _he:
+        logger.warning(f"Hedge mode detection failed: {_he} — assuming ONE-WAY")
+        connector.hedge_mode = False
+
     interval = int(cfg.get('signal_execution.monitor_interval_sec') or 10)
     monitor = PositionMonitor(connector, store, account_id=int(active_id), interval=interval)
     monitor.start()

@@ -45,8 +45,10 @@ def _sign(secret: str, params: str) -> str:
     return full + '&signature=' + sig
 
 
-def _get_position(api_key: str, api_secret: str, raw_sym: str) -> Optional[Dict]:
-    """Return Binance position dict for raw_sym, or None if no position."""
+def _get_position(api_key: str, api_secret: str, raw_sym: str,
+                  direction: str = None) -> Optional[Dict]:
+    """Return Binance position dict for raw_sym, or None if no position.
+    In hedge mode, pass direction='long'/'short' to filter the correct side."""
     try:
         par = _sign(api_secret, f'symbol={raw_sym}')
         r = requests.get(
@@ -54,8 +56,15 @@ def _get_position(api_key: str, api_secret: str, raw_sym: str) -> Optional[Dict]
             headers={'X-MBX-APIKEY': api_key}, timeout=8
         )
         for p in r.json():
-            if float(p.get('positionAmt', 0)) != 0:
-                return p
+            if float(p.get('positionAmt', 0)) == 0:
+                continue
+            # Hedge mode: filter by positionSide matching the trade direction
+            if direction:
+                expected = 'LONG' if direction == 'long' else 'SHORT'
+                pos_side = p.get('positionSide', 'BOTH')
+                if pos_side != 'BOTH' and pos_side != expected:
+                    continue
+            return p
         return None
     except Exception as e:
         logger.error(f'[Executor] _get_position error: {e}')
@@ -358,8 +367,10 @@ class TradeExecutor:
             _cancel_all_orders(api_key, api_secret, raw_sym)
 
             # STEP 1 — Market entry
-            logger.info(f'[Executor] ENTRY: {direction.upper()} {symbol} qty={qty} notional=${notional}')
-            order_result = self.connector.place_market_order(symbol, side, qty)
+            position_side = 'LONG' if direction == 'long' else 'SHORT'
+            logger.info(f'[Executor] ENTRY: {direction.upper()} {symbol} qty={qty} notional=${notional} positionSide={position_side}')
+            order_result = self.connector.place_market_order(symbol, side, qty,
+                                                             position_side=position_side)
             if 'error' in order_result:
                 return {'error': order_result['error']}
 
@@ -380,7 +391,7 @@ class TradeExecutor:
 
             # STEP 2 — Wait for position to register on Binance
             time.sleep(sl_tp_delay)
-            pos = _get_position(api_key, api_secret, raw_sym)
+            pos = _get_position(api_key, api_secret, raw_sym, direction=direction)
 
             if pos is None:
                 logger.error(
@@ -416,9 +427,13 @@ class TradeExecutor:
                 )
                 _cancel_all_orders(api_key, api_secret, raw_sym)
                 try:
+                    # Hedge mode uses positionSide; one-way uses reduceOnly
+                    _hedge = getattr(self.connector, 'hedge_mode', False)
+                    _close_extra = (f'&positionSide={actual_dir.upper()}' if _hedge
+                                    else '&reduceOnly=true')
                     close_par = _sign(api_secret,
                                       f'symbol={raw_sym}&side={close_side.upper()}'
-                                      f'&type=MARKET&quantity={qty_r}&reduceOnly=true')
+                                      f'&type=MARKET&quantity={qty_r}{_close_extra}')
                     requests.post(f'https://fapi.binance.com/fapi/v1/order?{close_par}',
                                   headers={'X-MBX-APIKEY': api_key}, timeout=10)
                     logger.info(f'[Executor] Closed inverted {actual_dir} position for {raw_sym}')

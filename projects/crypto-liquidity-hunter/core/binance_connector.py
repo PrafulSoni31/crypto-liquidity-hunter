@@ -89,6 +89,7 @@ class BinanceConnector:
         self.last_error   = None   # human-readable last error
         self.account_type = None   # 'paper' / 'spot' / 'futures'
         self.time_offset  = 0
+        self.hedge_mode   = False  # True when Binance dualSidePosition=True
 
     # ─── Connection ────────────────────────────────────────────────────────────
 
@@ -192,6 +193,22 @@ class BinanceConnector:
                 self.account_type = 'futures'
                 self.markets     = {}
                 self._connected  = True
+                # ── Detect hedge mode (dualSidePosition) ──────────────────────
+                try:
+                    import requests as _req2, time as _t2, hmac as _h2, hashlib as _ha2
+                    _ts2 = int(_t2.time() * 1000)
+                    _par2 = f"timestamp={_ts2}&recvWindow=5000"
+                    _sig2 = _h2.new(creds['secret'].encode(), _par2.encode(), _ha2.sha256).hexdigest()
+                    _r2 = _req2.get(
+                        f"https://fapi.binance.com/fapi/v1/positionSide/dual?{_par2}&signature={_sig2}",
+                        headers={"X-MBX-APIKEY": creds['apiKey']}, timeout=5
+                    )
+                    self.hedge_mode = _r2.json().get('dualSidePosition', False)
+                    logger.info(f"BinanceConnector: {'HEDGE' if self.hedge_mode else 'ONE-WAY'} position mode")
+                except Exception as _he:
+                    logger.warning(f"BinanceConnector: hedge mode detection failed: {_he}")
+                    self.hedge_mode = False
+                # ──────────────────────────────────────────────────────────────
                 logger.info("BinanceConnector: connected [LIVE FUTURES MAINNET]")
                 return True
             except ccxt.AuthenticationError as e:
@@ -491,7 +508,8 @@ class BinanceConnector:
         except Exception as e:
             return {'can_trade': False, 'can_futures': False, 'reason': str(e)}
 
-    def place_market_order(self, symbol: str, side: str, qty: float) -> Dict:
+    def place_market_order(self, symbol: str, side: str, qty: float,
+                           position_side: str = None) -> Dict:
         """
         Place a market order.
         Auto-handles 1000x contracts (PEPE/USDT → 1000PEPE/USDT:USDT).
@@ -516,10 +534,14 @@ class BinanceConnector:
             return self.paper_execute(symbol, side, qty, price)
         try:
             qty_r = self._round_qty(norm_sym, qty)
+            params = {}
+            if self.hedge_mode and position_side:
+                params['positionSide'] = position_side.upper()
             order = self.exchange.create_order(
-                symbol=norm_sym, type='market', side=side, amount=qty_r
+                symbol=norm_sym, type='market', side=side, amount=qty_r,
+                params=params if params else None
             )
-            logger.info(f"Market order: {side} {qty_r} {norm_sym} → {order['id']}")
+            logger.info(f"Market order: {side} {qty_r} {norm_sym} positionSide={params.get('positionSide','BOTH')} → {order['id']}")
             return order
         except Exception as e:
             err = str(e)
@@ -783,11 +805,13 @@ class BinanceConnector:
                 else:
                     ccxt_sym = sym
                 side = 'long' if amt > 0 else 'short'
+                pos_side = p.get('positionSide', 'BOTH')  # LONG/SHORT (hedge) or BOTH (one-way)
                 out.append({
                     'symbol':            ccxt_sym,
                     'raw_symbol':        sym,
                     'side':              side,
                     'direction':         side,
+                    'positionSide':      pos_side,
                     'contracts':         abs(amt),
                     'entry_price':       float(p.get('entryPrice', 0)),
                     'mark_price':        float(p.get('markPrice', 0)),

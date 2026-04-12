@@ -643,12 +643,20 @@ class PositionMonitor:
                             headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
                 actual_qty = 0
                 actual_direction = direction
+                _hedge_mode = getattr(self.connector, 'hedge_mode', False)
                 for p in r.json():
                     amt = float(p.get('positionAmt', 0))
-                    if amt != 0:
-                        actual_qty = abs(amt)
-                        actual_direction = 'long' if amt > 0 else 'short'
-                        break
+                    if amt == 0:
+                        continue
+                    # In hedge mode, filter by positionSide matching expected direction
+                    if _hedge_mode:
+                        expected_ps = 'LONG' if direction == 'long' else 'SHORT'
+                        ps = p.get('positionSide', 'BOTH')
+                        if ps != 'BOTH' and ps != expected_ps:
+                            continue
+                    actual_qty = abs(amt)
+                    actual_direction = 'long' if amt > 0 else 'short'
+                    break
 
                 if actual_qty <= 0:
                     logger.info(f"[Monitor] No position on Binance for {sym} — already closed")
@@ -663,9 +671,12 @@ class PositionMonitor:
                     close_side = 'sell' if actual_direction == 'long' else 'buy'
 
                 # ── Place market close via direct REST (no CCXT exchange object needed) ──
+                # Hedge mode: use positionSide. One-way mode: use reduceOnly.
                 ts2 = int(_t.time() * 1000)
+                _close_ps = 'LONG' if actual_direction == 'long' else 'SHORT'
+                _side_param = (f'&positionSide={_close_ps}' if _hedge_mode else '&reduceOnly=true')
                 par2 = (f'symbol={raw_sym}&side={close_side.upper()}&type=MARKET'
-                        f'&quantity={actual_qty}&reduceOnly=true'
+                        f'&quantity={actual_qty}{_side_param}'
                         f'&timestamp={ts2}&recvWindow=5000')
                 sig2 = _h.new(self.connector.api_secret.encode(), par2.encode(), _ha.sha256).hexdigest()
                 r2 = _rq.post(
