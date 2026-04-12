@@ -658,25 +658,32 @@ class PositionMonitor:
                     )
                     close_side = 'sell' if actual_direction == 'long' else 'buy'
 
-                # ── Place market close for FULL actual qty ──
-                ccxt_sym = self._normalise_symbol(sym)
-                qty_r = self.connector._round_qty(ccxt_sym, actual_qty)
-                order = self.connector.exchange.create_order(
-                    ccxt_sym, 'market', close_side, qty_r,
-                    params={'reduceOnly': True}
+                # ── Place market close via direct REST (no CCXT exchange object needed) ──
+                ts2 = int(_t.time() * 1000)
+                par2 = (f'symbol={raw_sym}&side={close_side.upper()}&type=MARKET'
+                        f'&quantity={actual_qty}&reduceOnly=true'
+                        f'&timestamp={ts2}&recvWindow=5000')
+                sig2 = _h.new(self.connector.api_secret.encode(), par2.encode(), _ha.sha256).hexdigest()
+                r2 = _rq.post(
+                    f'https://fapi.binance.com/fapi/v1/order?{par2}&signature={sig2}',
+                    headers={'X-MBX-APIKEY': self.connector.api_key,
+                             'Content-Type': 'application/x-www-form-urlencoded'},
+                    timeout=10
                 )
-                actual_exit = float(order.get('average') or order.get('price') or exit_price)
-                filled = float(order.get('filled', 0) or 0)
-                avg = float(order.get('average', 0) or 0)
-
-                if filled > 0 or avg > 0:
+                order_resp = r2.json()
+                if 'orderId' in order_resp:
+                    actual_exit = float(order_resp.get('avgPrice') or order_resp.get('price') or exit_price)
                     logger.info(
                         f"[Monitor] Market close filled (attempt {attempt+1}): "
-                        f"{close_side} {filled or qty_r} {ccxt_sym} @ {actual_exit}"
+                        f"{close_side.upper()} {actual_qty} {raw_sym} @ {actual_exit}"
                     )
                     return True
                 else:
-                    logger.warning(f"[Monitor] Market close placed but 0 filled (attempt {attempt+1})")
+                    err_code = order_resp.get('code', 0)
+                    if err_code == -2022:
+                        logger.error(f"[Monitor] reduceOnly rejected for {raw_sym}: {order_resp}")
+                        return False
+                    logger.warning(f"[Monitor] Close not confirmed (attempt {attempt+1}): {order_resp}")
 
             except Exception as e:
                 err = str(e)
