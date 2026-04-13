@@ -47,7 +47,7 @@ class PositionMonitor:
         # Debounce: require N consecutive "not found on exchange" checks before closing DB
         # Prevents false closes from transient API glitches
         self._missing_count: Dict[int, int] = {}   # trade_id → consecutive missing count
-        self._CLOSE_THRESHOLD = 2                   # must be missing 2× in a row
+        self._CLOSE_THRESHOLD = 4                   # must be missing 4× in a row before closing
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -249,6 +249,35 @@ class PositionMonitor:
                         if (direction == 'long'  and exit_price >= tp * (1 - TOL)) or \
                            (direction == 'short' and exit_price <= tp * (1 + TOL)):
                             reason = 'target_hit'
+                    # ── FINAL DIRECT REST CONFIRMATION ─────────────────────
+                    # Before writing closed_on_exchange to DB, do ONE more direct
+                    # positionRisk call. If the position is actually still open, abort.
+                    # This prevents false closes from transient get_positions() glitches.
+                    try:
+                        import time as _tc, hmac as _hc, hashlib as _hac, requests as _rqc
+                        _ts3 = int(_tc.time() * 1000)
+                        _par3 = f"symbol={raw_sym}&timestamp={_ts3}&recvWindow=5000"
+                        _sig3 = _hc.new(self.connector.api_secret.encode(), _par3.encode(), _hac.sha256).hexdigest()
+                        _rf = _rqc.get(
+                            f"https://fapi.binance.com/fapi/v2/positionRisk?{_par3}&signature={_sig3}",
+                            headers={"X-MBX-APIKEY": self.connector.api_key}, timeout=5
+                        )
+                        _expected_ps = 'LONG' if direction == 'long' else 'SHORT'
+                        _still_open = any(
+                            float(p.get('positionAmt', 0)) != 0 and
+                            p.get('positionSide', 'BOTH') in ('BOTH', _expected_ps)
+                            for p in _rf.json() if isinstance(p, dict) and p.get('symbol') == raw_sym
+                        )
+                        if _still_open:
+                            logger.warning(
+                                f"[Monitor] ABORT closed_on_exchange for {sym} — direct REST check "
+                                f"shows position still open. Resetting miss counter."
+                            )
+                            self._missing_count[trade_id] = 0
+                            continue
+                    except Exception as _ce:
+                        logger.warning(f"[Monitor] Direct REST confirm failed for {sym}: {_ce} — proceeding")
+                    # ────────────────────────────────────────────────────────
                     logger.info(f"[Monitor] Position {trade_id} {sym} confirmed closed: "
                                 f"exit={exit_price:.6g} reason={reason}")
                     self._close_trade_now(trade, exit_price, reason, sym)
@@ -418,7 +447,7 @@ class PositionMonitor:
             if closed:
                 import time as _time
                 _time.sleep(1)
-                pos_amt = self._get_position_amt(binance_sym)
+                pos_amt = self._get_position_amt(binance_sym, direction=direction)
                 if abs(pos_amt) > 0.001:
                     logger.warning(f"[Monitor] Position still open after close ({sym} {pos_amt}) — retrying")
                     actual_dir = 'long' if pos_amt > 0 else 'short'
@@ -604,8 +633,9 @@ class PositionMonitor:
         except Exception as e:
             logger.warning(f"[Monitor] _cancel_orphaned_orders error for {raw_sym}: {e}")
 
-    def _get_position_amt(self, raw_sym: str) -> float:
-        """Get current position amount from Binance. Returns signed qty (positive=long, negative=short)."""
+    def _get_position_amt(self, raw_sym: str, direction: str = None) -> float:
+        """Get current position amount from Binance. Returns signed qty (positive=long, negative=short).
+        In hedge mode, pass direction='long'/'short' to filter the correct positionSide."""
         try:
             import time as _t, hmac as _h, hashlib as _ha, requests as _rq
             ts = int(_t.time() * 1000)
@@ -613,10 +643,18 @@ class PositionMonitor:
             sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
             r = _rq.get(f'https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}',
                         headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
+            _hedge = getattr(self.connector, 'hedge_mode', False)
             for p in r.json():
                 amt = float(p.get('positionAmt', 0))
-                if amt != 0:
-                    return amt
+                if amt == 0:
+                    continue
+                # In hedge mode, filter to the correct positionSide
+                if _hedge and direction:
+                    expected_ps = 'LONG' if direction == 'long' else 'SHORT'
+                    ps = p.get('positionSide', 'BOTH')
+                    if ps != 'BOTH' and ps != expected_ps:
+                        continue
+                return amt
         except Exception as e:
             logger.debug(f"[Monitor] _get_position_amt error for {raw_sym}: {e}")
         return 0.0
@@ -695,8 +733,13 @@ class PositionMonitor:
                     return True
                 else:
                     err_code = order_resp.get('code', 0)
-                    if err_code == -2022:
-                        logger.error(f"[Monitor] reduceOnly rejected for {raw_sym}: {order_resp}")
+                    if err_code in (-2022, -4061):
+                        # -2022: reduceOnly rejected (one-way mode)
+                        # -4061: positionSide mismatch (hedge mode)
+                        logger.error(
+                            f"[Monitor] Position side error ({err_code}) for {raw_sym}: {order_resp} "
+                            f"— hedge_mode={getattr(self.connector,'hedge_mode',False)}"
+                        )
                         return False
                     logger.warning(f"[Monitor] Close not confirmed (attempt {attempt+1}): {order_resp}")
 
@@ -706,9 +749,9 @@ class PositionMonitor:
                     logger.warning(f"[Monitor] API IP-restricted, cannot place close order: {e}")
                     self._api_ok = False
                     return False  # don't retry auth errors
-                if '-2022' in err or 'reduce' in err.lower():
-                    logger.error(f"[Monitor] reduceOnly rejected for {sym}: {e}")
-                    return False  # can't retry reduceOnly rejection
+                if '-2022' in err or '-4061' in err or 'reduce' in err.lower() or 'positionSide' in err:
+                    logger.error(f"[Monitor] Position side error for {sym}: {e}")
+                    return False  # can't retry — wrong mode or reduceOnly rejected
                 logger.warning(f"[Monitor] Market close error for {sym} (attempt {attempt+1}/3): {e}")
                 if attempt < 2:
                     _t.sleep(1)
