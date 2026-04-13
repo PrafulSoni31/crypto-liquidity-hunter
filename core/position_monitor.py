@@ -48,6 +48,9 @@ class PositionMonitor:
         # Prevents false closes from transient API glitches
         self._missing_count: Dict[int, int] = {}   # trade_id → consecutive missing count
         self._CLOSE_THRESHOLD = 4                   # must be missing 4× in a row before closing
+        # Confirmed SL/TP hits waiting for close: trade_id → (status, exit_price)
+        # Once set, bot retries close every cycle even if price bounces back.
+        self._confirmed_close: Dict[int, tuple] = {}
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -121,7 +124,15 @@ class PositionMonitor:
     # ── Main loop ──────────────────────────────────────────────────────────────
 
     def _run(self):
+        _api_ok_reset_ts = 0  # timestamp of last _api_ok reset attempt
         while not self._stop_event.is_set():
+            # Periodically reset _api_ok to recover from transient auth errors
+            import time as _t_run
+            now_ts = _t_run.time()
+            if not self._api_ok and (now_ts - _api_ok_reset_ts) > 300:  # every 5 min
+                logger.info("[Monitor] Resetting _api_ok=True (5-min recovery attempt)")
+                self._api_ok = True
+                _api_ok_reset_ts = now_ts
             try:
                 self._sync()
             except Exception as e:
@@ -172,12 +183,31 @@ class PositionMonitor:
             sym      = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
             raw_sym  = sym.replace('/', '')
             ccxt_sym = self._normalise_symbol(sym)
+            trade_id = trade['id']
+
+            # ── Confirmed SL/TP retry: close every cycle until position is gone ──
+            # Set when SL/TP is first confirmed. Retries even if price bounces back.
+            if trade_id in self._confirmed_close:
+                _c_status, _c_exit = self._confirmed_close[trade_id]
+                _c_direction = trade.get('direction', 'short')
+                _c_sym = sym.replace('/', '').replace(':USDT', 'USDT')
+                logger.warning(
+                    f"[Monitor] *** CONFIRMED CLOSE RETRY *** #{trade_id} {sym} "
+                    f"({_c_status} @ {_c_exit:.6g}) — retrying until position closed"
+                )
+                if self._api_ok and self.connector and self.connector.mode != 'paper':
+                    _closed = self._place_market_close(_c_sym, _c_direction, trade, _c_exit)
+                    if _closed:
+                        self._close_trade_now(trade, _c_exit, _c_status, sym)
+                        self._confirmed_close.pop(trade_id, None)
+                        self._cancel_orphaned_orders(raw_sym)
+                continue  # skip regular Binance position + price check this cycle
+            # ────────────────────────────────────────────────────────────────────
 
             # ── Check against live Binance positions ─────────────────────────
             # Use Binance as source of truth ONLY if the fetch actually succeeded.
             # An empty result (0 positions) is valid and means ALL positions closed.
             if binance_fetch_ok:
-                trade_id = trade['id']
                 live_p = live_positions.get(raw_sym) or live_positions.get(ccxt_sym)
                 if not live_p:
                     # Position NOT found on Binance this cycle.
@@ -441,6 +471,10 @@ class PositionMonitor:
             f"safe_low={safe_low:.6g} safe_high={safe_high:.6g} SL={sl:.6g} TP={tp:.6g}"
         )
 
+        # ── Lock in confirmed close — retry every cycle until position is gone ──
+        # This ensures close is retried even if price bounces back from SL/TP.
+        self._confirmed_close[trade_id] = (status, exit_price)
+
         # ── Execute close on Binance ───────────────────────────────────────
         if self._api_ok and self.connector and self.connector.mode != 'paper':
             closed = self._place_market_close(binance_sym, direction, trade, exit_price)
@@ -453,13 +487,18 @@ class PositionMonitor:
                     actual_dir = 'long' if pos_amt > 0 else 'short'
                     self._place_market_close(binance_sym, actual_dir, trade, exit_price)
                 logger.info(f"[Monitor] Close confirmed: {sym} @ {exit_price:.6g}")
+                self._confirmed_close.pop(trade_id, None)   # clear — position is closed
                 self._close_trade_now(trade, exit_price, status, sym)
                 self._cancel_orphaned_orders(binance_sym)
             else:
-                logger.error(f"[Monitor] Close FAILED for {sym} — will retry next cycle")
+                logger.error(
+                    f"[Monitor] Close FAILED for {sym} — locked in _confirmed_close, "
+                    f"will retry every cycle until position is gone"
+                )
                 self._cancel_orphaned_orders(binance_sym)
         else:
             # Paper mode — just update DB
+            self._confirmed_close.pop(trade_id, None)
             self._close_trade_now(trade, exit_price, status, sym)
 
     def _verify_entry_filled(self, sym: str, entry_price: float) -> bool:
@@ -566,6 +605,7 @@ class PositionMonitor:
             )
             self._closed_trades.add(trade_id)
             self._sltp_placed.discard(trade_id)
+            self._confirmed_close.pop(trade_id, None)  # safety: clear confirmed_close on any DB close
             logger.info(
                 f"[Monitor] Trade {trade_id} {sym} closed "
                 f"exit={exit_price:.6g} pnl=${pnl:.2f} status={status}"
