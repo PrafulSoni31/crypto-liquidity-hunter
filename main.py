@@ -330,6 +330,7 @@ def cmd_scan_all(args):
     entry_tol       = float(exec_cfg.get('entry_tolerance_pct', 0.3)) / 100
     auto_exec       = exec_cfg.get('auto_execute', True)
     min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 0.5)) / 100
+    min_zone_str    = int(exec_cfg.get('min_zone_strength', 1))  # min zone touches for execution
 
     # ── Per-symbol entry cooldown (persisted to file) ────────────────────────
     # Prevents re-entering the same pair within 10 minutes of a previous entry.
@@ -494,12 +495,12 @@ def cmd_scan_all(args):
                             continue
 
                         # ── ZONE STRENGTH CHECK ─────────────────────────────────────────────
-                        if getattr(signal, 'zone_strength', 0) < 1:
+                        if getattr(signal, 'zone_strength', 0) < min_zone_str:
                             logger.info(f"Signal {pair} {signal.direction} REJECTED: "
-                                        f"zone_strength={signal.zone_strength} < 1 (no valid liquidity zone)")
+                                        f"zone_strength={signal.zone_strength} < min {min_zone_str} (no valid liquidity zone)")
                             _log('DUPLICATE_BLOCKED', pair=pair, tf=tf,
                                  direction=signal.direction,
-                                 reason=f'zone_strength_{signal.zone_strength}_below_1')
+                                 reason=f'zone_strength_{signal.zone_strength}_below_{min_zone_str}')
                             continue
 
                         # Save signal to DB
@@ -653,8 +654,8 @@ def cmd_scan_all(args):
                                      reason=f'rr_{_pe_rr:.2f}_below_{_pe_min_rr:.2f}')
                                 store.cancel_pending_signal(ps['id'])
                                 continue
-                            if _pe_sig_id and _pe_zs < 1:
-                                logger.info(f"Pending #{ps['id']} SKIPPED: zone_strength={_pe_zs} < 1 (no valid zone)")
+                            if _pe_sig_id and _pe_zs < min_zone_str:
+                                logger.info(f"Pending #{ps['id']} SKIPPED: zone_strength={_pe_zs} < min {min_zone_str} (no valid zone)")
                                 _log('DUPLICATE_BLOCKED', pair=pair, pending_id=ps['id'],
                                      direction=ps['direction'],
                                      reason=f'zone_strength_{_pe_zs}_below_1')
