@@ -201,6 +201,15 @@ class PositionMonitor:
                         self._close_trade_now(trade, _c_exit, _c_status, sym)
                         self._confirmed_close.pop(trade_id, None)
                         self._cancel_orphaned_orders(raw_sym)
+                else:
+                    # Paper mode — close in DB immediately on every retry cycle
+                    # (no exchange order needed; _confirmed_close retry would loop forever otherwise)
+                    logger.info(
+                        f"[Monitor] Paper mode confirmed close (retry): "
+                        f"#{trade_id} {sym} {_c_status} @ {_c_exit:.6g}"
+                    )
+                    self._confirmed_close.pop(trade_id, None)
+                    self._close_trade_now(trade, _c_exit, _c_status, sym)
                 continue  # skip regular Binance position + price check this cycle
             # ────────────────────────────────────────────────────────────────────
 
