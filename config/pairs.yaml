@@ -1,21 +1,20 @@
 sweep_detector:
-  volume_multiplier: 2.5
-  wick_ratio: 0.5
-  min_sweep_pct: 0.2
-  confirmation_bars: 3
-  min_body_ratio: 0.01
-  lookback_bars: 50
-  sweep_multiplier: 0.5
+  volume_multiplier: 2.5       # ✅ 2.5x avg volume = institutional sweep
+  wick_ratio: 0.5              # ✅ wick must dominate
+  min_sweep_pct: 0.3           # raised from 0.2 — need real extension
+  confirmation_bars: 5         # raised from 3 — 5 bars to confirm no re-grab
+  min_body_ratio: 0.4          # raised from 0.01 — strong displacement body required (≥40%)
+  lookback_bars: 50            # ✅ good lookback
+  sweep_multiplier: 1.0        # raised from 0.5 — must extend 1 ATR beyond prior level
 signal_engine:
-  min_risk_reward: 2.6
+  min_risk_reward: 3.0         # raised from 2.6 — professional minimum
   require_confluence: true
   risk_per_trade: 0.022
-  stop_buffer_pct: 0.001
+  stop_buffer_pct: 0.005       # raised from 0.001 — 0.5% beyond wick (stop hunt protection)
   target_buffer_pct: 0.005
   retracement_levels:
   - 0.5
-  - 0.618
-  - 0.786
+  - 0.618                      # ICT OTE zone only (0.786 removed — too deep/failing structure)
 alerts:
   telegram:
     bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
@@ -43,18 +42,18 @@ signal_execution:
   mode: pending
   auto_execute: true
   entry_tolerance_pct: 0.3
-  min_sl_gap_pct: 0.8
+  min_sl_gap_pct: 1.5          # raised from 0.8 — need 1.5% gap min to survive noise
   sl_tp_mode: monitor_only
   sl_tp_delay_sec: 8
   monitor_interval_sec: 5
   min_confidence: 0.8
-  min_risk_reward: 2.6
-  min_zone_strength: 1
+  min_risk_reward: 3.0         # raised from 2.6 — matches signal_engine
+  min_zone_strength: 3         # raised from 1 — need ≥3 touches = real liquidity pool
 liquidity_mapper:
   equal_touch_tolerance: 0.005
   swing_lookback: 14
-  round_tolerance: 5.0e-08
-  min_swing_strength: 1
+  round_tolerance: 0.005       # FIXED from 5e-08 (broken) — 0.5% bucket for round number detection
+  min_swing_strength: 3        # raised from 1 — equal highs/lows need ≥3 touches
 pairs:
 - binance:0G/USDT
 - binance:1000CAT/USDT
@@ -505,4 +504,4 @@ live_trading:
   risk_percent: 1.0
   max_notional_usd: 60.0
 backtester:
-  max_concurrent_trades: 3
+  max_concurrent_trades: 10
