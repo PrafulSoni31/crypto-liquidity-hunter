@@ -35,7 +35,7 @@ data_fetch:
 cron:
   scan_interval_minutes: 10
 paper_trading:
-  fixed_notional_usd: 20
+  fixed_notional_usd: 200
   margin_leverage: 20
   commission_per_trade: 0.001
   position_sizing: fixed_notional
@@ -54,7 +54,7 @@ liquidity_mapper:
   equal_touch_tolerance: 0.005
   swing_lookback: 14
   round_tolerance: 5.0e-08
-  min_swing_strength: 3
+  min_swing_strength: 1
 pairs:
 - binance:0G/USDT
 - binance:1000CAT/USDT
@@ -495,8 +495,8 @@ pairs:
 - binance:ZKP/USDT
 - binance:ZRO/USDT
 - binance:ZRX/USDT
-- binance:币安人生/USDT
-active_account_id: 5
+- "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
+active_account_id: 1
 live_trading:
   fixed_notional_usd: 50.0
   margin_leverage: 10.0

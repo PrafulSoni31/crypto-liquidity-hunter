@@ -2413,8 +2413,10 @@ def update_config():
         'min_swing_strength':     'liquidity_mapper.min_swing_strength',
         'backtest_commission_pct':  'backtester.commission_pct',
         'backtest_max_concurrent':  'backtester.max_concurrent_trades',
+        'max_concurrent_trades':    'backtester.max_concurrent_trades',  # frontend key alias
         'backtest_slippage_pct':    'backtester.slippage_pct',
         'backtest_timeout_bars':    'backtester.timeout_bars',
+        'min_zone_strength':        'signal_execution.min_zone_strength',  # was missing — saved to root level before
     }
 
     updated = {}
