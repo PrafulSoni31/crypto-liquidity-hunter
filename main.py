@@ -396,6 +396,7 @@ def cmd_scan_all(args):
         risk_per_trade=sig_cfg['risk_per_trade'],
         retracement_levels=sig_cfg['retracement_levels'],
         stop_buffer_pct=sig_cfg['stop_buffer_pct'],
+        target_buffer_pct=sig_cfg.get('target_buffer_pct', 0.001),  # wired from config (was missing)
         min_risk_reward=sig_cfg['min_risk_reward'],
         position_sizing=trade_cfg.get('position_sizing', 'fixed_notional'),
         fixed_notional_usd=trade_cfg.get('fixed_notional_usd', 20.0),
@@ -445,7 +446,7 @@ def cmd_scan_all(args):
                 htf_bias = 'neutral'
                 if tf in ('15m', '1h'):
                     try:
-                        df_htf   = fetcher.fetch_ohlcv(symbol, timeframe='4h', limit=100)
+                        df_htf   = fetcher.fetch_ohlcv(symbol, timeframe='4h', limit=250)  # EMA 200 needs 200+ bars
                         htf_bias = detector.get_htf_bias(df_htf)
                     except Exception as e:
                         logger.debug(f"HTF bias fetch failed for {symbol}: {e}")
