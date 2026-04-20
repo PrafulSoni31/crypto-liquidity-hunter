@@ -330,7 +330,6 @@ def cmd_scan_all(args):
     entry_tol       = float(exec_cfg.get('entry_tolerance_pct', 0.3)) / 100
     auto_exec       = exec_cfg.get('auto_execute', True)
     min_sl_gap_pct  = float(exec_cfg.get('min_sl_gap_pct', 0.5)) / 100
-    min_zone_str    = int(exec_cfg.get('min_zone_strength', 1))  # min zone touches for execution
 
     # ── Per-symbol entry cooldown (persisted to file) ────────────────────────
     # Prevents re-entering the same pair within 10 minutes of a previous entry.
@@ -396,7 +395,6 @@ def cmd_scan_all(args):
         risk_per_trade=sig_cfg['risk_per_trade'],
         retracement_levels=sig_cfg['retracement_levels'],
         stop_buffer_pct=sig_cfg['stop_buffer_pct'],
-        target_buffer_pct=sig_cfg.get('target_buffer_pct', 0.001),  # wired from config (was missing)
         min_risk_reward=sig_cfg['min_risk_reward'],
         position_sizing=trade_cfg.get('position_sizing', 'fixed_notional'),
         fixed_notional_usd=trade_cfg.get('fixed_notional_usd', 20.0),
@@ -446,7 +444,7 @@ def cmd_scan_all(args):
                 htf_bias = 'neutral'
                 if tf in ('15m', '1h'):
                     try:
-                        df_htf   = fetcher.fetch_ohlcv(symbol, timeframe='4h', limit=250)  # EMA 200 needs 200+ bars
+                        df_htf   = fetcher.fetch_ohlcv(symbol, timeframe='4h', limit=100)
                         htf_bias = detector.get_htf_bias(df_htf)
                     except Exception as e:
                         logger.debug(f"HTF bias fetch failed for {symbol}: {e}")
@@ -470,11 +468,8 @@ def cmd_scan_all(args):
                     )
                     if signal:
                         # ── CONFIDENCE THRESHOLD CHECK ──────────────────────────────────────
-                        # Primary source: signal_execution.min_confidence (execution bar)
-                        # Fallback: alerts.telegram.min_confidence, then 0.7
-                        _exec_cfg_conf = config.get('signal_execution', {})
+                        # Read min_confidence from config (alerts.telegram.min_confidence)
                         _min_conf = float(
-                            _exec_cfg_conf.get('min_confidence') or
                             config.get('alerts', {}).get('telegram', {}).get('min_confidence', 0.7)
                         )
                         if signal.confidence < _min_conf:
@@ -483,25 +478,6 @@ def cmd_scan_all(args):
                             _log('DUPLICATE_BLOCKED', pair=pair, tf=tf,
                                  direction=signal.direction,
                                  reason=f'confidence_{signal.confidence:.2f}_below_threshold_{_min_conf:.2f}')
-                            continue
-
-                        # ── R:R THRESHOLD CHECK (signal_execution.min_risk_reward) ──────────
-                        _min_rr_exec = float(_exec_cfg_conf.get('min_risk_reward', 2.0))
-                        if getattr(signal, 'risk_reward', 0) < _min_rr_exec:
-                            logger.info(f"Signal {pair} {signal.direction} REJECTED: "
-                                        f"R:R {signal.risk_reward:.2f} < exec threshold {_min_rr_exec}")
-                            _log('DUPLICATE_BLOCKED', pair=pair, tf=tf,
-                                 direction=signal.direction,
-                                 reason=f'rr_{signal.risk_reward:.2f}_below_exec_threshold_{_min_rr_exec}')
-                            continue
-
-                        # ── ZONE STRENGTH CHECK ─────────────────────────────────────────────
-                        if getattr(signal, 'zone_strength', 0) < min_zone_str:
-                            logger.info(f"Signal {pair} {signal.direction} REJECTED: "
-                                        f"zone_strength={signal.zone_strength} < min {min_zone_str} (no valid liquidity zone)")
-                            _log('DUPLICATE_BLOCKED', pair=pair, tf=tf,
-                                 direction=signal.direction,
-                                 reason=f'zone_strength_{signal.zone_strength}_below_{min_zone_str}')
                             continue
 
                         # Save signal to DB
@@ -617,58 +593,6 @@ def cmd_scan_all(args):
                                          min_required_pct=min_sl_gap_pct*100)
                                     store.cancel_pending_signal(ps['id'])
                                     continue
-
-                            # ── HIGH-CONFIDENCE GATE (signal_execution config) ───────────────
-                            # Blocks low-quality pending signals from executing even if price
-                            # is in range. All 3 checks must pass for entry to proceed.
-                            _pe_min_conf  = float(exec_cfg.get('min_confidence', 0.7))
-                            _pe_min_rr    = float(exec_cfg.get('min_risk_reward', 2.0))
-                            _pe_conf      = float(ps.get('confidence') or 0)
-
-                            # R:R and zone_strength are in signals table (not pending_signals)
-                            # Look them up via signal_id
-                            _pe_rr = 0.0
-                            _pe_zs = 0
-                            _pe_sig_id = ps.get('signal_id')
-                            if _pe_sig_id:
-                                import sqlite3 as _sqlite3
-                                with _sqlite3.connect(store.db_path) as _scon:
-                                    _sr = _scon.execute(
-                                        "SELECT risk_reward, zone_strength FROM signals WHERE id=?",
-                                        (_pe_sig_id,)
-                                    ).fetchone()
-                                    if _sr:
-                                        _pe_rr = float(_sr[0] or 0)
-                                        _pe_zs = int(_sr[1] or 0)
-
-                            if _pe_conf < _pe_min_conf:
-                                logger.info(f"Pending #{ps['id']} SKIPPED: confidence {_pe_conf:.2f} < min {_pe_min_conf:.2f}")
-                                _log('DUPLICATE_BLOCKED', pair=pair, pending_id=ps['id'],
-                                     direction=ps['direction'],
-                                     reason=f'confidence_{_pe_conf:.2f}_below_{_pe_min_conf:.2f}')
-                                store.cancel_pending_signal(ps['id'])
-                                continue
-                            if _pe_min_rr > 0 and _pe_rr > 0 and _pe_rr < _pe_min_rr:
-                                logger.info(f"Pending #{ps['id']} SKIPPED: R:R {_pe_rr:.2f} < min {_pe_min_rr:.2f}")
-                                _log('DUPLICATE_BLOCKED', pair=pair, pending_id=ps['id'],
-                                     direction=ps['direction'],
-                                     reason=f'rr_{_pe_rr:.2f}_below_{_pe_min_rr:.2f}')
-                                store.cancel_pending_signal(ps['id'])
-                                continue
-                            if _pe_sig_id and _pe_zs < min_zone_str:
-                                logger.info(f"Pending #{ps['id']} SKIPPED: zone_strength={_pe_zs} < min {min_zone_str} (no valid zone)")
-                                _log('DUPLICATE_BLOCKED', pair=pair, pending_id=ps['id'],
-                                     direction=ps['direction'],
-                                     reason=f'zone_strength_{_pe_zs}_below_1')
-                                store.cancel_pending_signal(ps['id'])
-                                continue
-                            logger.info(
-                                f"Pending #{ps['id']} HIGH-CONF GATE ✅ "
-                                f"conf={_pe_conf:.2f}/{_pe_min_conf:.2f} "
-                                f"RR={_pe_rr:.2f}/{_pe_min_rr:.2f} "
-                                f"zone_str={_pe_zs}"
-                            )
-                            # ─────────────────────────────────────────────────────────────────
 
                             max_concurrent = config.get('backtester', {}).get('max_concurrent_trades', 3)
                             open_trades_count = len(store.get_open_trades())

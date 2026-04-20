@@ -40,7 +40,7 @@ def _save_config(cfg: Dict):
 
 def _sign(secret: str, params: str) -> str:
     ts = int(time.time() * 1000)
-    full = params + f'&timestamp={ts}&recvWindow=15000'
+    full = params + f'&timestamp={ts}&recvWindow=5000'
     sig = hmac.new(secret.encode(), full.encode(), hashlib.sha256).hexdigest()
     return full + '&signature=' + sig
 

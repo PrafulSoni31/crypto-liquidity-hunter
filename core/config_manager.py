@@ -22,8 +22,7 @@ DEFAULTS = {
     'signal_execution.mode':                'auto',
     'signal_execution.auto_execute':        True,
     'signal_execution.entry_tolerance_pct': 0.3,
-    'signal_execution.min_sl_gap_pct':      1.5,   # 1.5% min gap — survive altcoin noise
-    'signal_execution.min_risk_reward':     3.0,   # professional minimum
+    'signal_execution.min_sl_gap_pct':      0.5,   # 0.5% min gap between entry and SL
     'signal_execution.sl_tp_mode':          'monitor_only',
     'signal_execution.sl_tp_delay_sec':     3,
     'signal_execution.monitor_interval_sec':5,
@@ -31,10 +30,10 @@ DEFAULTS = {
     # Signal engine
     'signal_engine.min_risk_reward':        3.0,
     'signal_engine.risk_per_trade':         0.01,
-    'signal_engine.stop_buffer_pct':        0.005,   # 0.5% — stop hunt protection
-    'signal_engine.target_buffer_pct':      0.005,
+    'signal_engine.stop_buffer_pct':        0.001,
+    'signal_engine.target_buffer_pct':      0.001,
     'signal_engine.require_confluence':     True,
-    'signal_engine.retracement_levels':     [0.5, 0.618],  # ICT OTE only, no 0.786
+    'signal_engine.retracement_levels':     [0.5, 0.618, 0.786],
 
     # Alerts
     'alerts.telegram.min_confidence':       0.7,
@@ -56,18 +55,18 @@ DEFAULTS = {
 
     # Liquidity mapper
     'liquidity_mapper.equal_touch_tolerance': 0.005,
-    'liquidity_mapper.swing_lookback':       14,   # raised — wider fractal window
-    'liquidity_mapper.round_tolerance':      0.005,  # 0.5% bucket for round number zones
-    'liquidity_mapper.min_swing_strength':   3,    # raised — need ≥3 touches for real liquidity
+    'liquidity_mapper.swing_lookback':       5,
+    'liquidity_mapper.round_tolerance':      0.005,
+    'liquidity_mapper.min_swing_strength':   2,
 
     # Sweep detector
-    'sweep_detector.sweep_multiplier':       1.0,   # raised — 1 ATR extension required
-    'sweep_detector.volume_multiplier':      2.5,   # ✅ institutional level
-    'sweep_detector.wick_ratio':             0.5,   # ✅
-    'sweep_detector.min_sweep_pct':          0.3,   # raised from 0.2
-    'sweep_detector.confirmation_bars':      5,     # ✅
-    'sweep_detector.min_body_ratio':         0.4,   # ✅ 40% body = real displacement
-    'sweep_detector.lookback_bars':          50,
+    'sweep_detector.sweep_multiplier':       0.5,
+    'sweep_detector.volume_multiplier':      2.5,
+    'sweep_detector.wick_ratio':             0.4,
+    'sweep_detector.min_sweep_pct':          0.2,
+    'sweep_detector.confirmation_bars':      5,
+    'sweep_detector.min_body_ratio':         0.4,
+    'sweep_detector.lookback_bars':          24,
 
     # Data fetch
     'data_fetch.ohlcv_limit':               300,

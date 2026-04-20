@@ -57,7 +57,7 @@ def main():
     try:
         import hmac as _hm, hashlib as _hs, requests as _rq2
         _ts = int(time.time() * 1000)
-        _par = f"timestamp={_ts}&recvWindow=15000"
+        _par = f"timestamp={_ts}&recvWindow=5000"
         _sig = _hm.new(api_secret.encode(), _par.encode(), _hs.sha256).hexdigest()
         _r = _rq2.get(
             f"https://fapi.binance.com/fapi/v1/positionSide/dual?{_par}&signature={_sig}",

@@ -1,29 +1,30 @@
 sweep_detector:
   volume_multiplier: 2.5
   wick_ratio: 0.5
-  min_sweep_pct: 0.3
-  confirmation_bars: 5
-  min_body_ratio: 0.4
-  lookback_bars: 50
-  sweep_multiplier: 1
+  min_sweep_pct: 0.2
+  confirmation_bars: 3
+  min_body_ratio: 0.01
+  lookback_bars: 14
+  sweep_multiplier: 0.5
 signal_engine:
-  min_risk_reward: 3
+  min_risk_reward: 2.3
   require_confluence: true
-  risk_per_trade: 0.022
-  stop_buffer_pct: 0.005
+  risk_per_trade: 0.03
+  stop_buffer_pct: 0.001
   target_buffer_pct: 0.005
   retracement_levels:
   - 0.5
   - 0.618
+  - 0.786
 alerts:
   telegram:
     bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
     chat_id: '686482312'
     enabled: true
-    min_confidence: 0.8
+    min_confidence: 0.7
 volume_filter:
   enabled: true
-  min_24h_volume_usd: 5000000
+  min_24h_volume_usd: 1000000
 data_fetch:
   ohlcv_limit: 300
   atr_period: 14
@@ -34,26 +35,25 @@ data_fetch:
 cron:
   scan_interval_minutes: 10
 paper_trading:
-  fixed_notional_usd: 200
+  fixed_notional_usd: 20
   margin_leverage: 20
   commission_per_trade: 0.001
   position_sizing: fixed_notional
 signal_execution:
   mode: pending
-  auto_execute: true
+  auto_execute: false
   entry_tolerance_pct: 0.3
-  min_sl_gap_pct: 1.5
+  min_sl_gap_pct: 0.8
   sl_tp_mode: monitor_only
   sl_tp_delay_sec: 8
   monitor_interval_sec: 5
-  min_confidence: 0.8
-  min_risk_reward: 3.0
-  min_zone_strength: 3
+  min_confidence: 0.7
+  min_risk_reward: 2.6
 liquidity_mapper:
   equal_touch_tolerance: 0.005
   swing_lookback: 14
-  round_tolerance: 0.005
-  min_swing_strength: 3
+  round_tolerance: 5.0e-08
+  min_swing_strength: 2
 pairs:
 - binance:0G/USDT
 - binance:1000CAT/USDT
@@ -497,11 +497,9 @@ pairs:
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
 active_account_id: 5
 live_trading:
-  fixed_notional_usd: 50.0
-  margin_leverage: 10.0
+  fixed_notional_usd: 100.0
+  margin_leverage: 20.0
   commission_per_trade: 0.001
   position_sizing: fixed_notional
   risk_percent: 1.0
-  max_notional_usd: 60.0
-backtester:
-  max_concurrent_trades: 10
+  max_notional_usd: 120.0

@@ -188,13 +188,12 @@ class SignalEngine:
         # ── GATE 5: Order Block confluence (Phase 2) ──────────────────────
         ob_confluence  = False
         ob_zone_used   = None
-        # 0.5% proximity tolerance — entry must be AT or inside the OB, not 2% away
-        # Professional ICT standard: OB confluence = price enters the OB candle's body
-        ob_tol = 0.005
+        # 2% proximity tolerance — OB doesn't need to be exact, just nearby
+        ob_tol = 0.02
         if order_blocks:
             for ob in order_blocks:
                 if direction == 'long' and ob.direction == 'bullish':
-                    # Entry within 0.5% of OB zone (inside or just below high)
+                    # Entry within 2% of OB zone (inside, above, or just below)
                     if ob.low * (1 - ob_tol) <= entry_price <= ob.high * (1 + ob_tol):
                         ob_confluence = True
                         ob_zone_used  = ob
@@ -207,11 +206,11 @@ class SignalEngine:
 
         # ── GATE 6: FVG confluence (Phase 2) ──────────────────────────────
         fvg_confluence = False
-        fvg_tol = 0.005  # 0.5% proximity tolerance — must be AT the imbalance
+        fvg_tol = 0.02  # 2% proximity tolerance
         if fvgs:
             for fvg in fvgs:
                 if direction == 'long' and fvg.direction == 'bullish':
-                    # Entry within 0.5% of FVG zone
+                    # Entry within 2% of FVG zone
                     if fvg.bottom * (1 - fvg_tol) <= entry_price <= fvg.top * (1 + fvg_tol):
                         fvg_confluence = True
                         break
