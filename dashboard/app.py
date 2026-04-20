@@ -1468,10 +1468,6 @@ def binance_save_settings():
 
         if 'max_concurrent' in data:
             config_mgr.set('backtester.max_concurrent_trades', int(data['max_concurrent']))
-        if 'max_concurrent_trades' in data:
-            config_mgr.set('backtester.max_concurrent_trades', int(data['max_concurrent_trades']))
-        if 'min_zone_strength' in data:
-            config_mgr.set('signal_execution.min_zone_strength', int(data['min_zone_strength']))
 
         return jsonify({'status': 'ok', 'message': 'Settings saved for paper + live'})
     except Exception as e:
@@ -2344,8 +2340,6 @@ def get_config():
             'sl_tp_mode':               c.get('signal_execution', {}).get('sl_tp_mode', 'binance_bracket'),
             'sl_tp_delay_sec':          c.get('signal_execution', {}).get('sl_tp_delay_sec', 3),
             'monitor_interval_sec':     c.get('signal_execution', {}).get('monitor_interval_sec', 5),
-            'min_zone_strength':        c.get('signal_execution', {}).get('min_zone_strength', 1),
-            'max_concurrent_trades':    c.get('backtester', {}).get('max_concurrent_trades', 3),
             # ── Liquidity Mapper ──
             'equal_touch_tolerance':    c.get('liquidity_mapper', {}).get('equal_touch_tolerance', 0.001),
             'swing_lookback':           c.get('liquidity_mapper', {}).get('swing_lookback', 5),
@@ -2413,10 +2407,8 @@ def update_config():
         'min_swing_strength':     'liquidity_mapper.min_swing_strength',
         'backtest_commission_pct':  'backtester.commission_pct',
         'backtest_max_concurrent':  'backtester.max_concurrent_trades',
-        'max_concurrent_trades':    'backtester.max_concurrent_trades',  # frontend key alias
         'backtest_slippage_pct':    'backtester.slippage_pct',
         'backtest_timeout_bars':    'backtester.timeout_bars',
-        'min_zone_strength':        'signal_execution.min_zone_strength',  # was missing — saved to root level before
     }
 
     updated = {}

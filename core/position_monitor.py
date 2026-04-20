@@ -48,9 +48,6 @@ class PositionMonitor:
         # Prevents false closes from transient API glitches
         self._missing_count: Dict[int, int] = {}   # trade_id → consecutive missing count
         self._CLOSE_THRESHOLD = 4                   # must be missing 4× in a row before closing
-        # Confirmed SL/TP hits waiting for close: trade_id → (status, exit_price)
-        # Once set, bot retries close every cycle even if price bounces back.
-        self._confirmed_close: Dict[int, tuple] = {}
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -85,7 +82,7 @@ class PositionMonitor:
 
             # Get all open orders
             ts  = int(_time.time() * 1000)
-            par = f"timestamp={ts}&recvWindow=15000"
+            par = f"timestamp={ts}&recvWindow=5000"
             sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
             r = _req.get(
                 f"https://fapi.binance.com/fapi/v1/openOrders?{par}&signature={sig}",
@@ -124,15 +121,7 @@ class PositionMonitor:
     # ── Main loop ──────────────────────────────────────────────────────────────
 
     def _run(self):
-        _api_ok_reset_ts = 0  # timestamp of last _api_ok reset attempt
         while not self._stop_event.is_set():
-            # Periodically reset _api_ok to recover from transient auth errors
-            import time as _t_run
-            now_ts = _t_run.time()
-            if not self._api_ok and (now_ts - _api_ok_reset_ts) > 300:  # every 5 min
-                logger.info("[Monitor] Resetting _api_ok=True (5-min recovery attempt)")
-                self._api_ok = True
-                _api_ok_reset_ts = now_ts
             try:
                 self._sync()
             except Exception as e:
@@ -183,40 +172,12 @@ class PositionMonitor:
             sym      = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
             raw_sym  = sym.replace('/', '')
             ccxt_sym = self._normalise_symbol(sym)
-            trade_id = trade['id']
-
-            # ── Confirmed SL/TP retry: close every cycle until position is gone ──
-            # Set when SL/TP is first confirmed. Retries even if price bounces back.
-            if trade_id in self._confirmed_close:
-                _c_status, _c_exit = self._confirmed_close[trade_id]
-                _c_direction = trade.get('direction', 'short')
-                _c_sym = sym.replace('/', '').replace(':USDT', 'USDT')
-                logger.warning(
-                    f"[Monitor] *** CONFIRMED CLOSE RETRY *** #{trade_id} {sym} "
-                    f"({_c_status} @ {_c_exit:.6g}) — retrying until position closed"
-                )
-                if self._api_ok and self.connector and self.connector.mode != 'paper':
-                    _closed = self._place_market_close(_c_sym, _c_direction, trade, _c_exit)
-                    if _closed:
-                        self._close_trade_now(trade, _c_exit, _c_status, sym)
-                        self._confirmed_close.pop(trade_id, None)
-                        self._cancel_orphaned_orders(raw_sym)
-                else:
-                    # Paper mode — close in DB immediately on every retry cycle
-                    # (no exchange order needed; _confirmed_close retry would loop forever otherwise)
-                    logger.info(
-                        f"[Monitor] Paper mode confirmed close (retry): "
-                        f"#{trade_id} {sym} {_c_status} @ {_c_exit:.6g}"
-                    )
-                    self._confirmed_close.pop(trade_id, None)
-                    self._close_trade_now(trade, _c_exit, _c_status, sym)
-                continue  # skip regular Binance position + price check this cycle
-            # ────────────────────────────────────────────────────────────────────
 
             # ── Check against live Binance positions ─────────────────────────
             # Use Binance as source of truth ONLY if the fetch actually succeeded.
             # An empty result (0 positions) is valid and means ALL positions closed.
             if binance_fetch_ok:
+                trade_id = trade['id']
                 live_p = live_positions.get(raw_sym) or live_positions.get(ccxt_sym)
                 if not live_p:
                     # Position NOT found on Binance this cycle.
@@ -295,7 +256,7 @@ class PositionMonitor:
                     try:
                         import time as _tc, hmac as _hc, hashlib as _hac, requests as _rqc
                         _ts3 = int(_tc.time() * 1000)
-                        _par3 = f"symbol={raw_sym}&timestamp={_ts3}&recvWindow=15000"
+                        _par3 = f"symbol={raw_sym}&timestamp={_ts3}&recvWindow=5000"
                         _sig3 = _hc.new(self.connector.api_secret.encode(), _par3.encode(), _hac.sha256).hexdigest()
                         _rf = _rqc.get(
                             f"https://fapi.binance.com/fapi/v2/positionRisk?{_par3}&signature={_sig3}",
@@ -480,10 +441,6 @@ class PositionMonitor:
             f"safe_low={safe_low:.6g} safe_high={safe_high:.6g} SL={sl:.6g} TP={tp:.6g}"
         )
 
-        # ── Lock in confirmed close — retry every cycle until position is gone ──
-        # This ensures close is retried even if price bounces back from SL/TP.
-        self._confirmed_close[trade_id] = (status, exit_price)
-
         # ── Execute close on Binance ───────────────────────────────────────
         if self._api_ok and self.connector and self.connector.mode != 'paper':
             closed = self._place_market_close(binance_sym, direction, trade, exit_price)
@@ -496,18 +453,13 @@ class PositionMonitor:
                     actual_dir = 'long' if pos_amt > 0 else 'short'
                     self._place_market_close(binance_sym, actual_dir, trade, exit_price)
                 logger.info(f"[Monitor] Close confirmed: {sym} @ {exit_price:.6g}")
-                self._confirmed_close.pop(trade_id, None)   # clear — position is closed
                 self._close_trade_now(trade, exit_price, status, sym)
                 self._cancel_orphaned_orders(binance_sym)
             else:
-                logger.error(
-                    f"[Monitor] Close FAILED for {sym} — locked in _confirmed_close, "
-                    f"will retry every cycle until position is gone"
-                )
+                logger.error(f"[Monitor] Close FAILED for {sym} — will retry next cycle")
                 self._cancel_orphaned_orders(binance_sym)
         else:
             # Paper mode — just update DB
-            self._confirmed_close.pop(trade_id, None)
             self._close_trade_now(trade, exit_price, status, sym)
 
     def _verify_entry_filled(self, sym: str, entry_price: float) -> bool:
@@ -522,7 +474,7 @@ class PositionMonitor:
             ts  = int(_time.time() * 1000)
             # Look back 24h for any trades on this symbol
             start_time = ts - 86_400_000
-            par = f"symbol={raw_sym}&limit=10&startTime={start_time}&timestamp={ts}&recvWindow=15000"
+            par = f"symbol={raw_sym}&limit=10&startTime={start_time}&timestamp={ts}&recvWindow=5000"
             sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
             r = _req.get(
                 f"https://fapi.binance.com/fapi/v1/userTrades?{par}&signature={sig}",
@@ -555,7 +507,7 @@ class PositionMonitor:
             import hmac as _hmac, hashlib as _hashlib, time as _time, requests as _req
             raw_sym = sym.replace('/', '')
             ts  = int(_time.time() * 1000)
-            par = f"symbol={raw_sym}&limit=5&timestamp={ts}&recvWindow=15000"
+            par = f"symbol={raw_sym}&limit=5&timestamp={ts}&recvWindow=5000"
             sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
             r = _req.get(
                 f"https://fapi.binance.com/fapi/v1/userTrades?{par}&signature={sig}",
@@ -614,7 +566,6 @@ class PositionMonitor:
             )
             self._closed_trades.add(trade_id)
             self._sltp_placed.discard(trade_id)
-            self._confirmed_close.pop(trade_id, None)  # safety: clear confirmed_close on any DB close
             logger.info(
                 f"[Monitor] Trade {trade_id} {sym} closed "
                 f"exit={exit_price:.6g} pnl=${pnl:.2f} status={status}"
@@ -657,7 +608,7 @@ class PositionMonitor:
         try:
             import time as _time, hmac as _hmac, hashlib as _hashlib, requests as _req
             ts  = int(_time.time() * 1000)
-            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=15000"
+            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=5000"
             sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
             # GET open orders for this symbol
             r_get = _req.get(
@@ -670,7 +621,7 @@ class PositionMonitor:
             logger.info(f"[Monitor] Cancelling {len(orders)} orphaned orders for {raw_sym}")
             # Cancel all open orders for this symbol
             ts2  = int(_time.time() * 1000)
-            par2 = f"symbol={raw_sym}&timestamp={ts2}&recvWindow=15000"
+            par2 = f"symbol={raw_sym}&timestamp={ts2}&recvWindow=5000"
             sig2 = _hmac.new(self.connector.api_secret.encode(), par2.encode(), _hashlib.sha256).hexdigest()
             r_del = _req.delete(
                 f"https://fapi.binance.com/fapi/v1/allOpenOrders?{par2}&signature={sig2}",
@@ -688,7 +639,7 @@ class PositionMonitor:
         try:
             import time as _t, hmac as _h, hashlib as _ha, requests as _rq
             ts = int(_t.time() * 1000)
-            par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=15000'
+            par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=5000'
             sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
             r = _rq.get(f'https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}',
                         headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
@@ -724,7 +675,7 @@ class PositionMonitor:
 
                 # ── Get ACTUAL position qty from Binance ──
                 ts = int(_t.time() * 1000)
-                par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=15000'
+                par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=5000'
                 sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
                 r = _rq.get(f'https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}',
                             headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
@@ -764,7 +715,7 @@ class PositionMonitor:
                 _side_param = (f'&positionSide={_close_ps}' if _hedge_mode else '&reduceOnly=true')
                 par2 = (f'symbol={raw_sym}&side={close_side.upper()}&type=MARKET'
                         f'&quantity={actual_qty}{_side_param}'
-                        f'&timestamp={ts2}&recvWindow=15000')
+                        f'&timestamp={ts2}&recvWindow=5000')
                 sig2 = _h.new(self.connector.api_secret.encode(), par2.encode(), _ha.sha256).hexdigest()
                 r2 = _rq.post(
                     f'https://fapi.binance.com/fapi/v1/order?{par2}&signature={sig2}',
@@ -815,7 +766,7 @@ class PositionMonitor:
         try:
             import time as _t, hmac as _h, hashlib as _ha, requests as _r
             ts  = int(_t.time() * 1000)
-            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=15000"
+            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=5000"
             sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
             resp = _r.get(
                 f"https://fapi.binance.com/fapi/v1/openOrders?{par}&signature={sig}",

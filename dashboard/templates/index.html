@@ -2504,14 +2504,6 @@ document.addEventListener('DOMContentLoaded', () => {
           <label class="cfg-label">Monitor Interval (sec) <small>How often bot checks prices for SL/TP (3–60)</small></label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_monitor_interval_sec" step="1" min="3" max="60">
         </div>
-        <div class="cfg-row">
-          <label class="cfg-label">Min Zone Strength <small>Minimum liquidity zone touches required to execute a trade (1–10). Higher = only strong zones.</small></label>
-          <input class="cfg-input cfg-input-sm" type="number" id="cfg_min_zone_strength" step="1" min="1" max="10">
-        </div>
-        <div class="cfg-row">
-          <label class="cfg-label">Max Concurrent Trades <small>Maximum number of open trades at any one time (1–10).</small></label>
-          <input class="cfg-input cfg-input-sm" type="number" id="cfg_max_concurrent_trades" step="1" min="1" max="10">
-        </div>
       </div>
     </div>
 
@@ -3341,8 +3333,6 @@ async function loadSettings() {
     sv('cfg_sl_tp_mode',            d.sl_tp_mode || 'binance_bracket');
     sv('cfg_sl_tp_delay_sec',       d.sl_tp_delay_sec ?? 3);
     sv('cfg_monitor_interval_sec',  d.monitor_interval_sec ?? 5);
-    sv('cfg_min_zone_strength',     d.min_zone_strength ?? 1);
-    sv('cfg_max_concurrent_trades', d.max_concurrent_trades ?? 3);
     toggleSlTpMode();
 
     // Liquidity Mapper
@@ -3408,8 +3398,6 @@ async function saveSettings() {
       sl_tp_mode:             gv('cfg_sl_tp_mode'),
       sl_tp_delay_sec:        gi('cfg_sl_tp_delay_sec'),
       monitor_interval_sec:   gi('cfg_monitor_interval_sec'),
-      min_zone_strength:      gi('cfg_min_zone_strength'),
-      max_concurrent_trades:  gi('cfg_max_concurrent_trades'),
       // Liquidity Mapper
       equal_touch_tolerance:  gf('cfg_equal_touch_tolerance'),
       swing_lookback:         gi('cfg_swing_lookback'),

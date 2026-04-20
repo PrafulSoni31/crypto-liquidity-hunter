@@ -377,13 +377,11 @@ class SweepDetector:
 
     # ── HTF Trend Bias ─────────────────────────────────────────────────────────
 
-    def get_htf_bias(self, df_htf: pd.DataFrame, ema_fast: int = 50,
-                     ema_slow: int = 200) -> str:
+    def get_htf_bias(self, df_htf: pd.DataFrame, ema_fast: int = 20,
+                     ema_slow: int = 50) -> str:
         """
         Determine higher-timeframe trend bias.
-        Uses EMA 50/200 crossover + recent swing structure.
-        EMA 50/200 on 4h = proper macro structural bias (institutional reference).
-        Previous 20/50 was too sensitive — whipsawed in ranging markets.
+        Uses EMA crossover + recent swing structure.
 
         Returns: 'bullish' | 'bearish' | 'neutral'
         """
