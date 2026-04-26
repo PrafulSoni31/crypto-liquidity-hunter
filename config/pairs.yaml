@@ -31,6 +31,7 @@ data_fetch:
   timeframes:
   - 1h
   - 15m
+  - 5m
 cron:
   scan_interval_minutes: 10
 paper_trading:
@@ -504,6 +505,6 @@ backtester:
   slippage_pct: 0.0005
   timeout_bars: 48
 tsl:
-  enabled: true
+  enabled: false
   activation_pct: 1
   trail_pct: 0.5

@@ -2,9 +2,9 @@
 """
 Standalone Position Monitor Daemon
 Runs independently of gunicorn — survives dashboard restarts.
-Only ONE instance runs at a time (controlled by systemd).
+Only ONE instance runs at a time (PID file lock prevents duplicates).
 """
-import sys, os, time, logging, sqlite3
+import sys, os, time, logging, sqlite3, signal, atexit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -19,7 +19,65 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ── PID file lock — prevents duplicate monitor instances ──────────────────────
+PID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'monitor.pid')
+
+def _acquire_pid_lock():
+    """
+    Write our PID to monitor.pid.
+    If PID file already exists and that PID is still alive → exit immediately.
+    This guarantees only ONE monitor runs at a time, even if crontab fires repeatedly.
+    """
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE) as f:
+                old_pid = int(f.read().strip())
+            # Check if that process is still alive
+            os.kill(old_pid, 0)   # signal 0 = existence check, raises OSError if dead
+            logger.warning(
+                f"[PID Lock] Monitor already running (PID {old_pid}). "
+                f"This instance (PID {os.getpid()}) will exit."
+            )
+            sys.exit(0)           # clean exit — not an error
+        except (ValueError, OSError):
+            # Stale PID file (process dead) — safe to overwrite
+            logger.info(f"[PID Lock] Stale PID file found — taking over.")
+
+    # Write our own PID
+    with open(PID_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+    logger.info(f"[PID Lock] Acquired (PID {os.getpid()})")
+
+def _release_pid_lock():
+    """Remove PID file on clean exit."""
+    try:
+        if os.path.exists(PID_FILE):
+            with open(PID_FILE) as f:
+                pid = int(f.read().strip())
+            if pid == os.getpid():
+                os.remove(PID_FILE)
+                logger.info(f"[PID Lock] Released (PID {os.getpid()})")
+    except Exception:
+        pass
+
+# Register cleanup on any exit (normal, exception, signal)
+atexit.register(_release_pid_lock)
+
+def _signal_handler(signum, frame):
+    """Handle SIGTERM/SIGINT gracefully — cleanup PID file then exit."""
+    logger.info(f"[MonitorDaemon] Signal {signum} received — shutting down.")
+    _release_pid_lock()
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, _signal_handler)
+signal.signal(signal.SIGINT,  _signal_handler)
+# ──────────────────────────────────────────────────────────────────────────────
+
 def main():
+    # ── Enforce single-instance via PID file ──────────────────────────────────
+    _acquire_pid_lock()
+    # ─────────────────────────────────────────────────────────────────────────
+
     from core.config_manager import ConfigManager
     from data.store import DataStore
     from core.binance_connector import BinanceConnector
