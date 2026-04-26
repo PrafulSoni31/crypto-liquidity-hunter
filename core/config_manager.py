@@ -77,6 +77,13 @@ DEFAULTS = {
     'backtester.commission_pct':            0.001,
     'backtester.slippage_pct':              0.0005,
 
+    # Trailing Stop Loss (TSL)
+    # activation_pct: profit % from entry before TSL kicks in  (e.g. 1.0 = 1%)
+    # trail_pct:      how many % below peak the TSL trails      (e.g. 0.5 = 0.5%)
+    'tsl.enabled':          False,
+    'tsl.activation_pct':   1.0,
+    'tsl.trail_pct':        0.5,
+
     # Cron
     'cron.scan_interval_minutes':           5,
 }

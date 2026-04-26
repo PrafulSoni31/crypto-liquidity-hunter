@@ -1,15 +1,15 @@
 sweep_detector:
   volume_multiplier: 2.5
   wick_ratio: 0.5
-  min_sweep_pct: 0.2
-  confirmation_bars: 3
-  min_body_ratio: 0.01
+  min_sweep_pct: 0.3
+  confirmation_bars: 2
+  min_body_ratio: 0.4
   lookback_bars: 14
   sweep_multiplier: 0.5
 signal_engine:
-  min_risk_reward: 2.3
+  min_risk_reward: 2.5
   require_confluence: true
-  risk_per_trade: 0.03
+  risk_per_trade: 0.01
   stop_buffer_pct: 0.001
   target_buffer_pct: 0.005
   retracement_levels:
@@ -29,7 +29,6 @@ data_fetch:
   ohlcv_limit: 300
   atr_period: 14
   timeframes:
-  - 4h
   - 1h
   - 15m
 cron:
@@ -40,19 +39,19 @@ paper_trading:
   commission_per_trade: 0.001
   position_sizing: fixed_notional
 signal_execution:
-  mode: pending
-  auto_execute: false
+  mode: auto
+  auto_execute: true
   entry_tolerance_pct: 0.3
-  min_sl_gap_pct: 0.8
+  min_sl_gap_pct: 0.5
   sl_tp_mode: monitor_only
   sl_tp_delay_sec: 8
   monitor_interval_sec: 5
   min_confidence: 0.7
-  min_risk_reward: 2.6
+  min_risk_reward: 2.5
 liquidity_mapper:
   equal_touch_tolerance: 0.005
   swing_lookback: 14
-  round_tolerance: 5.0e-08
+  round_tolerance: 0.001
   min_swing_strength: 2
 pairs:
 - binance:0G/USDT
@@ -124,7 +123,6 @@ pairs:
 - binance:BERA/USDT
 - binance:BFUSD/USDT
 - binance:BICO/USDT
-- binance:BIFI/USDT
 - binance:BIGTIME/USDT
 - binance:BIO/USDT
 - binance:BLUR/USDT
@@ -148,6 +146,7 @@ pairs:
 - binance:CFG/USDT
 - binance:CFX/USDT
 - binance:CGPT/USDT
+- binance:CHIP/USDT
 - binance:CHR/USDT
 - binance:CHZ/USDT
 - binance:CITY/USDT
@@ -203,7 +202,6 @@ pairs:
 - binance:FF/USDT
 - binance:FIDA/USDT
 - binance:FIL/USDT
-- binance:FIO/USDT
 - binance:FLOKI/USDT
 - binance:FLOW/USDT
 - binance:FLUX/USDT
@@ -211,7 +209,6 @@ pairs:
 - binance:FORM/USDT
 - binance:FRAX/USDT
 - binance:FTT/USDT
-- binance:FUN/USDT
 - binance:G/USDT
 - binance:GALA/USDT
 - binance:GAS/USDT
@@ -289,7 +286,6 @@ pairs:
 - binance:MAV/USDT
 - binance:MBL/USDT
 - binance:MBOX/USDT
-- binance:MDT/USDT
 - binance:ME/USDT
 - binance:MEME/USDT
 - binance:MET/USDT
@@ -328,7 +324,6 @@ pairs:
 - binance:ORCA/USDT
 - binance:ORDI/USDT
 - binance:OSMO/USDT
-- binance:OXT/USDT
 - binance:PARTI/USDT
 - binance:PAXG/USDT
 - binance:PENDLE/USDT
@@ -450,7 +445,6 @@ pairs:
 - binance:USDS/USDT
 - binance:USTC/USDT
 - binance:USUAL/USDT
-- binance:UTK/USDT
 - binance:VANA/USDT
 - binance:VANRY/USDT
 - binance:VELODROME/USDT
@@ -460,7 +454,6 @@ pairs:
 - binance:VTHO/USDT
 - binance:W/USDT
 - binance:WAL/USDT
-- binance:WAN/USDT
 - binance:WAXP/USDT
 - binance:WBETH/USDT
 - binance:WBTC/USDT
@@ -502,4 +495,15 @@ live_trading:
   commission_per_trade: 0.001
   position_sizing: fixed_notional
   risk_percent: 1.0
-  max_notional_usd: 120.0
+  max_notional_usd: 100.0
+min_zone_strength: 2
+max_concurrent_trades: 5
+backtester:
+  max_concurrent_trades: 5
+  commission_pct: 0.001
+  slippage_pct: 0.0005
+  timeout_bars: 48
+tsl:
+  enabled: true
+  activation_pct: 1
+  trail_pct: 0.5

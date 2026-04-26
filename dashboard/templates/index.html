@@ -2504,6 +2504,62 @@ document.addEventListener('DOMContentLoaded', () => {
           <label class="cfg-label">Monitor Interval (sec) <small>How often bot checks prices for SL/TP (3–60)</small></label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_monitor_interval_sec" step="1" min="3" max="60">
         </div>
+        <div class="cfg-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <label class="cfg-label">Max Concurrent Trades <small>Maximum number of open trades at any one time (1–10).</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_backtest_max_concurrent" step="1" min="1" max="10">
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label">Backtest Commission % <small>Commission fraction per trade e.g. 0.001 = 0.1%</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_backtest_commission_pct" step="0.0001" min="0" max="0.01">
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label">Backtest Slippage % <small>Simulated slippage per fill (0.0005 = 0.05%)</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_backtest_slippage_pct" step="0.0001" min="0" max="0.01">
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label">Backtest Timeout (bars) <small>Auto-close trade after N bars if neither SL nor TP hit</small></label>
+          <input class="cfg-input cfg-input-sm" type="number" id="cfg_backtest_timeout_bars" step="1" min="4" max="200">
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Trailing Stop Loss ── -->
+    <div class="cfg-section" id="tsl-section" style="border-color:rgba(16,185,129,.3)">
+      <div class="cfg-section-head" style="background:rgba(16,185,129,.05)">
+        <span class="cfg-section-icon">📈</span>
+        <span class="cfg-section-title" style="color:var(--green,#10b981)">Trailing Stop Loss (TSL)</span>
+        <span class="badge badge-blue" style="margin-left:auto;font-size:9px">monitor_only mode</span>
+      </div>
+      <div class="cfg-section-body">
+        <div class="cfg-row" style="background:rgba(16,185,129,.05);border-radius:6px;padding:8px 10px;margin:-4px 0 8px">
+          <span style="font-size:11px;color:var(--green,#10b981)">
+            💡 TSL locks in profit by trailing SL behind the best price seen. Activates only after reaching Activation %. Works with Monitor Only SL/TP mode.
+          </span>
+        </div>
+        <div class="cfg-row">
+          <label class="cfg-label cfg-toggle">
+            <input type="checkbox" id="cfg_tsl_enabled" onchange="toggleTslRows()">
+            Enable Trailing Stop Loss
+            <small style="color:var(--muted)">Auto-moves SL to lock profit as price moves in your favour</small>
+          </label>
+        </div>
+        <div id="tsl-rows" style="display:none">
+          <div class="cfg-row">
+            <label class="cfg-label">Activation % <small>Minimum profit from entry before TSL kicks in (e.g. 1.0 = 1%)</small></label>
+            <input class="cfg-input cfg-input-sm" type="number" id="cfg_tsl_activation_pct" step="0.1" min="0.1" max="20.0" value="1.0">
+          </div>
+          <div class="cfg-row">
+            <label class="cfg-label">Trail % <small>SL trails this far behind peak price (e.g. 0.5 = 0.5%). Tighter = more profit locked, more noise risk.</small></label>
+            <input class="cfg-input cfg-input-sm" type="number" id="cfg_tsl_trail_pct" step="0.1" min="0.1" max="10.0" value="0.5">
+          </div>
+          <div style="padding:8px 0 4px;font-size:11px;color:var(--muted);line-height:1.7">
+            <strong style="color:var(--text)">How it works:</strong><br>
+            • LONG: once price rises ≥ Activation %, TSL = peak × (1 − Trail %)<br>
+            • SHORT: once price falls ≥ Activation %, TSL = trough × (1 + Trail %)<br>
+            • SL only moves in the profitable direction — never widens<br>
+            • Requires <strong>SL/TP Mode = Monitor Only</strong> to enforce via bot
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3331,8 +3387,19 @@ async function loadSettings() {
     sv('cfg_entry_tolerance_pct',   d.entry_tolerance_pct);
     sv('cfg_min_sl_gap_pct',        d.min_sl_gap_pct);
     sv('cfg_sl_tp_mode',            d.sl_tp_mode || 'binance_bracket');
-    sv('cfg_sl_tp_delay_sec',       d.sl_tp_delay_sec ?? 3);
-    sv('cfg_monitor_interval_sec',  d.monitor_interval_sec ?? 5);
+    sv('cfg_sl_tp_delay_sec',            d.sl_tp_delay_sec ?? 3);
+    sv('cfg_monitor_interval_sec',       d.monitor_interval_sec ?? 5);
+    sv('cfg_backtest_max_concurrent',    d.backtest_max_concurrent ?? 3);
+    sv('cfg_backtest_commission_pct',    d.backtest_commission_pct ?? 0.001);
+    sv('cfg_backtest_slippage_pct',      d.backtest_slippage_pct ?? 0.0005);
+    sv('cfg_backtest_timeout_bars',      d.backtest_timeout_bars ?? 48);
+
+    // Trailing Stop Loss
+    sv('cfg_tsl_enabled',               d.tsl_enabled ?? false);
+    sv('cfg_tsl_activation_pct',        d.tsl_activation_pct ?? 1.0);
+    sv('cfg_tsl_trail_pct',             d.tsl_trail_pct ?? 0.5);
+    toggleTslRows();
+
     toggleSlTpMode();
 
     // Liquidity Mapper
@@ -3396,8 +3463,16 @@ async function saveSettings() {
       entry_tolerance_pct:    gf('cfg_entry_tolerance_pct'),
       min_sl_gap_pct:         gf('cfg_min_sl_gap_pct'),
       sl_tp_mode:             gv('cfg_sl_tp_mode'),
-      sl_tp_delay_sec:        gi('cfg_sl_tp_delay_sec'),
-      monitor_interval_sec:   gi('cfg_monitor_interval_sec'),
+      sl_tp_delay_sec:            gi('cfg_sl_tp_delay_sec'),
+      monitor_interval_sec:       gi('cfg_monitor_interval_sec'),
+      backtest_max_concurrent:    gi('cfg_backtest_max_concurrent'),
+      backtest_commission_pct:    gf('cfg_backtest_commission_pct'),
+      backtest_slippage_pct:      gf('cfg_backtest_slippage_pct'),
+      backtest_timeout_bars:      gi('cfg_backtest_timeout_bars'),
+      // Trailing Stop Loss
+      tsl_enabled:                gb('cfg_tsl_enabled'),
+      tsl_activation_pct:         gf('cfg_tsl_activation_pct'),
+      tsl_trail_pct:              gf('cfg_tsl_trail_pct'),
       // Liquidity Mapper
       equal_touch_tolerance:  gf('cfg_equal_touch_tolerance'),
       swing_lookback:         gi('cfg_swing_lookback'),
@@ -3514,6 +3589,12 @@ function toggleSlTpMode() {
   const monitorRow = document.getElementById('row_monitor_interval');
   if (delayRow)   delayRow.style.display   = mode === 'binance_bracket' ? '' : 'none';
   if (monitorRow) monitorRow.style.display  = mode === 'monitor_only'   ? '' : 'none';
+}
+
+function toggleTslRows() {
+  const enabled = document.getElementById('cfg_tsl_enabled')?.checked || false;
+  const rows    = document.getElementById('tsl-rows');
+  if (rows) rows.style.display = enabled ? '' : 'none';
 }
 
 function toggleLiveSizingMode() {

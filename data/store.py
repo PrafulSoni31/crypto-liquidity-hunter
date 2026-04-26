@@ -580,6 +580,17 @@ class DataStore:
             rows = cur.fetchall()
             return [dict(row) for row in rows]
 
+    def update_trade_sl(self, trade_id: int, new_sl: float) -> bool:
+        """Update the SL of an open trade (used by trailing stop)."""
+        with sqlite3.connect(self.db_path) as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE trades SET sl=? WHERE id=? AND status='open'",
+                (new_sl, trade_id)
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
     def get_closed_trades(self, limit: int = 50) -> List[Dict]:
         """Return recent closed trades."""
         with sqlite3.connect(self.db_path) as conn:

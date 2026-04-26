@@ -296,6 +296,9 @@ class PositionMonitor:
                     else:
                         price_map[raw_sym] = {'mark': mark}
 
+            # ── Trailing Stop Loss update (runs before SL/TP check) ──────────
+            self._update_trailing_stop(trade, price_map)
+
             # ── Price-based SL/TP check (always runs as safety net) ──────────
             self._check_trade(trade, price_map)
 
@@ -306,6 +309,121 @@ class PositionMonitor:
         # - Each gunicorn restart resets _sltp_placed memory
         # The monitor's only job is to DETECT closes and cancel orphans.
         # Bracket placement is the executor's responsibility, not the monitor's.
+
+    # ── Trailing Stop Loss ─────────────────────────────────────────────────────
+
+    def _update_trailing_stop(self, trade: dict, price_map: dict):
+        """
+        Trailing Stop Loss (TSL) engine — runs every monitor cycle BEFORE _check_trade.
+
+        Logic:
+          1. Read TSL config from pairs.yaml each cycle (live-reloadable).
+          2. Skip if TSL disabled, or trade < 45s old (grace period).
+          3. Calculate current profit % from entry.
+          4. If profit >= activation_pct → TSL is active.
+          5. Compute ideal TSL = peak_price × (1 ± trail_pct/100).
+             - LONG:  TSL = highest_mark_ever × (1 - trail_pct/100)
+             - SHORT: TSL = lowest_mark_ever  × (1 + trail_pct/100)
+          6. Only move TSL in the profitable direction (never widen it).
+          7. Write new SL to DB if it improved — monitor will enforce it next cycle.
+
+        Peak tracking is per-trade in-memory dict (_tsl_peaks). On restart the peak
+        resets to current price — TSL re-arms naturally as price moves further.
+        """
+        from datetime import datetime, timezone
+
+        trade_id  = trade['id']
+        direction = trade.get('direction', 'long')
+        entry     = float(trade.get('entry_price') or 0)
+        current_sl = float(trade.get('sl') or 0)
+
+        if entry <= 0:
+            return
+
+        # ── Read config live (picks up dashboard changes without restart) ──
+        try:
+            from core.config_manager import cfg as _cfg
+            _cfg.reload()
+            tsl_enabled      = bool(_cfg.get('tsl.enabled', False))
+            activation_pct   = float(_cfg.get('tsl.activation_pct', 1.0)) / 100.0
+            trail_pct        = float(_cfg.get('tsl.trail_pct', 0.5))    / 100.0
+        except Exception:
+            return
+
+        if not tsl_enabled:
+            return
+
+        # ── Grace period: skip if trade < 45s old ──────────────────────────
+        entry_time_str = trade.get('entry_time', '')
+        if not entry_time_str:
+            return
+        try:
+            et = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+            if et.tzinfo is None:
+                et = et.replace(tzinfo=timezone.utc)
+            if (datetime.now(timezone.utc) - et).total_seconds() < 45:
+                return
+        except Exception:
+            return
+
+        # ── Get current mark price ─────────────────────────────────────────
+        sym        = trade['pair'].split(':', 1)[1] if ':' in trade['pair'] else trade['pair']
+        binance_sym = sym.replace('/', '').replace(':USDT', 'USDT')
+        price_info = price_map.get(binance_sym, {})
+        mark = float(price_info.get('mark', 0) or 0)
+        if mark <= 0:
+            return
+
+        # ── Check profit % from entry ──────────────────────────────────────
+        if direction == 'long':
+            profit_pct = (mark - entry) / entry
+        else:  # short
+            profit_pct = (entry - mark) / entry
+
+        if profit_pct < activation_pct:
+            # Not yet profitable enough to activate TSL
+            return
+
+        # ── Track peak (best price seen since activation) ──────────────────
+        if not hasattr(self, '_tsl_peaks'):
+            self._tsl_peaks: dict = {}
+
+        if direction == 'long':
+            peak = self._tsl_peaks.get(trade_id, mark)
+            peak = max(peak, mark)
+            self._tsl_peaks[trade_id] = peak
+            new_sl = peak * (1.0 - trail_pct)
+            # Only move SL upward (never lower it)
+            if new_sl <= current_sl:
+                return
+        else:  # short
+            peak = self._tsl_peaks.get(trade_id, mark)
+            peak = min(peak, mark)
+            self._tsl_peaks[trade_id] = peak
+            new_sl = peak * (1.0 + trail_pct)
+            # Only move SL downward (never raise it for shorts)
+            if new_sl >= current_sl:
+                return
+
+        # ── Safety: TSL must not be worse than original SL ─────────────────
+        if direction == 'long'  and new_sl < float(trade.get('sl') or 0) * 0.95:
+            return   # sanity: never set TSL more than 5% below original SL
+        if direction == 'short' and new_sl > float(trade.get('sl') or 0) * 1.05:
+            return
+
+        # ── Write to DB ────────────────────────────────────────────────────
+        try:
+            updated = self.store.update_trade_sl(trade_id, round(new_sl, 8))
+            if updated:
+                logger.info(
+                    f"[TSL] #{trade_id} {sym} {direction.upper()} | "
+                    f"peak={peak:.6g} → new_sl={new_sl:.6g} "
+                    f"(trail={trail_pct*100:.2f}% | profit={profit_pct*100:.2f}%)"
+                )
+                # Update the in-memory trade dict so _check_trade uses the new SL this cycle
+                trade['sl'] = new_sl
+        except Exception as e:
+            logger.warning(f"[TSL] DB update failed for trade {trade_id}: {e}")
 
     # ── Price-based SL/TP enforcement ─────────────────────────────────────────
 

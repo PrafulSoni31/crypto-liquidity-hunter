@@ -2350,6 +2350,10 @@ def get_config():
             'backtest_max_concurrent':  c.get('backtester', {}).get('max_concurrent_trades', 3),
             'backtest_slippage_pct':    c.get('backtester', {}).get('slippage_pct', 0.0005),
             'backtest_timeout_bars':    c.get('backtester', {}).get('timeout_bars', 48),
+            # ── Trailing Stop Loss ──
+            'tsl_enabled':              bool(c.get('tsl', {}).get('enabled', False)),
+            'tsl_activation_pct':       float(c.get('tsl', {}).get('activation_pct', 1.0)),
+            'tsl_trail_pct':            float(c.get('tsl', {}).get('trail_pct', 0.5)),
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -2409,6 +2413,10 @@ def update_config():
         'backtest_max_concurrent':  'backtester.max_concurrent_trades',
         'backtest_slippage_pct':    'backtester.slippage_pct',
         'backtest_timeout_bars':    'backtester.timeout_bars',
+        # Trailing Stop Loss
+        'tsl_enabled':              'tsl.enabled',
+        'tsl_activation_pct':       'tsl.activation_pct',
+        'tsl_trail_pct':            'tsl.trail_pct',
     }
 
     updated = {}
