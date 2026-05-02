@@ -388,28 +388,56 @@ class PositionMonitor:
         if not hasattr(self, '_tsl_peaks'):
             self._tsl_peaks: dict = {}
 
+        # ── Guard: invalidate stale peak if this trade_id was reused ───────
+        # If DB was cleared and a new trade opened with the same integer ID,
+        # the in-memory peak belongs to a different instrument. Detect this by
+        # storing (trade_id, entry_price) as the key, not just trade_id.
+        tsl_key = (trade_id, round(entry, 8))
+        if trade_id in self._tsl_peaks and not isinstance(list(self._tsl_peaks.keys())[0], tuple):
+            # Migrate legacy int keys to tuple keys on first encounter
+            self._tsl_peaks = {k: v for k, v in self._tsl_peaks.items()
+                                if isinstance(k, tuple)}
+
         if direction == 'long':
-            peak = self._tsl_peaks.get(trade_id, mark)
+            peak = self._tsl_peaks.get(tsl_key, mark)
+            # Validate: for LONG, peak must be >= entry (price moved up profitably)
+            if peak < entry:
+                peak = mark  # stale/wrong peak from another trade — reset
             peak = max(peak, mark)
-            self._tsl_peaks[trade_id] = peak
+            self._tsl_peaks[tsl_key] = peak
             new_sl = peak * (1.0 - trail_pct)
             # Only move SL upward (never lower it)
             if new_sl <= current_sl:
                 return
+            # Sanity: new TSL must be ABOVE entry * 0.90 (within 10% below entry)
+            if new_sl < entry * 0.90:
+                logger.warning(f"[TSL] #{trade_id} {sym} LONG TSL sanity fail: "
+                                f"new_sl={new_sl:.6g} < entry*0.90={entry*0.90:.6g} — skip")
+                return
         else:  # short
-            peak = self._tsl_peaks.get(trade_id, mark)
+            peak = self._tsl_peaks.get(tsl_key, mark)
+            # Validate: for SHORT, peak must be <= entry (price moved down profitably)
+            if peak > entry:
+                peak = mark  # stale/wrong peak from another trade — reset
             peak = min(peak, mark)
-            self._tsl_peaks[trade_id] = peak
+            self._tsl_peaks[tsl_key] = peak
             new_sl = peak * (1.0 + trail_pct)
-            # Only move SL downward (never raise it for shorts)
+            # Only move SL downward (never raise it for shorts = never move further from entry)
             if new_sl >= current_sl:
                 return
-
-        # ── Safety: TSL must not be worse than original SL ─────────────────
-        if direction == 'long'  and new_sl < float(trade.get('sl') or 0) * 0.95:
-            return   # sanity: never set TSL more than 5% below original SL
-        if direction == 'short' and new_sl > float(trade.get('sl') or 0) * 1.05:
-            return
+            # Sanity: new TSL for SHORT must be BELOW entry * 1.10 (within 10% above entry)
+            # i.e. the TSL price must make sense as a stop for a short position
+            if new_sl > entry * 1.10:
+                logger.warning(f"[TSL] #{trade_id} {sym} SHORT TSL sanity fail: "
+                                f"new_sl={new_sl:.6g} > entry*1.10={entry*1.10:.6g} — skip")
+                return
+            # Also: for SHORT the new SL must always be BELOW the original SL
+            # (original SL is ABOVE entry for shorts; TSL should move SL DOWN towards entry)
+            original_sl = float(trade.get('sl') or 0)
+            if original_sl > 0 and new_sl > original_sl * 1.02:
+                logger.warning(f"[TSL] #{trade_id} {sym} SHORT TSL above original SL: "
+                                f"new_sl={new_sl:.6g} > original_sl={original_sl:.6g} — skip")
+                return
 
         # ── Write to DB ────────────────────────────────────────────────────
         try:
@@ -561,17 +589,22 @@ class PositionMonitor:
 
         # ── Execute close on Binance ───────────────────────────────────────
         if self._api_ok and self.connector and self.connector.mode != 'paper':
-            closed = self._place_market_close(binance_sym, direction, trade, exit_price)
-            if closed:
+            # _place_market_close now returns the actual fill price (float > 0) or 0.0 on failure
+            fill_price = self._place_market_close(binance_sym, direction, trade, exit_price)
+            if fill_price:
                 import time as _time
                 _time.sleep(1)
                 pos_amt = self._get_position_amt(binance_sym, direction=direction)
                 if abs(pos_amt) > 0.001:
                     logger.warning(f"[Monitor] Position still open after close ({sym} {pos_amt}) — retrying")
                     actual_dir = 'long' if pos_amt > 0 else 'short'
-                    self._place_market_close(binance_sym, actual_dir, trade, exit_price)
-                logger.info(f"[Monitor] Close confirmed: {sym} @ {exit_price:.6g}")
-                self._close_trade_now(trade, exit_price, status, sym)
+                    retry_price = self._place_market_close(binance_sym, actual_dir, trade, fill_price)
+                    if retry_price:
+                        fill_price = retry_price
+                # Use actual fill price for DB — NOT the SL/TP threshold value
+                actual_exit = fill_price if fill_price > 0 else exit_price
+                logger.info(f"[Monitor] Close confirmed: {sym} @ {actual_exit:.6g}")
+                self._close_trade_now(trade, actual_exit, status, sym)
                 self._cancel_orphaned_orders(binance_sym)
             else:
                 logger.error(f"[Monitor] Close FAILED for {sym} — will retry next cycle")
@@ -658,11 +691,26 @@ class PositionMonitor:
         ep        = float(trade.get('entry_price', exit_price) or exit_price)
         commission= float(trade.get('commission_usd', 0) or 0)
 
-        # Try to get actual exit price from Binance trade history (more accurate)
-        if exit_price <= 0 or exit_price == ep:
+        # ── Always fetch actual exit price from Binance trade history ────────
+        # CRITICAL: exit_price passed in may be the SL/TP threshold value (not the
+        # actual fill price). Always prefer the real trade history price.
+        # Only skip if the trade history fetch itself fails (use passed value as fallback).
+        try:
             actual = self._get_actual_exit_price(sym, ep)
-            if actual > 0:
+            if actual > 0 and abs(actual - ep) / max(ep, 1e-12) < 0.5:
+                # Sanity: actual exit must be within 50% of entry (avoids garbage data)
                 exit_price = actual
+            elif exit_price <= 0:
+                # Last resort: use current mark price from public API
+                raw_sym = sym.replace('/', '')
+                prices = self._fetch_public_prices([raw_sym])
+                pm = prices.get(raw_sym, {})
+                if isinstance(pm, dict):
+                    exit_price = float(pm.get('mark', 0) or pm.get('last', 0) or ep)
+                else:
+                    exit_price = float(pm or ep)
+        except Exception as _ex:
+            logger.warning(f"[Monitor] exit price fetch failed for {sym}: {_ex} — using {exit_price:.6g}")
 
         # Compute PnL
         if ep > 0 and notional > 0:
@@ -816,7 +864,7 @@ class PositionMonitor:
 
                 if actual_qty <= 0:
                     logger.info(f"[Monitor] No position on Binance for {sym} — already closed")
-                    return True
+                    return exit_price  # position already gone — use passed exit_price as-is
 
                 # Detect direction flip (LIMIT SL overfilled → position flipped)
                 if actual_direction != direction:
@@ -843,12 +891,32 @@ class PositionMonitor:
                 )
                 order_resp = r2.json()
                 if 'orderId' in order_resp:
-                    actual_exit = float(order_resp.get('avgPrice') or order_resp.get('price') or exit_price)
+                    actual_exit = float(order_resp.get('avgPrice') or order_resp.get('price') or 0)
+                    if actual_exit <= 0:
+                        # avgPrice=0 means order was accepted but fill price not yet known
+                        # Fetch from userTrades immediately
+                        try:
+                            import time as _tw
+                            _tw.sleep(0.5)  # brief wait for fill to register
+                            _ts_t = int(_tw.time() * 1000)
+                            _par_t = f"symbol={raw_sym}&limit=5&timestamp={_ts_t}&recvWindow=5000"
+                            _sig_t = _h.new(self.connector.api_secret.encode(),
+                                            _par_t.encode(), _ha.sha256).hexdigest()
+                            _rt = _rq.get(
+                                f"https://fapi.binance.com/fapi/v1/userTrades?{_par_t}&signature={_sig_t}",
+                                headers={"X-MBX-APIKEY": self.connector.api_key}, timeout=5
+                            )
+                            _fills = _rt.json()
+                            if isinstance(_fills, list) and _fills:
+                                _fills.sort(key=lambda x: x.get('time', 0), reverse=True)
+                                actual_exit = float(_fills[0].get('price', 0))
+                        except Exception as _fe:
+                            logger.debug(f"[Monitor] fill price fetch error: {_fe}")
                     logger.info(
                         f"[Monitor] Market close filled (attempt {attempt+1}): "
-                        f"{close_side.upper()} {actual_qty} {raw_sym} @ {actual_exit}"
+                        f"{close_side.upper()} {actual_qty} {raw_sym} @ {actual_exit:.6g}"
                     )
-                    return True
+                    return actual_exit if actual_exit > 0 else exit_price
                 else:
                     err_code = order_resp.get('code', 0)
                     if err_code in (-2022, -4061):

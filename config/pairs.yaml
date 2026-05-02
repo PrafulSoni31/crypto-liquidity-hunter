@@ -1,13 +1,13 @@
 sweep_detector:
-  volume_multiplier: 2.5
+  volume_multiplier: 3
   wick_ratio: 0.5
   min_sweep_pct: 0.3
-  confirmation_bars: 2
+  confirmation_bars: 3
   min_body_ratio: 0.4
-  lookback_bars: 14
-  sweep_multiplier: 0.5
+  lookback_bars: 50
+  sweep_multiplier: 1
 signal_engine:
-  min_risk_reward: 2.5
+  min_risk_reward: 3
   require_confluence: true
   risk_per_trade: 0.01
   stop_buffer_pct: 0.001
@@ -21,7 +21,7 @@ alerts:
     bot_token: 8663125030:AAHO1AIHTTObsj4exqoEc82935zhrYxO7Ys
     chat_id: '686482312'
     enabled: true
-    min_confidence: 0.7
+    min_confidence: 0.75
 volume_filter:
   enabled: true
   min_24h_volume_usd: 1000000
@@ -30,8 +30,8 @@ data_fetch:
   atr_period: 14
   timeframes:
   - 1h
+  - '30'
   - 15m
-  - 5m
 cron:
   scan_interval_minutes: 10
 paper_trading:
@@ -51,7 +51,7 @@ signal_execution:
   min_risk_reward: 2.5
 liquidity_mapper:
   equal_touch_tolerance: 0.005
-  swing_lookback: 14
+  swing_lookback: 28
   round_tolerance: 0.001
   min_swing_strength: 2
 pairs:
@@ -491,20 +491,20 @@ pairs:
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
 active_account_id: 5
 live_trading:
-  fixed_notional_usd: 100.0
+  fixed_notional_usd: 60.0
   margin_leverage: 20.0
   commission_per_trade: 0.001
   position_sizing: fixed_notional
   risk_percent: 1.0
-  max_notional_usd: 100.0
+  max_notional_usd: 61.0
 min_zone_strength: 2
 max_concurrent_trades: 5
 backtester:
-  max_concurrent_trades: 5
+  max_concurrent_trades: 9
   commission_pct: 0.001
   slippage_pct: 0.0005
   timeout_bars: 48
 tsl:
   enabled: false
-  activation_pct: 1
-  trail_pct: 0.5
+  activation_pct: 2
+  trail_pct: 1
