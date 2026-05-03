@@ -33,7 +33,7 @@ data_fetch:
   - '30'
   - 15m
 cron:
-  scan_interval_minutes: 10
+  scan_interval_minutes: 5
 paper_trading:
   fixed_notional_usd: 20
   margin_leverage: 20
@@ -491,12 +491,12 @@ pairs:
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
 active_account_id: 5
 live_trading:
-  fixed_notional_usd: 60.0
+  fixed_notional_usd: 100.0
   margin_leverage: 20.0
   commission_per_trade: 0.001
   position_sizing: fixed_notional
   risk_percent: 1.0
-  max_notional_usd: 61.0
+  max_notional_usd: 66.0
 min_zone_strength: 2
 max_concurrent_trades: 5
 backtester:
@@ -505,6 +505,14 @@ backtester:
   slippage_pct: 0.0005
   timeout_bars: 48
 tsl:
-  enabled: false
+  enabled: true
   activation_pct: 2
   trail_pct: 1
+binance_connection:
+  api_key: paper
+  api_secret: paper
+  testnet: false
+  mode: paper
+  is_demo: false
+  environment: mainnet
+  enabled: true

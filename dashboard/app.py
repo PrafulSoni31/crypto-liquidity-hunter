@@ -51,6 +51,24 @@ def check_admin_token(req):
     expected = hashlib.sha256(pw.encode()).hexdigest()[:32]
     return token == expected
 
+def require_admin(f):
+    """
+    Decorator that enforces admin auth on any API route.
+    Returns HTTP 401 JSON if the request does not carry a valid admin token.
+    Token accepted via:
+      - Cookie:  clh_admin_token
+      - Header:  X-Admin-Token
+      - Query:   ?admin_token=...
+    Apply to every state-mutating or sensitive route.
+    """
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not check_admin_token(request):
+            return jsonify({'status': 'error', 'message': 'Unauthorized — admin login required'}), 401
+        return f(*args, **kwargs)
+    return decorated
+
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     """Verify admin password, return token if correct."""
@@ -437,6 +455,7 @@ def get_trades():
     return jsonify([serialize(t) for t in trades])
 
 @app.route('/api/clear_trades', methods=['POST'])
+@require_admin
 def clear_trades():
     """Wipe only the trades table (paper trades). Signals/sweeps/zones untouched."""
     import sqlite3
@@ -456,6 +475,7 @@ def clear_trades():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/api/clear_data', methods=['POST'])
+@require_admin
 def clear_data():
     """
     Wipe all trades, signals, sweeps, zones from DB and reset the signal cache.
@@ -816,6 +836,7 @@ def binance_status():
 
 
 @app.route('/api/binance/connect', methods=['POST'])
+@require_admin
 def binance_connect():
     """Save and test Binance API credentials. Returns detailed error on failure."""
     from core.trade_executor import TradeExecutor
@@ -906,6 +927,7 @@ def binance_connect():
 
 
 @app.route('/api/binance/execute', methods=['POST'])
+@require_admin
 def binance_execute():
     """Execute a trade signal via Binance (paper or live)."""
     from core.trade_executor import TradeExecutor
@@ -932,6 +954,7 @@ def binance_execute():
 
 
 @app.route('/api/binance/close', methods=['POST'])
+@require_admin
 def binance_close():
     """Close an open trade."""
     from core.trade_executor import TradeExecutor
@@ -1105,6 +1128,7 @@ def monitor_status():
 
 
 @app.route('/api/monitor/restart', methods=['POST'])
+@require_admin
 def monitor_restart():
     """Restart position monitor (after fixing API key permissions)."""
     try:
@@ -1184,6 +1208,7 @@ def binance_live_pnl():
 
 
 @app.route('/api/binance/book_sltp', methods=['POST'])
+@require_admin
 def book_sltp():
     """
     Place SL + TP bracket orders for an existing live Binance position.
@@ -1241,6 +1266,7 @@ def book_sltp():
 
 
 @app.route('/api/binance/close_position', methods=['POST'])
+@require_admin
 def close_position():
     """
     Close a live Binance position immediately at market.
@@ -1316,6 +1342,7 @@ def close_position():
 
 
 @app.route('/api/binance/cancel', methods=['POST'])
+@require_admin
 def binance_cancel():
     """Cancel an open order."""
     data     = request.get_json() or {}
@@ -1445,6 +1472,7 @@ def binance_get_settings():
 
 
 @app.route('/api/binance/save_settings', methods=['POST'])
+@require_admin
 def binance_save_settings():
     """Save position-sizing settings for paper AND live modes to pairs.yaml using central config_manager."""
     data = request.get_json() or {}
@@ -1500,6 +1528,7 @@ def get_active_account():
     return jsonify({'active_account_id': _get_active_account_id()})
 
 @app.route('/api/accounts/active', methods=['POST'])
+@require_admin
 def set_active_account():
     """Persist the active account id server-side."""
     data = request.get_json() or {}
@@ -1518,6 +1547,7 @@ def list_accounts():
 
 
 @app.route('/api/accounts', methods=['POST'])
+@require_admin
 def add_account():
     """Add a new account. Validates connectivity (unless paper mode)."""
     from core.binance_connector import BinanceConnector
@@ -1593,6 +1623,7 @@ def add_account():
 
 
 @app.route('/api/accounts/<int:account_id>', methods=['DELETE'])
+@require_admin
 def delete_account(account_id):
     """Delete (soft) an account."""
     store = DataStore()
@@ -1601,6 +1632,7 @@ def delete_account(account_id):
 
 
 @app.route('/api/accounts/<int:account_id>/connect', methods=['POST'])
+@require_admin
 def connect_account(account_id):
     """Re-test connection and refresh balance for a saved account."""
     store = DataStore()
@@ -1685,6 +1717,7 @@ def account_status(account_id):
 
 
 @app.route('/api/accounts/<int:account_id>/execute', methods=['POST'])
+@require_admin
 def execute_on_account(account_id):
     """Execute a trade on a specific account."""
     from core.trade_executor import TradeExecutor
@@ -1767,6 +1800,7 @@ def account_performance(account_id):
 
 
 @app.route('/api/accounts/<int:account_id>/toggle', methods=['POST'])
+@require_admin
 def toggle_account(account_id):
     """Enable or disable an account (toggle trading on/off)."""
     import sqlite3
@@ -1785,6 +1819,7 @@ def toggle_account(account_id):
 
 
 @app.route('/api/accounts/<int:account_id>/close', methods=['POST'])
+@require_admin
 def close_trade_on_account(account_id):
     """Close an open trade for a specific account."""
     from core.trade_executor import TradeExecutor
@@ -2150,6 +2185,7 @@ def signal_checklist():
 
 
 @app.route('/api/pending/<int:pid>/cancel', methods=['POST'])
+@require_admin
 def cancel_pending_signal(pid):
     """Cancel a pending signal."""
     store = DataStore()
@@ -2216,6 +2252,7 @@ def _check_symbol_tradable(pair: str) -> dict:
 
 
 @app.route('/api/pending/<int:pid>/execute', methods=['POST'])
+@require_admin
 def execute_pending_signal(pid):
     """Manually trigger execution of a pending signal at market price."""
     from core.trade_executor import TradeExecutor
@@ -2360,6 +2397,7 @@ def get_config():
 
 
 @app.route('/api/config', methods=['POST'])
+@require_admin
 def update_config():
     """
     Update one or more config parameters from dashboard or Telegram bot.

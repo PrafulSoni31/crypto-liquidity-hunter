@@ -1284,6 +1284,27 @@ async function initAdminState() {
 
 function isAdmin() { return !!_adminToken; }
 
+/**
+ * apiFetch — drop-in fetch() replacement that auto-attaches the admin token.
+ * Use for ALL calls to protected API routes (POST/DELETE/PUT).
+ * GET-only public routes can still use plain fetch().
+ */
+async function apiFetch(url, options = {}) {
+  const token = _adminToken || getStoredToken();
+  const headers = Object.assign({}, options.headers || {});
+  if (token) headers['X-Admin-Token'] = token;
+  const resp = await fetch(url, Object.assign({}, options, { headers, credentials: 'include' }));
+  if (resp.status === 401) {
+    // Token expired or missing — show login overlay
+    clearStoredToken();
+    const overlay = document.getElementById('admin-overlay');
+    if (overlay) overlay.style.display = 'flex';
+    setTimeout(() => document.getElementById('admin-pw-input')?.focus(), 100);
+    throw new Error('Session expired — please log in again');
+  }
+  return resp;
+}
+
 function unlockAdminTabs() {
   // Remove lock icon from admin tabs once authenticated
   document.querySelectorAll('.admin-tab').forEach(tab => {
@@ -1391,7 +1412,7 @@ async function doClean() {
   btn.disabled = true; btn.textContent = '⏳…';
   const ep = _clearMode === 'trades' ? '/api/clear_trades' : '/api/clear_data';
   try {
-    const r = await fetch(ep, {method:'POST'});
+    const r = await apiFetch(ep, {method:'POST'});
     const d = await r.json();
     closeModal();
     toast(d.status === 'ok' ? '✅ ' + d.message : '❌ ' + d.message, d.status === 'ok' ? 'green' : 'red');
@@ -2676,7 +2697,7 @@ async function loadPendingSignals() {
 async function executePending(pid, sym) {
   if (!confirm(`Execute pending signal #${pid} (${sym}) at MARKET price now?`)) return;
   try {
-    const r = await fetch(`/api/pending/${pid}/execute`, {method:'POST'});
+    const r = await apiFetch(`/api/pending/${pid}/execute`, {method:'POST'});
     const d = await r.json();
     if (d.error) {
       let msg = `❌ ${sym} — Cannot Execute\n\n${d.error}`;
@@ -2693,7 +2714,7 @@ async function executePending(pid, sym) {
 
 async function cancelPending(pid) {
   try {
-    await fetch(`/api/pending/${pid}/cancel`, {method:'POST'});
+    await apiFetch(`/api/pending/${pid}/cancel`, {method:'POST'});
     loadPendingSignals();
   } catch(e) { alert('Error: ' + e); }
 }
@@ -2901,7 +2922,7 @@ function renderAccountsTable(accounts) {
 
 async function toggleAccount(id) {
   try {
-    const r = await fetch(`/api/accounts/${id}/toggle`, {method:'POST'});
+    const r = await apiFetch(`/api/accounts/${id}/toggle`, {method:'POST'});
     const d = await r.json();
     if (d.status === 'ok') {
       // Update cache locally for instant UI response
@@ -2957,7 +2978,7 @@ async function addAccount() {
   };
   if (!body.name) { btn.textContent = '⚠️ Name required'; btn.style.color = 'var(--red)'; return; }
   try {
-    const r = await fetch('/api/accounts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const r = await apiFetch('/api/accounts', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
     const d = await r.json();
     if (d.status === 'ok') {
       btn.style.color = 'var(--green)'; btn.textContent = d.message;
@@ -2987,7 +3008,7 @@ async function deleteAccount(id, name) {
 async function refreshAccountStatus(id) {
   try {
     // First reconnect to update balance
-    const r = await fetch(`/api/accounts/${id}/connect`, {method:'POST'});
+    const r = await apiFetch(`/api/accounts/${id}/connect`, {method:'POST'});
     const d = await r.json();
     // Then check permissions
     const r2 = await fetch(`/api/accounts/${id}/status`);
@@ -3064,7 +3085,7 @@ async function executeTrade(forceMode) {
     timeframe:    '1h',
   };
   try {
-    const r = await fetch(execUrl, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const r = await apiFetch(execUrl, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
     const d = await r.json();
     if (d.error) {
       msg.style.color = 'var(--red)'; msg.textContent = '❌ ' + d.error;
@@ -3260,7 +3281,7 @@ async function closeTrade(tradeId, symbol, accountId) {
   if (!confirm(`Close trade #${tradeId} for ${symbol}?`)) return;
   try {
     const url = accountId ? `/api/accounts/${accountId}/close` : '/api/binance/close';
-    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+    const r = await apiFetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({trade_id: tradeId, symbol: 'binance:' + symbol})});
     const d = await r.json();
     if (d.status === 'ok') { loadPositions(); }
@@ -3504,8 +3525,8 @@ async function saveSettings() {
 
     // Save both in parallel
     const [r, lr] = await Promise.all([
-      fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}),
-      fetch('/api/binance/save_settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(livePayload)}),
+      apiFetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}),
+      apiFetch('/api/binance/save_settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(livePayload)}),
     ]);
     const d  = await r.json();
     const ld = await lr.json();
@@ -3556,7 +3577,7 @@ function autoSaveLive(el, fieldName) {
     });
 
     try {
-      const r = await fetch('/api/binance/save_settings', {
+      const r = await apiFetch('/api/binance/save_settings', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
