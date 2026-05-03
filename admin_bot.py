@@ -141,6 +141,18 @@ KEY_DOT_PATHS = {
     'auto_execute':           'signal_execution.auto_execute',
     'entry_tolerance_pct':    'signal_execution.entry_tolerance_pct',
     'min_sl_gap_pct':         'signal_execution.min_sl_gap_pct',
+    # ── New: synced with dashboard ───────────────────────────────────────────
+    'sl_tp_mode':             'signal_execution.sl_tp_mode',
+    'sl_tp_delay_sec':        'signal_execution.sl_tp_delay_sec',
+    'monitor_interval_sec':   'signal_execution.monitor_interval_sec',
+    'tsl_enabled':            'tsl.enabled',
+    'tsl_activation_pct':     'tsl.activation_pct',
+    'tsl_trail_pct':          'tsl.trail_pct',
+    'backtest_max_concurrent':'backtester.max_concurrent_trades',
+    'backtest_commission_pct':'backtester.commission_pct',
+    'backtest_slippage_pct':  'backtester.slippage_pct',
+    'backtest_timeout_bars':  'backtester.timeout_bars',
+    # ── Liquidity Mapper ─────────────────────────────────────────────────────
     'equal_touch_tolerance':  'liquidity_mapper.equal_touch_tolerance',
     'swing_lookback':         'liquidity_mapper.swing_lookback',
     'round_tolerance':        'liquidity_mapper.round_tolerance',
@@ -211,6 +223,20 @@ HELP_TEXT = """<b>🎯 Liquidity Hunter Admin Bot</b>
 /toggle_auto_execute
 /set_entry_tolerance &lt;0.1–5.0&gt;
 /set_min_sl_gap &lt;0.1–10.0&gt;
+/set_sl_tp_mode &lt;binance_bracket|monitor_only&gt;
+/set_sl_tp_delay &lt;seconds 1–60&gt;
+/set_monitor_interval &lt;seconds 3–60&gt;
+/set_max_concurrent &lt;1–10&gt;
+
+<b>📈 Trailing Stop Loss:</b>
+/toggle_tsl — enable/disable TSL
+/set_tsl_activation &lt;% e.g. 1.0&gt;
+/set_tsl_trail &lt;% e.g. 0.5&gt;
+
+<b>💰 Live Trading:</b>
+/set_live_notional &lt;USD per trade&gt;
+/set_live_leverage &lt;1–125&gt;
+/set_live_max_notional &lt;USD cap&gt;
 
 <b>🗺️ Liquidity Mapper:</b>
 /set_touch_tolerance &lt;0.001–0.05&gt;
@@ -281,6 +307,15 @@ async def show_params(update: Update, context: ContextTypes.DEFAULT_TYPE):
   auto_execute: {on(d.get('auto_execute'))}
   entry_tolerance: <b>{d.get('entry_tolerance_pct')}%</b>
   min_sl_gap: <b>{d.get('min_sl_gap_pct')}%</b>
+  sl_tp_mode: <b>{d.get('sl_tp_mode','monitor_only')}</b>
+  sl_tp_delay: <b>{d.get('sl_tp_delay_sec',8)}s</b>
+  monitor_interval: <b>{d.get('monitor_interval_sec',5)}s</b>
+  max_concurrent: <b>{d.get('backtest_max_concurrent',5)}</b>
+
+<b>📈 Trailing Stop Loss:</b>
+  enabled: {on(d.get('tsl_enabled'))}
+  activation: <b>{d.get('tsl_activation_pct',1.0)}%</b>
+  trail: <b>{d.get('tsl_trail_pct',0.5)}%</b>
 
 <b>🗺️ Liquidity Mapper:</b>
   equal_touch_tolerance: <b>{d.get('equal_touch_tolerance')}</b>
@@ -637,6 +672,105 @@ async def set_swing_strength(update, context):
     if not v: await update.message.reply_text("Usage: /set_swing_strength <1–10>"); return
     await _set(update, 'min_swing_strength', v, 'Min Swing Strength', int, 1, 10)
 
+# ── Signal Execution — extra params (fully synced with dashboard) ─────────────
+async def set_sl_tp_mode(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if v not in ('binance_bracket', 'monitor_only'):
+        await update.message.reply_text("Usage: /set_sl_tp_mode <binance_bracket|monitor_only>"); return
+    cfg_set('sl_tp_mode', v)
+    await update.message.reply_text(f"✅ SL/TP Mode → <b>{v}</b>", parse_mode="HTML")
+
+async def set_sl_tp_delay(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_sl_tp_delay <seconds 1–60>"); return
+    await _set(update, 'sl_tp_delay_sec', v, 'SL/TP Delay', int, 1, 60, 's')
+
+async def set_monitor_interval(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_monitor_interval <seconds 3–60>"); return
+    await _set(update, 'monitor_interval_sec', v, 'Monitor Interval', int, 3, 60, 's')
+
+async def set_max_concurrent(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_max_concurrent <1–10>"); return
+    await _set(update, 'backtest_max_concurrent', v, 'Max Concurrent Trades', int, 1, 10)
+
+# ── Trailing Stop Loss ─────────────────────────────────────────────────────────
+async def toggle_tsl(update, context):
+    if not is_admin(update): await deny(update); return
+    cur = cfg_get('tsl_enabled', False)
+    new = not cur
+    cfg_set('tsl_enabled', new)
+    state = "ENABLED ✅" if new else "DISABLED ❌"
+    await update.message.reply_text(f"Trailing Stop Loss: <b>{state}</b>", parse_mode="HTML")
+
+async def set_tsl_activation(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_tsl_activation <% e.g. 1.0>"); return
+    await _set(update, 'tsl_activation_pct', v, 'TSL Activation %', float, 0.1, 20.0, '%')
+
+async def set_tsl_trail(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_tsl_trail <% e.g. 0.5>"); return
+    await _set(update, 'tsl_trail_pct', v, 'TSL Trail %', float, 0.1, 10.0, '%')
+
+# ── Live Trading — syncs via /api/binance/save_settings ───────────────────────
+def _live_set(key, value):
+    """Write live trading setting directly to config and notify dashboard."""
+    dot_map = {
+        'live_notional_usd':   'live_trading.fixed_notional_usd',
+        'live_leverage':       'live_trading.margin_leverage',
+        'live_commission':     'live_trading.commission_per_trade',
+        'live_position_sizing':'live_trading.position_sizing',
+        'live_risk_percent':   'live_trading.risk_percent',
+        'live_max_notional':   'live_trading.max_notional_usd',
+    }
+    if config_mgr:
+        config_mgr.set(dot_map.get(key, key), value)
+    # Sync to gunicorn via binance/save_settings
+    _http('POST', '/api/binance/save_settings', {key: value})
+
+async def set_live_notional(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_live_notional <USD e.g. 100>"); return
+    try:
+        val = float(v)
+        if not (5 <= val <= 10000): raise ValueError
+        _live_set('live_notional_usd', val)
+        await update.message.reply_text(f"✅ Live Notional → <b>${val:.0f}</b>", parse_mode="HTML")
+    except ValueError:
+        await update.message.reply_text("❌ Must be 5–10000 USD")
+
+async def set_live_leverage(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_live_leverage <1–125>"); return
+    try:
+        val = float(v)
+        if not (1 <= val <= 125): raise ValueError
+        _live_set('live_leverage', val)
+        await update.message.reply_text(f"✅ Live Leverage → <b>{val:.0f}×</b>", parse_mode="HTML")
+    except ValueError:
+        await update.message.reply_text("❌ Must be 1–125")
+
+async def set_live_max_notional(update, context):
+    if not is_admin(update): await deny(update); return
+    v = _arg(context)
+    if not v: await update.message.reply_text("Usage: /set_live_max_notional <USD cap>"); return
+    try:
+        val = float(v)
+        _live_set('live_max_notional', val)
+        await update.message.reply_text(f"✅ Live Max Notional Cap → <b>${val:.0f}</b>", parse_mode="HTML")
+    except ValueError:
+        await update.message.reply_text("❌ Must be a number")
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     logger.info(f"Starting Liquidity Hunter Admin Bot")
@@ -715,7 +849,23 @@ def main():
     app.add_handler(CommandHandler("set_touch_tolerance", set_touch_tolerance))
     app.add_handler(CommandHandler("set_swing_lookback",  set_swing_lookback))
     app.add_handler(CommandHandler("set_round_tolerance", set_round_tolerance))
-    app.add_handler(CommandHandler("set_swing_strength",  set_swing_strength))
+    app.add_handler(CommandHandler("set_swing_strength",   set_swing_strength))
+
+    # ── Signal Execution extras ──
+    app.add_handler(CommandHandler("set_sl_tp_mode",       set_sl_tp_mode))
+    app.add_handler(CommandHandler("set_sl_tp_delay",      set_sl_tp_delay))
+    app.add_handler(CommandHandler("set_monitor_interval", set_monitor_interval))
+    app.add_handler(CommandHandler("set_max_concurrent",   set_max_concurrent))
+
+    # ── Trailing Stop Loss ──
+    app.add_handler(CommandHandler("toggle_tsl",           toggle_tsl))
+    app.add_handler(CommandHandler("set_tsl_activation",   set_tsl_activation))
+    app.add_handler(CommandHandler("set_tsl_trail",        set_tsl_trail))
+
+    # ── Live Trading ──
+    app.add_handler(CommandHandler("set_live_notional",    set_live_notional))
+    app.add_handler(CommandHandler("set_live_leverage",    set_live_leverage))
+    app.add_handler(CommandHandler("set_live_max_notional",set_live_max_notional))
 
     logger.info("Bot polling started. Send /help to get started.")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
