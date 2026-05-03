@@ -29,13 +29,13 @@ data_fetch:
   ohlcv_limit: 300
   atr_period: 14
   timeframes:
+  - 4h
   - 1h
-  - '30'
   - 15m
 cron:
-  scan_interval_minutes: 10
+  scan_interval_minutes: 5
 paper_trading:
-  fixed_notional_usd: 20
+  fixed_notional_usd: 65
   margin_leverage: 20
   commission_per_trade: 0.001
   position_sizing: fixed_notional
@@ -489,9 +489,9 @@ pairs:
 - binance:ZRO/USDT
 - binance:ZRX/USDT
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
-active_account_id: 6
+active_account_id: 7
 live_trading:
-  fixed_notional_usd: 100.0
+  fixed_notional_usd: 65.0
   margin_leverage: 20.0
   commission_per_trade: 0.001
   position_sizing: fixed_notional

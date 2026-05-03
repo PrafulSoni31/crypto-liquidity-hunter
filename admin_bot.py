@@ -4,10 +4,36 @@ Telegram Admin Bot for Liquidity Hunter.
 ALL parameters sync with dashboard via /api/config (GET + POST).
 Single master parameter list — same as dashboard Settings tab.
 """
-import os, sys, subprocess, logging, json, urllib.request, urllib.error
+import os, sys, subprocess, logging, json, urllib.request, urllib.error, atexit, signal
 from pathlib import Path
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+
+# ── PID file lock — prevents duplicate bot instances (causes Telegram 409 Conflict) ──
+_BOT_PID_FILE = Path("/root/.openclaw/workspace/projects/crypto-liquidity-hunter/admin_bot.pid")
+
+def _acquire_bot_pid_lock():
+    if _BOT_PID_FILE.exists():
+        try:
+            old_pid = int(_BOT_PID_FILE.read_text().strip())
+            os.kill(old_pid, 0)   # raises OSError if dead
+            print(f"[BotPID] Bot already running (PID {old_pid}). Exiting.", flush=True)
+            sys.exit(0)
+        except (ValueError, OSError):
+            pass   # stale PID file — overwrite
+    _BOT_PID_FILE.write_text(str(os.getpid()))
+
+def _release_bot_pid_lock():
+    try:
+        if _BOT_PID_FILE.exists() and int(_BOT_PID_FILE.read_text().strip()) == os.getpid():
+            _BOT_PID_FILE.unlink()
+    except Exception:
+        pass
+
+atexit.register(_release_bot_pid_lock)
+signal.signal(signal.SIGTERM, lambda s, f: (_release_bot_pid_lock(), sys.exit(0)))
+_acquire_bot_pid_lock()
+# ──────────────────────────────────────────────────────────────────────────────
 
 # ── Config ────────────────────────────────────────────────────────────────────
 ADMIN_USER_ID  = 686482312
