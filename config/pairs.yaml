@@ -33,7 +33,7 @@ data_fetch:
   - '30'
   - 15m
 cron:
-  scan_interval_minutes: 5
+  scan_interval_minutes: 10
 paper_trading:
   fixed_notional_usd: 20
   margin_leverage: 20
@@ -489,7 +489,7 @@ pairs:
 - binance:ZRO/USDT
 - binance:ZRX/USDT
 - "binance:\u5E01\u5B89\u4EBA\u751F/USDT"
-active_account_id: 5
+active_account_id: 6
 live_trading:
   fixed_notional_usd: 100.0
   margin_leverage: 20.0

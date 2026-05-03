@@ -37,10 +37,27 @@ async def deny(update):
     await update.message.reply_text("⛔ Unauthorised.")
 
 # ── HTTP helper (for dashboard API calls) ────────────────────────────────────
+def _get_admin_token():
+    """Return the dashboard admin token (SHA-256 of admin password)."""
+    import hashlib
+    try:
+        if config_mgr:
+            pw = config_mgr.get('admin_password', '') or ''
+        else:
+            pw = ''
+    except Exception:
+        pw = ''
+    pw = pw or os.environ.get('ADMIN_PASS', '') or 'admin1234'
+    return hashlib.sha256(pw.encode()).hexdigest()[:32]
+
 def _http(method, path, body=None, timeout=8):
     url  = DASHBOARD_URL.rstrip('/') + path
     data = json.dumps(body).encode() if body else None
-    hdrs = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+    hdrs = {
+        'Content-Type':  'application/json',
+        'Accept':        'application/json',
+        'X-Admin-Token': _get_admin_token(),   # required for protected routes
+    }
     req  = urllib.request.Request(url, data=data, headers=hdrs, method=method)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
