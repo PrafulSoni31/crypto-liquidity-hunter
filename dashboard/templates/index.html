@@ -442,8 +442,9 @@
   <div class="tabnav-item"        onclick="switchTab('activity',this)">📋 Activity</div>
   <div class="tabnav-item"        onclick="switchTab('perf',this)">📊 Performance</div>
   <div class="tabnav-item"        onclick="switchTab('trades',this)">💼 Trades</div>
-  <div class="tabnav-item admin-tab" onclick="adminGate('trading',this,'loadTradingTab')">⚙️ Trading 🔒</div>
-  <div class="tabnav-item admin-tab" id="settings-tab" onclick="adminGate('settings',this,'loadSettings')" style="display:none">🔧 Settings 🔒</div>
+  <div class="tabnav-item admin-tab" id="trading-tab" onclick="adminGate('trading',this,'loadTradingTab')" style="display:none">⚙️ Trading</div>
+  <div class="tabnav-item admin-tab" id="settings-tab" onclick="adminGate('settings',this,'loadSettings')" style="display:none">🔧 Settings</div>
+  <div class="tabnav-item" id="admin-login-btn" onclick="showAdminLogin()" style="color:var(--muted);font-size:11px">🔐 Admin</div>
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════════
@@ -1276,9 +1277,8 @@ async function initAdminState() {
       clearStoredToken();  // token invalid — clear it
     }
   } catch(e) {
-    // Network error — still trust cached token for UX (offline resilience)
-    _adminToken = token;
-    unlockAdminTabs();
+    // Network error — do NOT auto-unlock on failure (security > UX)
+    clearStoredToken();
   }
 }
 
@@ -1306,12 +1306,52 @@ async function apiFetch(url, options = {}) {
 }
 
 function unlockAdminTabs() {
-  // Show and unlock all admin tabs once authenticated
+  // Reveal all admin-only tabs
   document.querySelectorAll('.admin-tab').forEach(tab => {
-    tab.style.display = '';        // reveal hidden tabs (e.g. Settings)
-    tab.textContent = tab.textContent.replace(' 🔒','');
+    tab.style.display = '';
     tab.style.color = '';
   });
+  // Swap login button → logout button
+  const loginBtn = document.getElementById('admin-login-btn');
+  if (loginBtn) {
+    loginBtn.textContent = '🔓 Logout';
+    loginBtn.onclick = adminLogout;
+    loginBtn.style.color = 'var(--green)';
+  }
+}
+
+function lockAdminTabs() {
+  // Hide all admin-only tabs
+  document.querySelectorAll('.admin-tab').forEach(tab => {
+    tab.style.display = 'none';
+  });
+  // Swap logout button → login button
+  const loginBtn = document.getElementById('admin-login-btn');
+  if (loginBtn) {
+    loginBtn.textContent = '🔐 Admin';
+    loginBtn.onclick = showAdminLogin;
+    loginBtn.style.color = 'var(--muted)';
+  }
+}
+
+function showAdminLogin() {
+  if (isAdmin()) { adminLogout(); return; }
+  const overlay = document.getElementById('admin-overlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    setTimeout(() => document.getElementById('admin-pw-input')?.focus(), 100);
+  }
+}
+
+function adminLogout() {
+  clearStoredToken();
+  lockAdminTabs();
+  // If currently on an admin tab, switch to overview
+  const activePage = document.querySelector('.page.active');
+  if (activePage && (activePage.id === 'tab-trading' || activePage.id === 'tab-settings')) {
+    const overviewEl = document.querySelector('[onclick*="overview"]');
+    switchTab('overview', overviewEl);
+  }
 }
 
 function adminGate(tabName, el, loadFnName) {
