@@ -149,18 +149,13 @@ def main():
                 _release_pid_lock()
                 sys.exit(1)
 
-            # ── _api_ok auto-recovery ─────────────────────────────────────────
-            # If _api_ok was set False (e.g. IP restriction, expired credentials),
-            # reset it every 5 minutes so the monitor retries instead of staying
-            # permanently blind.
-            m = monitor
-            if hasattr(m, '_monitor') and hasattr(m._monitor, '_api_ok'):
-                inner = m._monitor
-            else:
-                inner = m
-            if hasattr(inner, '_api_ok') and not inner._api_ok:
-                logger.info("[MonitorDaemon] Resetting _api_ok=True (retry after failure)")
-                inner._api_ok = True
+            # ── _api_ok recovery from daemon loop (belt + suspenders) ──────────
+            # The PositionMonitor thread also auto-resets after 60 cycles.
+            # This daemon loop adds a second reset every 30s as an extra safety net.
+            if not monitor._api_ok:
+                logger.warning("[MonitorDaemon] _api_ok=False detected — resetting for retry")
+                monitor._api_ok = True
+                monitor._api_fail_count = 0
 
     except KeyboardInterrupt:
         logger.info("Monitor daemon stopping.")

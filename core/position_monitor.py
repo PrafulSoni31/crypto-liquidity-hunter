@@ -56,6 +56,22 @@ class PositionMonitor:
     def start(self):
         if self._thread and self._thread.is_alive():
             return
+
+        # ── Validate connector credentials before starting ────────────────────
+        # If API key is missing/empty/paper the monitor will run but never close
+        # positions. Fail loudly NOW rather than silently later.
+        if self.connector:
+            ak = getattr(self.connector, 'api_key', '') or ''
+            mode = getattr(self.connector, 'mode', 'paper')
+            if mode != 'paper' and (not ak or ak == 'paper' or len(ak) < 10):
+                logger.critical(
+                    f"[PositionMonitor] INVALID API KEY for account {self.account_id} "
+                    f"(key='{ak[:8]}...', mode={mode}). "
+                    f"Monitor will NOT place close orders — fix account credentials!"
+                )
+                # Still start so it can do price-based detection, but mark api as bad
+                self._api_ok = False
+
         self._stop_event.clear()
         self._thread = threading.Thread(
             target=self._run, name=f"pos-monitor-{self.account_id}", daemon=True
@@ -138,6 +154,14 @@ class PositionMonitor:
             # network errors, IP restrictions, or credential issues that self-heal.
             if not self._api_ok:
                 self._api_fail_count += 1
+                # Alert loudly every 60 cycles (~5 min) while blind
+                if self._api_fail_count % 60 == 1:
+                    open_count = len(self._get_open_trades())
+                    logger.critical(
+                        f"[PositionMonitor] ⛔ API DISABLED (_api_ok=False) for {self._api_fail_count} cycles. "
+                        f"{open_count} live trade(s) NOT protected. "
+                        f"Close orders WILL NOT be placed until API recovers."
+                    )
                 if self._api_fail_count >= self._API_RETRY_AFTER:
                     logger.info(
                         f"[PositionMonitor] _api_ok reset after {self._api_fail_count} cycles — retrying"
@@ -607,8 +631,22 @@ class PositionMonitor:
         )
 
         # ── Execute close on Binance ───────────────────────────────────────
-        if self._api_ok and self.connector and self.connector.mode != 'paper':
-            # _place_market_close now returns the actual fill price (float > 0) or 0.0 on failure
+        is_live = self.connector and self.connector.mode != 'paper'
+
+        if is_live and not self._api_ok:
+            # API is currently down — CANNOT place close order.
+            # DO NOT fall through to paper-mode DB update: that would mark the
+            # trade as closed in DB while the real Binance position stays open.
+            # Log CRITICAL and wait for _api_ok to recover (auto-resets in ~5 min).
+            logger.critical(
+                f"[Monitor] ⛔ SL/TP BREACH DETECTED but API DISABLED for {sym} "
+                f"trade #{trade_id} {direction.upper()} — close order NOT placed. "
+                f"Will retry automatically when API recovers."
+            )
+            return  # leave trade open in DB; retry next cycle
+
+        if is_live and self._api_ok:
+            # _place_market_close returns the actual fill price (float > 0) or 0.0 on failure
             fill_price = self._place_market_close(binance_sym, direction, trade, exit_price)
             if fill_price:
                 import time as _time
@@ -629,7 +667,7 @@ class PositionMonitor:
                 logger.error(f"[Monitor] Close FAILED for {sym} — will retry next cycle")
                 self._cancel_orphaned_orders(binance_sym)
         else:
-            # Paper mode — just update DB
+            # Paper mode — just update DB (no exchange order needed)
             self._close_trade_now(trade, exit_price, status, sym)
 
     def _verify_entry_filled(self, sym: str, entry_price: float) -> bool:
