@@ -44,6 +44,8 @@ class PositionMonitor:
         self._sltp_placed: set = set()
         self._closed_trades: set = set()
         self._api_ok: bool = True
+        self._api_fail_count: int = 0           # consecutive API failures
+        self._API_RETRY_AFTER: int = 60         # reset _api_ok after this many _run() cycles (~5min at 5s interval)
         # Debounce: require N consecutive "not found on exchange" checks before closing DB
         # Prevents false closes from transient API glitches
         self._missing_count: Dict[int, int] = {}   # trade_id → consecutive missing count
@@ -124,8 +126,25 @@ class PositionMonitor:
         while not self._stop_event.is_set():
             try:
                 self._sync()
+                # Reset failure counter on successful sync
+                if self._api_ok:
+                    self._api_fail_count = 0
             except Exception as e:
                 logger.error(f"[PositionMonitor] Sync error: {e}", exc_info=True)
+                self._api_fail_count += 1
+
+            # ── Auto-recovery: reset _api_ok after enough cycles ─────────────
+            # Prevents monitor from staying permanently disabled after transient
+            # network errors, IP restrictions, or credential issues that self-heal.
+            if not self._api_ok:
+                self._api_fail_count += 1
+                if self._api_fail_count >= self._API_RETRY_AFTER:
+                    logger.info(
+                        f"[PositionMonitor] _api_ok reset after {self._api_fail_count} cycles — retrying"
+                    )
+                    self._api_ok = True
+                    self._api_fail_count = 0
+
             self._stop_event.wait(timeout=self.interval)
 
     def _sync(self):

@@ -136,6 +136,32 @@ def main():
         while True:
             time.sleep(30)
             cfg.reload()
+
+            # ── Thread health check ───────────────────────────────────────────
+            # If the monitor thread dies (unhandled exception, bad connector, etc)
+            # the daemon must exit — so PID lock releases and crontab spawns a
+            # fresh process with the current config/account.
+            if not monitor.is_running():
+                logger.error(
+                    "[MonitorDaemon] ⚠️  Monitor thread is DEAD — daemon exiting "
+                    "so watchdog can restart with fresh state."
+                )
+                _release_pid_lock()
+                sys.exit(1)
+
+            # ── _api_ok auto-recovery ─────────────────────────────────────────
+            # If _api_ok was set False (e.g. IP restriction, expired credentials),
+            # reset it every 5 minutes so the monitor retries instead of staying
+            # permanently blind.
+            m = monitor
+            if hasattr(m, '_monitor') and hasattr(m._monitor, '_api_ok'):
+                inner = m._monitor
+            else:
+                inner = m
+            if hasattr(inner, '_api_ok') and not inner._api_ok:
+                logger.info("[MonitorDaemon] Resetting _api_ok=True (retry after failure)")
+                inner._api_ok = True
+
     except KeyboardInterrupt:
         logger.info("Monitor daemon stopping.")
         monitor.stop()
