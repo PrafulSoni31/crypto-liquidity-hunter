@@ -8,7 +8,7 @@ import yaml
 import os
 import sys
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
 from dotenv import load_dotenv
 
@@ -306,7 +306,7 @@ def cmd_scan_all(args):
 
     # Initialize data store for trade tracking
     store = DataStore()
-    scan_start = datetime.utcnow()   # for duration tracking
+    scan_start = datetime.now(timezone.utc)   # for duration tracking
     # Track latest prices for open trade exit checks
     latest_prices = {}
 
@@ -729,7 +729,7 @@ def cmd_scan_all(args):
          duration_s=scan_duration)
 
     # ── Scan duration ──────────────────────────────────────────────────────────
-    scan_end     = datetime.utcnow()
+    scan_end     = datetime.now(timezone.utc)
     scan_dur_sec = int((scan_end - scan_start).total_seconds()) if 'scan_start' in dir() else 0
 
     # ── Collect open trades + unrealized PnL for summary ──────────────────────

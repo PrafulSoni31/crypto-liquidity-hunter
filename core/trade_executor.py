@@ -134,12 +134,20 @@ def _get_exchange_info(raw_sym: str) -> Dict:
 
 
 def _place_limit_order(api_key: str, api_secret: str,
-                       raw_sym: str, side: str, price: float, qty: float) -> Dict:
-    """Place a plain LIMIT order. Returns Binance response dict."""
+                       raw_sym: str, side: str, price: float, qty: float,
+                       position_side: str = None) -> Dict:
+    """Place a plain LIMIT order. Returns Binance response dict.
+    
+    Args:
+        position_side: 'LONG' or 'SHORT' - REQUIRED for hedge mode accounts
+                      to avoid -4061 "position side does not match" error
+    """
     try:
-        par = _sign(api_secret,
-                    f'symbol={raw_sym}&side={side.upper()}&type=LIMIT'
-                    f'&price={price}&quantity={qty}&timeInForce=GTC')
+        params = f'symbol={raw_sym}&side={side.upper()}&type=LIMIT' \
+                 f'&price={price}&quantity={qty}&timeInForce=GTC'
+        if position_side:
+            params += f'&positionSide={position_side.upper()}'
+        par = _sign(api_secret, params)
         r = requests.post(
             f'https://fapi.binance.com/fapi/v1/order?{par}',
             headers={'X-MBX-APIKEY': api_key}, timeout=10
@@ -157,10 +165,11 @@ def _place_sl_tp(api_key: str, api_secret: str, raw_sym: str,
     """
     Place SL + TP as plain LIMIT orders (no reduceOnly).
 
-    Account type: Multi-Assets Cross Margin
+    Account type: Multi-Assets Cross Margin (HEDGE MODE)
       - STOP_MARKET      → -4120 blocked
       - LIMIT reduceOnly → -2022 blocked
       - LIMIT (plain)    → WORKS ✅
+      - positionSide param REQUIRED for hedge mode (-4061 error if missing)
 
     Safety: SL/TP prices are on the correct side of entry so they WAIT
     in the order book and only fill when price reaches them:
@@ -172,26 +181,27 @@ def _place_sl_tp(api_key: str, api_secret: str, raw_sym: str,
     Position monitor cancels the orphaned bracket when one leg fills.
     """
     exit_side = 'BUY' if direction == 'short' else 'SELL'
+    position_side = 'LONG' if direction == 'long' else 'SHORT'  # REQUIRED for hedge mode
     qty_r = _round_qty(raw_sym, qty, exi)
 
     result = {}
 
     if sl_price > 0:
         sl_r = _round_price(raw_sym, sl_price, exi)
-        sl_resp = _place_limit_order(api_key, api_secret, raw_sym, exit_side, sl_r, qty_r)
+        sl_resp = _place_limit_order(api_key, api_secret, raw_sym, exit_side, sl_r, qty_r, position_side)
         if 'orderId' in sl_resp:
             result['sl_order_id'] = sl_resp['orderId']
-            logger.info(f'[Executor] SL placed: {raw_sym} {exit_side} @ {sl_r} id={sl_resp["orderId"]}')
+            logger.info(f'[Executor] SL placed: {raw_sym} {exit_side} {position_side} @ {sl_r} id={sl_resp["orderId"]}')
         else:
             logger.error(f'[Executor] SL FAILED: {raw_sym} code={sl_resp.get("code")} {sl_resp.get("msg","")}')
             result['sl_order_id'] = f'error:{sl_resp.get("code","?")}'
 
     if tp_price > 0:
         tp_r = _round_price(raw_sym, tp_price, exi)
-        tp_resp = _place_limit_order(api_key, api_secret, raw_sym, exit_side, tp_r, qty_r)
+        tp_resp = _place_limit_order(api_key, api_secret, raw_sym, exit_side, tp_r, qty_r, position_side)
         if 'orderId' in tp_resp:
             result['tp_order_id'] = tp_resp['orderId']
-            logger.info(f'[Executor] TP placed: {raw_sym} {exit_side} @ {tp_r} id={tp_resp["orderId"]}')
+            logger.info(f'[Executor] TP placed: {raw_sym} {exit_side} {position_side} @ {tp_r} id={tp_resp["orderId"]}')
         else:
             logger.error(f'[Executor] TP FAILED: {raw_sym} code={tp_resp.get("code")} {tp_resp.get("msg","")}')
             result['tp_order_id'] = f'error:{tp_resp.get("code","?")}'

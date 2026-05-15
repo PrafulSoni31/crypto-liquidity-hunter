@@ -563,6 +563,21 @@ class BinanceConnector:
                 except Exception:
                     pass
                 return {'error': 'Margin insufficient — reduce notional or add funds'}
+            if '-2027' in err or 'Exceeded the maximum allowable position' in err:
+                # Try to get current position to see existing size
+                try:
+                    pos = self.get_position(symbol)
+                    if pos and pos.get('contracts'):
+                        logger.warning(f"place_market_order: max position limit for {norm_sym}. "
+                                       f"Existing: {pos.get('contracts')} @ {pos.get('side')}. "
+                                       f"Requested qty={qty_r} exceeds limit.")
+                    else:
+                        logger.warning(f"place_market_order: max position limit for {norm_sym} qty={qty_r} — "
+                                       f"symbol may have low max position at current 20x leverage. "
+                                       f"Consider reducing leverage or skipping this symbol.")
+                except Exception:
+                    logger.warning(f"place_market_order: max position limit (-2027) for {norm_sym} qty={qty_r}")
+                return {'error': 'Max position limit exceeded — reduce qty or leverage', 'code': -2027}
             logger.error(f"place_market_order error: {e}")
             return {'error': err}
 
