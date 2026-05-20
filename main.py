@@ -430,7 +430,12 @@ def cmd_scan_all(args):
                 max_sweep_age = tf_max_age.get(tf, 6)
 
                 # Only process recent sweeps (last 10, age-filtered inside signal engine)
+                _allowed_dirs = config.get('allowed_directions', ['long', 'short'])
                 for sweep in sweeps[-10:]:
+                    # Skip sweep if its direction is not in allowed_directions
+                    if sweep.direction not in _allowed_dirs:
+                        logger.debug(f"Sweep {sweep.direction} skipped — not in allowed_directions {_allowed_dirs}")
+                        continue
                     signal = engine.generate_signal(
                         sweep, zones, latest_price,
                         capital=args.capital or 10000,
