@@ -197,7 +197,7 @@ class BinanceConnector:
                 try:
                     import requests as _req2, time as _t2, hmac as _h2, hashlib as _ha2
                     _ts2 = int(_t2.time() * 1000)
-                    _par2 = f"timestamp={_ts2}&recvWindow=5000"
+                    _par2 = f"timestamp={_ts2}&recvWindow=10000"
                     _sig2 = _h2.new(creds['secret'].encode(), _par2.encode(), _ha2.sha256).hexdigest()
                     _r2 = _req2.get(
                         f"https://fapi.binance.com/fapi/v1/positionSide/dual?{_par2}&signature={_sig2}",
@@ -634,7 +634,7 @@ class BinanceConnector:
 
         def _sign(params: str) -> str:
             ts  = int(_time.time() * 1000)
-            p   = params + f'&timestamp={ts}&recvWindow=5000'
+            p   = params + f'&timestamp={ts}&recvWindow=10000'
             sig = _hmac.new(secret.encode(), p.encode(), _hashlib.sha256).hexdigest()
             return p + '&signature=' + sig
 
@@ -871,7 +871,7 @@ class BinanceConnector:
             f"&price={price}"
             f"&quantity={qty_r}"
             f"&timeInForce=GTC"
-            f"&timestamp={ts}&recvWindow=5000"
+            f"&timestamp={ts}&recvWindow=10000"
         )
         sig = _h.new(self.api_secret.encode(), params.encode(), _ha.sha256).hexdigest()
         resp = _r2.post(
@@ -918,7 +918,7 @@ class BinanceConnector:
             # ── Check if bracket orders already exist ──────────────────────
             import time as _chk_t, hmac as _chk_h, hashlib as _chk_ha, requests as _chk_r
             ts_chk  = int(_chk_t.time() * 1000)
-            par_chk = f"symbol={raw_binance}&timestamp={ts_chk}&recvWindow=5000"
+            par_chk = f"symbol={raw_binance}&timestamp={ts_chk}&recvWindow=10000"
             sig_chk = _chk_h.new(self.api_secret.encode(), par_chk.encode(), _chk_ha.sha256).hexdigest()
             r_chk   = _chk_r.get(
                 f"https://fapi.binance.com/fapi/v1/openOrders?{par_chk}&signature={sig_chk}",

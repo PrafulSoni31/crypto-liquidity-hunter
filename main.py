@@ -156,32 +156,6 @@ def cmd_scan(args):
     # Save to data store if needed
     # data_store = DataStore()
     # ... (store results)
-        signal = engine.generate_signal(sweep, zones, latest_price, capital=args.capital or 10000)
-        if signal:
-            signals.append(signal)
-
-    # Print report
-    print(f"\n=== SCAN REPORT: {pair} ({df.index[-1]}) ===")
-    print(f" Liquidity zones: {len(zones)}")
-    print(f" Sweeps detected: {len(sweeps)}")
-    print(f" New signals: {len(signals)}")
-    print("\n--- Zones (top 10) ---")
-    for z in zones[:10]:
-        print(f"  {z.zone_type:12} price={z.price:,.2f} strength={z.strength} last={z.last_touch.date()}")
-    print("\n--- Recent Sweeps (last 5) ---")
-    for s in sweeps[-5:]:
-        print(f"  {s.timestamp} {s.direction:5} sweep={s.sweep_price:,.2f} close={s.close_price:,.2f} confirmed={s.confirmed}")
-    print("\n--- Active Signals ---")
-    for sig in signals:
-        print(f"  {sig.direction.upper()} Entry={sig.entry_price:,.2f} SL={sig.stop_loss:,.2f} TP={sig.target:,.2f} R:R={sig.risk_reward:.2f}")
-
-    # Send alerts
-    dispatcher = AlertDispatcher(config['alerts'])
-    if args.alert:
-        for s in sweeps[-3:]:
-            dispatcher.send_sweep(asdict(s))
-        for sig in signals:
-            dispatcher.send_signal(sig)
 
 def cmd_backtest(args):
     """Run backtest on historical data."""

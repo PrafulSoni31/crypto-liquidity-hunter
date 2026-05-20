@@ -100,7 +100,7 @@ class PositionMonitor:
 
             # Get all open orders
             ts  = int(_time.time() * 1000)
-            par = f"timestamp={ts}&recvWindow=5000"
+            par = f"timestamp={ts}&recvWindow=10000"
             sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
             r = _req.get(
                 f"https://fapi.binance.com/fapi/v1/openOrders?{par}&signature={sig}",
@@ -299,7 +299,7 @@ class PositionMonitor:
                     try:
                         import time as _tc, hmac as _hc, hashlib as _hac, requests as _rqc
                         _ts3 = int(_tc.time() * 1000)
-                        _par3 = f"symbol={raw_sym}&timestamp={_ts3}&recvWindow=5000"
+                        _par3 = f"symbol={raw_sym}&timestamp={_ts3}&recvWindow=10000"
                         _sig3 = _hc.new(self.connector.api_secret.encode(), _par3.encode(), _hac.sha256).hexdigest()
                         _rf = _rqc.get(
                             f"https://fapi.binance.com/fapi/v2/positionRisk?{_par3}&signature={_sig3}",
@@ -682,7 +682,7 @@ class PositionMonitor:
             ts  = int(_time.time() * 1000)
             # Look back 24h for any trades on this symbol
             start_time = ts - 86_400_000
-            par = f"symbol={raw_sym}&limit=10&startTime={start_time}&timestamp={ts}&recvWindow=5000"
+            par = f"symbol={raw_sym}&limit=10&startTime={start_time}&timestamp={ts}&recvWindow=10000"
             sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
             r = _req.get(
                 f"https://fapi.binance.com/fapi/v1/userTrades?{par}&signature={sig}",
@@ -715,7 +715,7 @@ class PositionMonitor:
             import hmac as _hmac, hashlib as _hashlib, time as _time, requests as _req
             raw_sym = sym.replace('/', '')
             ts  = int(_time.time() * 1000)
-            par = f"symbol={raw_sym}&limit=5&timestamp={ts}&recvWindow=5000"
+            par = f"symbol={raw_sym}&limit=5&timestamp={ts}&recvWindow=10000"
             sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
             r = _req.get(
                 f"https://fapi.binance.com/fapi/v1/userTrades?{par}&signature={sig}",
@@ -831,7 +831,7 @@ class PositionMonitor:
         try:
             import time as _time, hmac as _hmac, hashlib as _hashlib, requests as _req
             ts  = int(_time.time() * 1000)
-            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=5000"
+            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=10000"
             sig = _hmac.new(self.connector.api_secret.encode(), par.encode(), _hashlib.sha256).hexdigest()
             # GET open orders for this symbol
             r_get = _req.get(
@@ -844,7 +844,7 @@ class PositionMonitor:
             logger.info(f"[Monitor] Cancelling {len(orders)} orphaned orders for {raw_sym}")
             # Cancel all open orders for this symbol
             ts2  = int(_time.time() * 1000)
-            par2 = f"symbol={raw_sym}&timestamp={ts2}&recvWindow=5000"
+            par2 = f"symbol={raw_sym}&timestamp={ts2}&recvWindow=10000"
             sig2 = _hmac.new(self.connector.api_secret.encode(), par2.encode(), _hashlib.sha256).hexdigest()
             r_del = _req.delete(
                 f"https://fapi.binance.com/fapi/v1/allOpenOrders?{par2}&signature={sig2}",
@@ -862,7 +862,7 @@ class PositionMonitor:
         try:
             import time as _t, hmac as _h, hashlib as _ha, requests as _rq
             ts = int(_t.time() * 1000)
-            par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=5000'
+            par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=10000'
             sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
             r = _rq.get(f'https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}',
                         headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
@@ -898,7 +898,7 @@ class PositionMonitor:
 
                 # ── Get ACTUAL position qty from Binance ──
                 ts = int(_t.time() * 1000)
-                par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=5000'
+                par = f'symbol={raw_sym}&timestamp={ts}&recvWindow=10000'
                 sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
                 r = _rq.get(f'https://fapi.binance.com/fapi/v2/positionRisk?{par}&signature={sig}',
                             headers={'X-MBX-APIKEY': self.connector.api_key}, timeout=8)
@@ -938,7 +938,7 @@ class PositionMonitor:
                 _side_param = (f'&positionSide={_close_ps}' if _hedge_mode else '&reduceOnly=true')
                 par2 = (f'symbol={raw_sym}&side={close_side.upper()}&type=MARKET'
                         f'&quantity={actual_qty}{_side_param}'
-                        f'&timestamp={ts2}&recvWindow=5000')
+                        f'&timestamp={ts2}&recvWindow=10000')
                 sig2 = _h.new(self.connector.api_secret.encode(), par2.encode(), _ha.sha256).hexdigest()
                 r2 = _rq.post(
                     f'https://fapi.binance.com/fapi/v1/order?{par2}&signature={sig2}',
@@ -956,7 +956,7 @@ class PositionMonitor:
                             import time as _tw
                             _tw.sleep(0.5)  # brief wait for fill to register
                             _ts_t = int(_tw.time() * 1000)
-                            _par_t = f"symbol={raw_sym}&limit=5&timestamp={_ts_t}&recvWindow=5000"
+                            _par_t = f"symbol={raw_sym}&limit=5&timestamp={_ts_t}&recvWindow=10000"
                             _sig_t = _h.new(self.connector.api_secret.encode(),
                                             _par_t.encode(), _ha.sha256).hexdigest()
                             _rt = _rq.get(
@@ -1009,7 +1009,7 @@ class PositionMonitor:
         try:
             import time as _t, hmac as _h, hashlib as _ha, requests as _r
             ts  = int(_t.time() * 1000)
-            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=5000"
+            par = f"symbol={raw_sym}&timestamp={ts}&recvWindow=10000"
             sig = _h.new(self.connector.api_secret.encode(), par.encode(), _ha.sha256).hexdigest()
             resp = _r.get(
                 f"https://fapi.binance.com/fapi/v1/openOrders?{par}&signature={sig}",
