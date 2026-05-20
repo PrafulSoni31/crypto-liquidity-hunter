@@ -1466,6 +1466,7 @@ def binance_get_settings():
             'live_risk_percent':  float(live_cfg.get('risk_percent', 1.0)),
             'live_max_notional':  float(live_cfg.get('max_notional_usd', 500.0)),
             'max_concurrent':     int(config.get('backtester', {}).get('max_concurrent_trades', 3)),
+            'allowed_directions': config.get('allowed_directions', ['long', 'short']),
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -1496,6 +1497,16 @@ def binance_save_settings():
 
         if 'max_concurrent' in data:
             config_mgr.set('backtester.max_concurrent_trades', int(data['max_concurrent']))
+
+        # Allowed directions — accept comma-string "long,short" or list ["long","short"]
+        if 'allowed_directions' in data:
+            val = data['allowed_directions']
+            if isinstance(val, str):
+                val = [v.strip() for v in val.split(',') if v.strip() in ('long', 'short')]
+            elif isinstance(val, list):
+                val = [v for v in val if v in ('long', 'short')]
+            if val:
+                config_mgr.set('allowed_directions', val)
 
         return jsonify({'status': 'ok', 'message': 'Settings saved for paper + live'})
     except Exception as e:

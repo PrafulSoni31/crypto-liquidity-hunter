@@ -2570,6 +2570,17 @@ document.addEventListener('DOMContentLoaded', () => {
           <label class="cfg-label">Max Concurrent Trades <small>Maximum number of open trades at any one time (1–10).</small></label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_backtest_max_concurrent" step="1" min="1" max="10">
         </div>
+        <div class="cfg-row" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <label class="cfg-label">Allowed Trade Directions <small>Which directions the scanner can take signals for.</small></label>
+          <div style="display:flex;gap:16px;align-items:center;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="cfg_dir_long" style="width:16px;height:16px;cursor:pointer"> Long ↑
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+              <input type="checkbox" id="cfg_dir_short" style="width:16px;height:16px;cursor:pointer"> Short ↓
+            </label>
+          </div>
+        </div>
         <div class="cfg-row">
           <label class="cfg-label">Backtest Commission % <small>Commission fraction per trade e.g. 0.001 = 0.1%</small></label>
           <input class="cfg-input cfg-input-sm" type="number" id="cfg_backtest_commission_pct" step="0.0001" min="0" max="0.01">
@@ -3456,6 +3467,11 @@ async function loadSettings() {
     sv('cfg_backtest_slippage_pct',      d.backtest_slippage_pct ?? 0.0005);
     sv('cfg_backtest_timeout_bars',      d.backtest_timeout_bars ?? 48);
 
+    // Allowed Directions
+    const dirs = d.allowed_directions || ['long','short'];
+    document.getElementById('cfg_dir_long').checked  = dirs.includes('long');
+    document.getElementById('cfg_dir_short').checked = dirs.includes('short');
+
     // Trailing Stop Loss
     sv('cfg_tsl_enabled',               d.tsl_enabled ?? false);
     sv('cfg_tsl_activation_pct',        d.tsl_activation_pct ?? 1.0);
@@ -3547,6 +3563,12 @@ async function saveSettings() {
       if (typeof payload[k] === 'number' && isNaN(payload[k])) delete payload[k];
     });
 
+    // Allowed directions
+    const allowedDirs = [];
+    if (document.getElementById('cfg_dir_long').checked)  allowedDirs.push('long');
+    if (document.getElementById('cfg_dir_short').checked) allowedDirs.push('short');
+    if (allowedDirs.length === 0) allowedDirs.push('long','short'); // safety: never allow empty
+
     // Save live trading settings separately
     const livePayload = {
       live_notional_usd:    gf('cfg_live_notional_usd'),
@@ -3555,6 +3577,7 @@ async function saveSettings() {
       live_position_sizing: gv('cfg_live_position_sizing'),
       live_risk_percent:    gf('cfg_live_risk_percent'),
       live_max_notional:    gf('cfg_live_max_notional'),
+      allowed_directions:   allowedDirs,
     };
     Object.keys(livePayload).forEach(k => {
       if (typeof livePayload[k] === 'number' && isNaN(livePayload[k])) delete livePayload[k];
